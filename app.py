@@ -9,35 +9,44 @@ import pandas as pd
 import streamlit as st
 
 # =========================
-# CONFIG
+# CONFIG GERAL
 # =========================
 START_DATE = dt.date(2026, 1, 1)  # memorizar a partir de 01/01/2026
+META_PCT = 0.20                  # meta 20%
 
-# PLANILHA PRINCIPAL (C6)
-COL_T = "DT_CONTA_CRIADA"                 # data de abertura
+# =========================
+# COLUNAS (PLANILHA C6)
+# =========================
+COL_T = "DT_CONTA_CRIADA"                 # abertura
 COL_P = "DT_FUNDACAO_EMPRESA"             # fundação
-COL_X = "CHAVES_PIX_FORTE"                # tipo de chave pix
+COL_X = "CHAVES_PIX_FORTE"                # tipo chave pix
 COL_Y = "VL_SALDO_MEDIO_MENSALIZADO"      # saldo
 COL_V = "STATUS_CC"                       # status
-COL_AQ = "BANCO_DOMICILIO"                # domicílio bancário
+COL_AQ = "BANCO_DOMICILIO"                # domicílio
 COL_BY = "FL_QUALIFICADO_COMISS"          # qualificada (0/1)
-COL_BR = "MES_REF_COMISS"                 # M0/M1/M2 (referência)
-COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"   # texto: CASH IN: 3 | ...
+COL_BR = "MES_REF_COMISS"                 # M0/M1/M2
+COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"   # texto critérios
 
 COL_NOME = "NOME_CLIENTE"
-COL_DOC = "CD_CPF_CNPJ_CLIENTE"
+COL_DOC  = "CD_CPF_CNPJ_CLIENTE"
 
+# Pagamento por nível (1..4)
 PAYOUT = {1: 210, 2: 345, 3: 600, 4: 810}
 
-# PLANILHA LEADS (cadastro) - coluna M por posição (13ª coluna)
+# =========================
+# PLANILHA LEADS (CADASTRO)
+# =========================
+# Coluna M por posição (13ª coluna => índice 12)
 LEADS_DATE_COL_INDEX = 12
 
+# =========================
 # PERSISTÊNCIA
+# =========================
 DATA_DIR = "data_uploads"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 LATEST_PATH = os.path.join(DATA_DIR, "latest.json")
-PREV_PATH = os.path.join(DATA_DIR, "prev.json")
+PREV_PATH   = os.path.join(DATA_DIR, "prev.json")
 
 HIST_OPEN_DAILY = os.path.join(DATA_DIR, "hist_aberturas_diario.csv")
 HIST_OPEN_MONTH = os.path.join(DATA_DIR, "hist_aberturas_mensal.csv")
@@ -45,16 +54,80 @@ HIST_CAD_DAILY  = os.path.join(DATA_DIR, "hist_cadastros_diario.csv")
 HIST_CAD_MONTH  = os.path.join(DATA_DIR, "hist_cadastros_mensal.csv")
 
 # =========================
+# ESTILO (cores combinando com a logo)
+# =========================
+NAVY = "#1f2852"
+NAVY_2 = "#2b3570"
+OK = "#1e88e5"
+BAD = "#e53935"
+SOFT_BG = "#f6f8ff"
+
+st.set_page_config(page_title="Assis & Mollerke", layout="wide")
+
+st.markdown(
+    f"""
+    <style>
+      .block-container {{
+        padding-top: 1.2rem;
+        padding-bottom: 2rem;
+      }}
+      .am-card {{
+        border: 1px solid #e7eaf6;
+        background: white;
+        padding: 14px 16px;
+        border-radius: 14px;
+        box-shadow: 0 4px 18px rgba(0,0,0,.04);
+      }}
+      .am-title {{
+        font-size: 28px;
+        font-weight: 800;
+        color: {NAVY};
+        margin: 0;
+      }}
+      .am-sub {{
+        color: #5b6280;
+        margin-top: 4px;
+      }}
+      .chip {{
+        display: inline-block;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 12px;
+        line-height: 1;
+      }}
+      .chip-ok {{
+        background: rgba(30,136,229,.12);
+        color: {OK};
+        border: 1px solid rgba(30,136,229,.25);
+      }}
+      .chip-bad {{
+        background: rgba(229,57,53,.10);
+        color: {BAD};
+        border: 1px solid rgba(229,57,53,.22);
+      }}
+      .chip-neutral {{
+        background: rgba(43,53,112,.08);
+        color: {NAVY_2};
+        border: 1px solid rgba(43,53,112,.18);
+      }}
+      div[data-testid="metric-container"] {{
+        border: 1px solid #e7eaf6;
+        padding: 14px 14px;
+        border-radius: 14px;
+        background: {SOFT_BG};
+      }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# =========================
 # FORMATAÇÃO
 # =========================
 def fmt_date_br(d) -> str:
     if pd.isna(d) or d is None:
         return ""
-    if isinstance(d, str):
-        dd = pd.to_datetime(d, errors="coerce")
-        if pd.isna(dd):
-            return ""
-        return dd.strftime("%d/%m/%Y")
     if isinstance(d, dt.date):
         return d.strftime("%d/%m/%Y")
     dd = pd.to_datetime(d, errors="coerce")
@@ -68,14 +141,15 @@ def fmt_month_br(s: str) -> str:
         return str(s)
     try:
         y, m = s[:4], s[5:7]
-        if y.isdigit() and m.isdigit():
-            return f"{m}/{y}"
+        return f"{m}/{y}"
     except Exception:
-        pass
-    return str(s)
+        return str(s)
 
 def fmt_int(n) -> str:
-    return f"{int(n):,}".replace(",", ".")
+    try:
+        return f"{int(n):,}".replace(",", ".")
+    except Exception:
+        return "0"
 
 def fmt_money(v: float) -> str:
     try:
@@ -89,13 +163,16 @@ def fmt_pct(p: float) -> str:
     try:
         return f"{p*100:.1f}%".replace(".", ",")
     except Exception:
-        return ""
+        return "0,0%"
 
 # =========================
-# UTILITÁRIOS
+# UTIL
 # =========================
 def _hash_bytes(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
+
+def _load_excel(file_bytes: bytes) -> pd.DataFrame:
+    return pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
 
 def _safe_to_date_series(s: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce").dt.date
@@ -106,9 +183,56 @@ def _normalize_str(s: pd.Series) -> pd.Series:
 def _contains_c6(val: str) -> bool:
     return "c6" in str(val).lower()
 
-def _load_excel(file_bytes: bytes) -> pd.DataFrame:
-    return pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
+# =========================
+# HISTÓRICO (CSV)
+# =========================
+def _read_hist(path: str, key_col: str) -> pd.DataFrame:
+    if not os.path.exists(path):
+        return pd.DataFrame(columns=[key_col, "valor"])
+    df = pd.read_csv(path, dtype={key_col: "string"})
+    if key_col not in df.columns:
+        return pd.DataFrame(columns=[key_col, "valor"])
+    df[key_col] = df[key_col].astype("string").fillna("").str.strip()
+    df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0).astype(int)
+    df = df[df[key_col] != ""].copy()
+    return df
 
+def _write_hist(df: pd.DataFrame, path: str):
+    df.to_csv(path, index=False)
+
+def _sort_hist(df: pd.DataFrame, key_col: str) -> pd.DataFrame:
+    if key_col == "dia":
+        k = pd.to_datetime(df[key_col], errors="coerce")
+        df = df.assign(_k=k).sort_values("_k").drop(columns=["_k"])
+    elif key_col == "mes":
+        k = pd.to_datetime(df[key_col] + "-01", errors="coerce")
+        df = df.assign(_k=k).sort_values("_k").drop(columns=["_k"])
+    else:
+        df = df.sort_values(key_col)
+    return df
+
+def _upsert_hist(path: str, key_col: str, new_df: pd.DataFrame):
+    base = _read_hist(path, key_col)
+
+    base[key_col] = base[key_col].astype("string").fillna("").str.strip()
+    new_df[key_col] = new_df[key_col].astype("string").fillna("").str.strip()
+
+    base = base.set_index(key_col)
+    new_df = new_df.set_index(key_col)
+
+    base.update(new_df)
+    missing = new_df.index.difference(base.index)
+    if len(missing) > 0:
+        base = pd.concat([base, new_df.loc[missing]], axis=0)
+
+    base = base.reset_index()
+    base = base[base[key_col] != ""].copy()
+    base = _sort_hist(base, key_col)
+    _write_hist(base, path)
+
+# =========================
+# COERCE C6
+# =========================
 def _coerce_c6(df: pd.DataFrame) -> pd.DataFrame:
     required = [COL_T, COL_P, COL_X, COL_Y, COL_V, COL_AQ, COL_BY, COL_BR, COL_CRIT]
     for c in required:
@@ -127,73 +251,28 @@ def _coerce_c6(df: pd.DataFrame) -> pd.DataFrame:
     df[COL_BY] = pd.to_numeric(df[COL_BY], errors="coerce").fillna(0).astype(int)
     df[COL_Y] = pd.to_numeric(df[COL_Y], errors="coerce").fillna(0.0)
 
-    # Filtra a partir de 01/01/2026
     df = df[df[COL_T].notna()].copy()
     df = df[df[COL_T] >= START_DATE].copy()
 
     return df
 
 # =========================
-# HISTÓRICO (GRAVAR / LER)
-# =========================
-def _read_hist(path: str, key_col: str) -> pd.DataFrame:
-    if not os.path.exists(path):
-        return pd.DataFrame(columns=[key_col, "valor"])
-    df = pd.read_csv(path, dtype={key_col: "string"})
-    if key_col not in df.columns:
-        return pd.DataFrame(columns=[key_col, "valor"])
-    df[key_col] = df[key_col].astype("string").fillna("").str.strip()
-    df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0).astype(int)
-    df = df[df[key_col] != ""].copy()
-    return df
-
-def _write_hist(df: pd.DataFrame, path: str):
-    df.to_csv(path, index=False)
-
-def _sort_hist(df: pd.DataFrame, key_col: str) -> pd.DataFrame:
-    # dia: YYYY-MM-DD | mes: YYYY-MM
-    if key_col == "dia":
-        k = pd.to_datetime(df[key_col], errors="coerce")
-        df = df.assign(_k=k).sort_values("_k").drop(columns=["_k"])
-    elif key_col == "mes":
-        k = pd.to_datetime(df[key_col] + "-01", errors="coerce")
-        df = df.assign(_k=k).sort_values("_k").drop(columns=["_k"])
-    else:
-        df = df.sort_values(key_col)
-    return df
-
-def _upsert_hist(path: str, key_col: str, new_df: pd.DataFrame):
-    """
-    new_df: colunas [key_col, "valor"] com key_col SEMPRE string padronizada
-    Regra: se existir a chave, sobrescreve com o novo valor.
-    """
-    base = _read_hist(path, key_col)
-
-    base[key_col] = base[key_col].astype("string").fillna("").str.strip()
-    new_df[key_col] = new_df[key_col].astype("string").fillna("").str.strip()
-
-    base = base.set_index(key_col)
-    new_df = new_df.set_index(key_col)
-
-    base.update(new_df)
-    missing = new_df.index.difference(base.index)
-    if len(missing) > 0:
-        base = pd.concat([base, new_df.loc[missing]], axis=0)
-
-    base = base.reset_index()
-    base = base[base[key_col] != ""].copy()
-    base = _sort_hist(base, key_col)
-
-    _write_hist(base, path)
-
-# =========================
 # MÉTRICAS C6
 # =========================
+def _aberturas_por_dia(df: pd.DataFrame) -> pd.DataFrame:
+    s = pd.Series(df[COL_T]).dropna().apply(lambda d: d.strftime("%Y-%m-%d") if isinstance(d, dt.date) else "")
+    s = s[s != ""]
+    return s.value_counts().sort_index().rename_axis("dia").reset_index(name="valor")
+
+def _aberturas_por_mes(df: pd.DataFrame) -> pd.DataFrame:
+    t = pd.to_datetime(df[COL_T], errors="coerce")
+    m = t.dropna().dt.to_period("M").astype(str)
+    return m.value_counts().sort_index().rename_axis("mes").reset_index(name="valor")
+
 def _pix_info(df: pd.DataFrame):
     s = df[COL_X].astype("string").fillna("").str.strip().str.upper()
     s = s.str.replace("'", "", regex=False)
     has_pix = ~s.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
-
     qtd_com = int(has_pix.sum())
     qtd_sem = int((~has_pix).sum())
 
@@ -204,26 +283,6 @@ def _pix_info(df: pd.DataFrame):
         .reset_index(name="Quantidade")
     )
     return qtd_com, qtd_sem, por_chave
-
-def _aberturas_por_dia(df: pd.DataFrame) -> pd.DataFrame:
-    # Chave padronizada: YYYY-MM-DD (string)
-    s = pd.Series(df[COL_T]).dropna().apply(lambda d: d.strftime("%Y-%m-%d") if isinstance(d, dt.date) else "")
-    s = s[s != ""]
-    return (
-        s.value_counts().sort_index()
-        .rename_axis("dia")
-        .reset_index(name="valor")
-    )
-
-def _aberturas_por_mes(df: pd.DataFrame) -> pd.DataFrame:
-    # Chave padronizada: YYYY-MM (string)
-    t = pd.to_datetime(df[COL_T], errors="coerce")
-    m = t.dropna().dt.to_period("M").astype(str)
-    return (
-        m.value_counts().sort_index()
-        .rename_axis("mes")
-        .reset_index(name="valor")
-    )
 
 def _sum_saldo(df: pd.DataFrame) -> float:
     return float(df[COL_Y].sum())
@@ -244,15 +303,10 @@ def _qualificadas(df: pd.DataFrame) -> pd.DataFrame:
 
 def _br_counts(dfq: pd.DataFrame) -> pd.DataFrame:
     s = dfq[COL_BR].fillna("").astype(str).str.upper().str.strip()
-    return (
-        s.replace("", "SEM")
-        .value_counts()
-        .rename_axis("Referência")
-        .reset_index(name="Quantidade")
-    )
+    return s.replace("", "SEM").value_counts().rename_axis("Referência").reset_index(name="Quantidade")
 
 # =========================
-# QUALIFICAÇÃO: considerar somente o MAIOR valor e o critério correspondente
+# QUALIFICAÇÃO: MAIOR VALOR + CRITÉRIO
 # =========================
 def _parse_criterios_max(txt: str) -> Tuple[int, str]:
     if not isinstance(txt, str) or not txt.strip():
@@ -284,26 +338,25 @@ def _payout_from_max(dfq: pd.DataFrame):
         return (
             pd.DataFrame(columns=["Nível", "Quantidade", "Valor unitário", "Total"]),
             0,
-            pd.DataFrame(columns=["Critério (maior)", "Quantidade"]),
+            pd.DataFrame(columns=["Critério (principal)", "Quantidade"]),
             pd.DataFrame()
         )
 
     parsed = dfq[COL_CRIT].apply(_parse_criterios_max)
     dfq2 = dfq.copy()
-    dfq2["Critério considerado"] = parsed.apply(lambda x: x[1])
-    dfq2["Nível considerado"] = parsed.apply(lambda x: x[0])
-    dfq2["Receita"] = dfq2["Nível considerado"].apply(lambda n: PAYOUT.get(int(n), 0))
-
-    levels = dfq2["Nível considerado"].astype(int)
-    levels = levels[levels > 0]
+    dfq2["Critério principal"] = parsed.apply(lambda x: x[1])
+    dfq2["Nível principal"] = parsed.apply(lambda x: int(x[0]))
+    dfq2["Receita estimada"] = dfq2["Nível principal"].apply(lambda n: PAYOUT.get(int(n), 0))
 
     crit_tbl = (
-        dfq2[dfq2["Nível considerado"] > 0]["Critério considerado"]
+        dfq2[dfq2["Nível principal"] > 0]["Critério principal"]
         .value_counts()
-        .rename_axis("Critério (maior)")
+        .rename_axis("Critério (principal)")
         .reset_index(name="Quantidade")
     )
 
+    levels = dfq2["Nível principal"]
+    levels = levels[levels > 0]
     if levels.empty:
         return (
             pd.DataFrame(columns=["Nível", "Quantidade", "Valor unitário", "Total"]),
@@ -324,15 +377,15 @@ def _payout_from_max(dfq: pd.DataFrame):
     return payout_tbl, total_payout, crit_tbl, dfq2
 
 # =========================
-# FUNDAÇÕES: por dia -> mês/ano
+# FUNDAÇÕES: POR DIA → MÊS/ANO
 # =========================
 def _fundacoes_mes_por_dia(df: pd.DataFrame, dia: dt.date) -> pd.DataFrame:
     x = df[df[COL_T] == dia][[COL_P]].dropna().copy()
     if x.empty:
         return pd.DataFrame(columns=["Mês de fundação", "Quantidade"])
-    x["MES_FUND"] = x[COL_P].apply(lambda d: d.strftime("%m/%Y") if isinstance(d, dt.date) else "")
+    x["Mês de fundação"] = x[COL_P].apply(lambda d: d.strftime("%m/%Y") if isinstance(d, dt.date) else "")
     out = (
-        x["MES_FUND"].replace("", "SEM FUNDAÇÃO")
+        x["Mês de fundação"].replace("", "SEM FUNDAÇÃO")
         .value_counts()
         .rename_axis("Mês de fundação")
         .reset_index(name="Quantidade")
@@ -340,11 +393,11 @@ def _fundacoes_mes_por_dia(df: pd.DataFrame, dia: dt.date) -> pd.DataFrame:
     return out
 
 # =========================
-# LEADS
+# LEADS: CADASTROS
 # =========================
 def _load_leads_dates(df_leads: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
     if df_leads.shape[1] <= LEADS_DATE_COL_INDEX:
-        raise ValueError("A planilha de Leads não tem a coluna M (13ª coluna).")
+        raise ValueError("A planilha de Leads não possui a coluna M (13ª coluna).")
     col_used = df_leads.columns[LEADS_DATE_COL_INDEX]
     s = pd.to_datetime(df_leads[col_used], errors="coerce").dt.date
     out = pd.DataFrame({"dia": s}).dropna()
@@ -352,49 +405,46 @@ def _load_leads_dates(df_leads: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
     return out, str(col_used)
 
 def _cadastros_por_dia(df_dates: pd.DataFrame) -> pd.DataFrame:
-    # Chave padronizada: YYYY-MM-DD (string)
     s = df_dates["dia"].dropna().apply(lambda d: d.strftime("%Y-%m-%d") if isinstance(d, dt.date) else "")
     s = s[s != ""]
-    return (
-        s.value_counts().sort_index()
-        .rename_axis("dia")
-        .reset_index(name="valor")
-    )
+    return s.value_counts().sort_index().rename_axis("dia").reset_index(name="valor")
 
 def _cadastros_por_mes(df_dates: pd.DataFrame) -> pd.DataFrame:
     t = pd.to_datetime(df_dates["dia"], errors="coerce")
     m = t.dropna().dt.to_period("M").astype(str)
-    return (
-        m.value_counts().sort_index()
-        .rename_axis("mes")
-        .reset_index(name="valor")
-    )
+    return m.value_counts().sort_index().rename_axis("mes").reset_index(name="valor")
 
 # =========================
-# % Cadastro ÷ Abertura usando HISTÓRICO
+# % Cadastro ÷ Abertura (SEM STYLER, ZERO ERROS)
 # =========================
-def _pct_table_daily() -> pd.DataFrame:
-    o = _read_hist(HIST_OPEN_DAILY, "dia")
-    c = _read_hist(HIST_CAD_DAILY, "dia")
-    df = pd.merge(o, c, on="dia", how="outer", suffixes=("_abertas", "_cad")).fillna(0)
-    df["valor_abertas"] = df["valor_abertas"].astype(int)
-    df["valor_cad"] = df["valor_cad"].astype(int)
-    df["percentual"] = df.apply(lambda r: (r["valor_cad"] / r["valor_abertas"]) if r["valor_abertas"] > 0 else 0.0, axis=1)
+def _pct_daily_table() -> pd.DataFrame:
+    o = _read_hist(HIST_OPEN_DAILY, "dia").rename(columns={"valor": "abertas"})
+    c = _read_hist(HIST_CAD_DAILY, "dia").rename(columns={"valor": "cadastradas"})
+    df = pd.merge(o, c, on="dia", how="outer").fillna(0)
+    df["abertas"] = df["abertas"].astype(int)
+    df["cadastradas"] = df["cadastradas"].astype(int)
+    df["percentual"] = df.apply(lambda r: (r["cadastradas"] / r["abertas"]) if r["abertas"] > 0 else 0.0, axis=1)
     df = _sort_hist(df, "dia")
     return df
 
-def _pct_table_month() -> pd.DataFrame:
-    o = _read_hist(HIST_OPEN_MONTH, "mes")
-    c = _read_hist(HIST_CAD_MONTH, "mes")
-    df = pd.merge(o, c, on="mes", how="outer", suffixes=("_abertas", "_cad")).fillna(0)
-    df["valor_abertas"] = df["valor_abertas"].astype(int)
-    df["valor_cad"] = df["valor_cad"].astype(int)
-    df["percentual"] = df.apply(lambda r: (r["valor_cad"] / r["valor_abertas"]) if r["valor_abertas"] > 0 else 0.0, axis=1)
+def _pct_month_table() -> pd.DataFrame:
+    o = _read_hist(HIST_OPEN_MONTH, "mes").rename(columns={"valor": "abertas"})
+    c = _read_hist(HIST_CAD_MONTH, "mes").rename(columns={"valor": "cadastradas"})
+    df = pd.merge(o, c, on="mes", how="outer").fillna(0)
+    df["abertas"] = df["abertas"].astype(int)
+    df["cadastradas"] = df["cadastradas"].astype(int)
+    df["percentual"] = df.apply(lambda r: (r["cadastradas"] / r["abertas"]) if r["abertas"] > 0 else 0.0, axis=1)
     df = _sort_hist(df, "mes")
     return df
 
+def _chip_pct(p: float) -> str:
+    # HTML chip com cor
+    if float(p) >= META_PCT:
+        return f'<span class="chip chip-ok">OK • {fmt_pct(p)}</span>'
+    return f'<span class="chip chip-bad">Atenção • {fmt_pct(p)}</span>'
+
 # =========================
-# Snapshot (ontem x hoje)
+# SNAPSHOT (ontem x hoje)
 # =========================
 def _snapshot_to_disk(tag: str, file_hash: str, metrics: Dict):
     payload = {
@@ -423,10 +473,10 @@ def _load_prev_latest() -> Tuple[Optional[dict], Optional[dict]]:
     return prev, latest
 
 # =========================
-# Login simples
+# LOGIN (simples)
 # =========================
 def login_gate():
-    st.sidebar.title("Acesso")
+    st.sidebar.markdown("### Acesso")
     u = st.sidebar.text_input("Usuário", value="")
     p = st.sidebar.text_input("Senha", value="", type="password")
     if st.sidebar.button("Entrar"):
@@ -436,62 +486,73 @@ def login_gate():
     return st.session_state.get("logged_in", False)
 
 # =========================
-# APP
+# TOPO (LOGO + TITULO)
 # =========================
-st.set_page_config(page_title="Assis & Mollerke", layout="wide")
-
-# Logo (confere nomes comuns no repositório)
-logo_paths = [
-    "assets/logo.png",
-    "logo.png",
+logo_candidates = [
     "LOGO CORRETA.png",
+    "logo.png",
+    "assets/logo.png",
     "LOGO_CORRETA.png",
-    "LOGO%20CORRETA.png",
 ]
-logo_found = next((p for p in logo_paths if os.path.exists(p)), None)
+logo_found = next((p for p in logo_candidates if os.path.exists(p)), None)
 
-top_l, top_r = st.columns([1, 3])
-with top_l:
+header_l, header_r = st.columns([1, 3])
+with header_l:
     if logo_found:
         st.image(logo_found, use_container_width=True)
-with top_r:
-    st.markdown("## Assis & Mollerke")
-    st.caption("Painel automático com memória desde 01/01/2026 (não perde dados do passado).")
+with header_r:
+    st.markdown('<p class="am-title">Assis & Mollerke</p>', unsafe_allow_html=True)
+    st.markdown('<p class="am-sub">Painel executivo com memória desde 01/01/2026.</p>', unsafe_allow_html=True)
 
+# Login
 if not login_gate():
     st.stop()
 
-st.subheader("Importação do dia")
+# =========================
+# IMPORTAÇÃO
+# =========================
+st.markdown("### Importação do dia")
 
 col_up1, col_up2 = st.columns(2)
 with col_up1:
-    uploaded_c6 = st.file_uploader("1) Planilha principal (C6) (.xlsx)", type=["xlsx"], key="c6")
+    uploaded_c6 = st.file_uploader("Planilha C6 (aberturas)", type=["xlsx"], key="c6")
 with col_up2:
-    uploaded_leads = st.file_uploader("2) Planilha de Leads (Cadastro) (.xlsx)", type=["xlsx"], key="leads")
+    uploaded_leads = st.file_uploader("Planilha Leads (cadastros)", type=["xlsx"], key="leads")
 
 prev, latest_saved = _load_prev_latest()
 
-lead_col_used = None
+# variáveis para as abas (só existem se upload)
+df = None
+qtd_com_pix = qtd_sem_pix = 0
+pix_por_chave = pd.DataFrame()
+status_tbl = pd.DataFrame()
+dfq_view = pd.DataFrame()
+payout_tbl = pd.DataFrame()
+crit_tbl = pd.DataFrame()
+br_counts = pd.DataFrame()
+total_payout = 0
 
+# Processa upload C6
 if uploaded_c6:
     file_bytes = uploaded_c6.getvalue()
     file_hash = _hash_bytes(file_bytes)
 
-    df = _load_excel(file_bytes)
-    df = _coerce_c6(df)
+    df_raw = _load_excel(file_bytes)
+    df = _coerce_c6(df_raw)
 
-    # Atualiza HISTÓRICO de aberturas
+    # Atualiza histórico aberturas
     open_daily = _aberturas_por_dia(df)
     open_month = _aberturas_por_mes(df)
     _upsert_hist(HIST_OPEN_DAILY, "dia", open_daily)
     _upsert_hist(HIST_OPEN_MONTH, "mes", open_month)
 
-    # Métricas do arquivo atual
+    # Métricas do dia (arquivo)
     qtd_com_pix, qtd_sem_pix, pix_por_chave = _pix_info(df)
     saldo_total = _sum_saldo(df)
     status_tbl = _status_counts(df)
     qtd_c6 = _domicilio_c6_count(df)
 
+    # Qualificadas
     dfq = _qualificadas(df)
     br_counts = _br_counts(dfq)
     payout_tbl, total_payout, crit_tbl, dfq_view = _payout_from_max(dfq)
@@ -499,8 +560,23 @@ if uploaded_c6:
     total_contas_arquivo = int(df.shape[0])
     total_qualificadas = int(dfq.shape[0])
 
-    # Leads: atualiza histórico se enviado
-    if uploaded_leads:
+    metrics = {
+        "total_contas": total_contas_arquivo,
+        "qtd_com_pix": qtd_com_pix,
+        "qtd_sem_pix": qtd_sem_pix,
+        "saldo_total": float(saldo_total),
+        "qtd_c6": int(qtd_c6),
+        "total_qualificadas": int(total_qualificadas),
+        "total_payout": int(total_payout),
+    }
+
+    _snapshot_to_disk(tag=uploaded_c6.name, file_hash=file_hash, metrics=metrics)
+    prev, latest_saved = _load_prev_latest()
+
+# Processa upload Leads
+lead_col_used = None
+if uploaded_leads:
+    try:
         df_leads = _load_excel(uploaded_leads.getvalue())
         df_dates, lead_col_used = _load_leads_dates(df_leads)
 
@@ -509,70 +585,67 @@ if uploaded_c6:
 
         _upsert_hist(HIST_CAD_DAILY, "dia", cad_daily)
         _upsert_hist(HIST_CAD_MONTH, "mes", cad_month)
-
-    metrics = {
-        "total_contas": total_contas_arquivo,
-        "qtd_com_pix": qtd_com_pix,
-        "qtd_sem_pix": qtd_sem_pix,
-        "saldo_total": saldo_total,
-        "qtd_c6": qtd_c6,
-        "total_qualificadas": total_qualificadas,
-        "total_payout": total_payout,
-    }
-    _snapshot_to_disk(tag=uploaded_c6.name, file_hash=file_hash, metrics=metrics)
-    prev, latest_saved = _load_prev_latest()
+    except Exception as e:
+        st.error(f"Não consegui ler a planilha de Leads. Motivo: {str(e)}")
 
 st.divider()
 
+# =========================
+# RESUMO EXECUTIVO
+# =========================
 if latest_saved:
     m = latest_saved["metrics"]
 
-    st.subheader("Resumo do dia (arquivo enviado)")
+    st.markdown("### Resumo executivo")
+
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Contas abertas", fmt_int(m["total_contas"]))
+    c1.metric("Contas abertas (arquivo)", fmt_int(m["total_contas"]))
     c2.metric("Saldo total", fmt_money(m["saldo_total"]))
     c3.metric("Clientes com Pix", fmt_int(m["qtd_com_pix"]))
     c4.metric("Clientes sem Pix", fmt_int(m["qtd_sem_pix"]))
 
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Clientes com domicílio C6", fmt_int(m["qtd_c6"]))
-    c6.metric("Contas qualificadas", fmt_int(m["total_qualificadas"]))
+    c5.metric("Domicílio C6", fmt_int(m["qtd_c6"]))
+    c6.metric("Qualificadas", fmt_int(m["total_qualificadas"]))
     c7.metric("Receita estimada", fmt_money(m["total_payout"]))
-    c8.metric("Arquivo", latest_saved.get("tag", "-"))
+    c8.metric("Arquivo processado", latest_saved.get("tag", "-"))
 
-    st.subheader("Diferença (arquivo de hoje vs anterior)")
+    st.markdown("### Variação vs arquivo anterior")
     if prev and prev.get("metrics"):
         pm = prev["metrics"]
         d1, d2, d3, d4 = st.columns(4)
-        d1.metric("Δ Abertas", f"{(m['total_contas'] - pm.get('total_contas', 0)):+,}".replace(",", "."))
-        d2.metric("Δ Saldo", fmt_money(m["saldo_total"] - pm.get("saldo_total", 0.0)))
-        d3.metric("Δ Qualificadas", f"{(m['total_qualificadas'] - pm.get('total_qualificadas', 0)):+,}".replace(",", "."))
-        d4.metric("Δ Receita", fmt_money(m["total_payout"] - pm.get("total_payout", 0)))
+        d1.metric("Abertas", fmt_int(m["total_contas"]), delta=f"{m['total_contas']-pm.get('total_contas',0):+d}")
+        d2.metric("Saldo total", fmt_money(m["saldo_total"]), delta=fmt_money(m["saldo_total"]-pm.get("saldo_total",0.0)))
+        d3.metric("Qualificadas", fmt_int(m["total_qualificadas"]), delta=f"{m['total_qualificadas']-pm.get('total_qualificadas',0):+d}")
+        d4.metric("Receita", fmt_money(m["total_payout"]), delta=fmt_money(m["total_payout"]-pm.get("total_payout",0)))
     else:
-        st.info("Ainda não existe arquivo anterior para comparar. Envie pelo menos 2 dias.")
+        st.info("Envie pelo menos 2 dias para aparecer a variação.")
 else:
-    st.info("Envie a planilha principal (C6) para gerar o resumo do dia. O histórico será acumulado a partir de 01/01/2026.")
+    st.info("Envie a planilha C6 para gerar o resumo do dia e alimentar o histórico.")
 
 st.divider()
 
+# =========================
+# ABAS
+# =========================
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "Histórico de Aberturas",
-    "Fundações",
+    "Aberturas (Histórico)",
+    "Fundações (Detalhe do dia)",
     "Pix e Status",
     "Qualificadas e Receita",
-    "Cadastro vs Abertura (%)",
+    "Cadastro x Abertura",
 ])
 
 with tab1:
-    st.markdown("### Aberturas (histórico desde 01/01/2026)")
+    st.markdown("#### Aberturas acumuladas (desde 01/01/2026)")
 
     h_daily = _read_hist(HIST_OPEN_DAILY, "dia")
     if h_daily.empty:
         st.info("Sem histórico diário ainda.")
     else:
         show = h_daily.copy()
-        show["Dia"] = show["dia"].apply(fmt_date_br)
-        show = show[["Dia", "valor"]].rename(columns={"valor": "Contas abertas"})
+        show["Data"] = show["dia"].apply(fmt_date_br)
+        show = show[["Data", "valor"]].rename(columns={"valor": "Contas abertas"})
         st.dataframe(show, use_container_width=True, hide_index=True)
 
     h_month = _read_hist(HIST_OPEN_MONTH, "mes")
@@ -585,46 +658,44 @@ with tab1:
         st.dataframe(showm, use_container_width=True, hide_index=True)
 
 with tab2:
-    st.markdown("### Fundações por dia (mês/ano) — usando o arquivo enviado")
-    if not uploaded_c6:
-        st.info("Envie a planilha principal para ver o detalhamento de fundações do dia.")
+    st.markdown("#### Fundações por dia (mês/ano)")
+    if df is None or df.empty:
+        st.info("Envie a planilha C6 para ver este relatório.")
     else:
         dias = sorted(pd.Series(df[COL_T]).dropna().unique().tolist())
         if not dias:
             st.info("Sem datas de abertura no arquivo.")
         else:
-            dia_sel = st.selectbox("Selecione o dia", dias, format_func=fmt_date_br)
+            dia_sel = st.selectbox("Selecione a data de abertura", dias, format_func=fmt_date_br)
             fund = _fundacoes_mes_por_dia(df, dia_sel)
             st.dataframe(fund, use_container_width=True, hide_index=True)
 
 with tab3:
-    st.markdown("### Pix e Status — usando o arquivo enviado")
-    if not uploaded_c6:
-        st.info("Envie a planilha principal para ver Pix e Status.")
+    st.markdown("#### Pix")
+    if df is None:
+        st.info("Envie a planilha C6 para ver Pix e Status.")
     else:
         a, b = st.columns(2)
-        with a:
-            st.metric("Clientes com Pix", fmt_int(qtd_com_pix))
-        with b:
-            st.metric("Clientes sem Pix", fmt_int(qtd_sem_pix))
+        a.metric("Clientes com Pix", fmt_int(qtd_com_pix))
+        b.metric("Clientes sem Pix", fmt_int(qtd_sem_pix))
 
-        st.markdown("#### Tipos de chave Pix (somente quem tem Pix)")
+        st.markdown("##### Tipos de chave Pix (somente clientes com Pix)")
         st.dataframe(pix_por_chave, use_container_width=True, hide_index=True)
 
         st.markdown("#### Status")
         st.dataframe(status_tbl, use_container_width=True, hide_index=True)
 
 with tab4:
-    st.markdown("### Qualificadas e Receita — usando o arquivo enviado")
-    st.caption("Cálculo considera SOMENTE o maior nível do texto de critérios (ex.: 'SALDO MEDIO: 4').")
+    st.markdown("#### Qualificadas e Receita")
+    st.caption("O cálculo considera apenas o MAIOR nível dos critérios por cliente (ex.: SALDO MEDIO: 4).")
 
-    if not uploaded_c6:
-        st.info("Envie a planilha principal para ver as qualificadas.")
+    if df is None:
+        st.info("Envie a planilha C6 para ver as qualificadas.")
     else:
-        st.markdown("#### Critério (maior) considerado")
+        st.markdown("##### Critério principal (por maior nível)")
         st.dataframe(crit_tbl, use_container_width=True, hide_index=True)
 
-        st.markdown("#### Receita por nível")
+        st.markdown("##### Receita por nível")
         payout_show = payout_tbl.copy()
         if not payout_show.empty:
             payout_show["Valor unitário"] = payout_show["Valor unitário"].apply(fmt_money)
@@ -632,77 +703,73 @@ with tab4:
         st.dataframe(payout_show, use_container_width=True, hide_index=True)
         st.success(f"Receita estimada: {fmt_money(total_payout)}")
 
-        st.markdown("#### Visualização por cliente (para entender)")
+        st.markdown("##### Visualização por cliente (para entendimento)")
         cols_show = []
         if COL_DOC in dfq_view.columns:
             cols_show.append(COL_DOC)
         if COL_NOME in dfq_view.columns:
             cols_show.append(COL_NOME)
-        cols_show += ["Critério considerado", "Nível considerado", "Receita", COL_CRIT]
+        cols_show += ["Critério principal", "Nível principal", "Receita estimada", COL_CRIT]
 
         view = dfq_view[cols_show].copy()
-        view["Receita"] = view["Receita"].apply(fmt_money)
-        view = view.rename(columns={"Receita": "Receita estimada"})
+        view["Receita estimada"] = view["Receita estimada"].apply(fmt_money)
+        view = view.rename(columns={COL_CRIT: "Texto completo dos critérios"})
         st.dataframe(view, use_container_width=True, hide_index=True)
 
+        st.markdown("##### Referência (M0/M1/M2)")
+        st.dataframe(br_counts, use_container_width=True, hide_index=True)
+
 with tab5:
-    st.markdown("### Cadastro ÷ Abertura (%) — histórico desde 01/01/2026")
-    st.caption("Azul: >= 20% | Vermelho: < 20%")
+    st.markdown("#### Cadastro x Abertura (acumulado)")
+    st.caption("Painel diário e mensal, com indicador automático de desempenho.")
 
-    if (not os.path.exists(HIST_OPEN_DAILY)) or (not os.path.exists(HIST_CAD_DAILY)):
-        st.warning("Envie as duas planilhas (C6 e Leads) pelo menos uma vez para criar o histórico.")
+    daily_ok = os.path.exists(HIST_OPEN_DAILY) and os.path.exists(HIST_CAD_DAILY)
+    month_ok = os.path.exists(HIST_OPEN_MONTH) and os.path.exists(HIST_CAD_MONTH)
+
+    if not (daily_ok or month_ok):
+        st.info("Envie as duas planilhas (C6 e Leads) pelo menos uma vez para iniciar o histórico.")
     else:
-        pct_d = _pct_table_daily()
-        if pct_d.empty:
-            st.info("Sem dados suficientes ainda.")
-        else:
-            show = pct_d.copy()
-            show["Dia"] = show["dia"].apply(fmt_date_br)
-            show = show.rename(columns={
-                "valor_abertas": "Contas abertas",
-                "valor_cad": "Contas cadastradas",
-                "percentual": "Percentual",
-            })[["Dia", "Contas abertas", "Contas cadastradas", "Percentual"]]
+        if daily_ok:
+            pct_d = _pct_daily_table()
+            if pct_d.empty:
+                st.info("Sem dados diários suficientes ainda.")
+            else:
+                st.markdown("##### Diário")
+                view = pct_d.copy()
+                view["Data"] = view["dia"].apply(fmt_date_br)
+                view["Percentual"] = view["percentual"].apply(fmt_pct)
+                view["Indicador"] = view["percentual"].apply(_chip_pct)
 
-            aux = show.copy()
-            aux["Percentual_num"] = pct_d["percentual"].values
+                view = view.rename(columns={
+                    "abertas": "Contas abertas",
+                    "cadastradas": "Contas cadastradas",
+                })[["Data", "Contas abertas", "Contas cadastradas", "Indicador", "Percentual"]]
 
-            def style_row(row):
-                v = row["Percentual_num"]
-                color = "#cfe9ff" if float(v) >= 0.20 else "#ffd6d6"
-                return ["background-color: %s" % color if c == "Percentual" else "" for c in row.index]
+                # Renderiza “Indicador” como HTML
+                st.markdown(
+                    view.to_html(index=False, escape=False),
+                    unsafe_allow_html=True
+                )
 
-            st.dataframe(
-                aux.drop(columns=["Percentual_num"])
-                   .style.apply(style_row, axis=1)
-                   .format({"Percentual": lambda x: fmt_pct(float(x))}),
-                use_container_width=True
-            )
+        st.divider()
 
-        st.markdown("#### Mensal")
-        pct_m = _pct_table_month()
-        if pct_m.empty:
-            st.info("Sem dados mensais ainda.")
-        else:
-            mm = pct_m.copy()
-            mm["Mês"] = mm["mes"].apply(fmt_month_br)
-            mm = mm.rename(columns={
-                "valor_abertas": "Contas abertas",
-                "valor_cad": "Contas cadastradas",
-                "percentual": "Percentual",
-            })[["Mês", "Contas abertas", "Contas cadastradas", "Percentual"]]
+        if month_ok:
+            pct_m = _pct_month_table()
+            if pct_m.empty:
+                st.info("Sem dados mensais suficientes ainda.")
+            else:
+                st.markdown("##### Mensal")
+                viewm = pct_m.copy()
+                viewm["Mês"] = viewm["mes"].apply(fmt_month_br)
+                viewm["Percentual"] = viewm["percentual"].apply(fmt_pct)
+                viewm["Indicador"] = viewm["percentual"].apply(_chip_pct)
 
-            auxm = mm.copy()
-            auxm["Percentual_num"] = pct_m["percentual"].values
+                viewm = viewm.rename(columns={
+                    "abertas": "Contas abertas",
+                    "cadastradas": "Contas cadastradas",
+                })[["Mês", "Contas abertas", "Contas cadastradas", "Indicador", "Percentual"]]
 
-            def style_row_m(row):
-                v = row["Percentual_num"]
-                color = "#cfe9ff" if float(v) >= 0.20 else "#ffd6d6"
-                return ["background-color: %s" % color if c == "Percentual" else "" for c in row.index]
-
-            st.dataframe(
-                auxm.drop(columns=["Percentual_num"])
-                    .style.apply(style_row_m, axis=1)
-                    .format({"Percentual": lambda x: fmt_pct(float(x))}),
-                use_container_width=True
-            )
+                st.markdown(
+                    viewm.to_html(index=False, escape=False),
+                    unsafe_allow_html=True
+                )
