@@ -24,7 +24,6 @@ COL_BY = "FL_QUALIFICADO_COMISS"          # qualificada (0/1)
 COL_BR = "MES_REF_COMISS"                 # M0/M1/M2 (referência)
 COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"   # texto: CASH IN: 3 | ...
 
-# (se existirem)
 COL_NOME = "NOME_CLIENTE"
 COL_DOC = "CD_CPF_CNPJ_CLIENTE"
 
@@ -51,6 +50,11 @@ HIST_CAD_MONTH  = os.path.join(DATA_DIR, "hist_cadastros_mensal.csv")
 def fmt_date_br(d) -> str:
     if pd.isna(d) or d is None:
         return ""
+    if isinstance(d, str):
+        dd = pd.to_datetime(d, errors="coerce")
+        if pd.isna(dd):
+            return ""
+        return dd.strftime("%d/%m/%Y")
     if isinstance(d, dt.date):
         return d.strftime("%d/%m/%Y")
     dd = pd.to_datetime(d, errors="coerce")
@@ -59,18 +63,16 @@ def fmt_date_br(d) -> str:
     return dd.strftime("%d/%m/%Y")
 
 def fmt_month_br(s: str) -> str:
-    # s vem como "YYYY-MM" ou "YYYY-MM-01" ou "YYYY-MM" period string
-    try:
-        # tenta YYYY-MM
-        if isinstance(s, str) and len(s) == 7 and s[4] == "-":
-            y, m = s.split("-")
-            return f"{m}/{y}"
-        dd = pd.to_datetime(s, errors="coerce")
-        if pd.isna(dd):
-            return str(s)
-        return dd.strftime("%m/%Y")
-    except Exception:
+    # "YYYY-MM" -> "MM/YYYY"
+    if not isinstance(s, str) or len(s) < 7:
         return str(s)
+    try:
+        y, m = s[:4], s[5:7]
+        if y.isdigit() and m.isdigit():
+            return f"{m}/{y}"
+    except Exception:
+        pass
+    return str(s)
 
 def fmt_int(n) -> str:
     return f"{int(n):,}".replace(",", ".")
@@ -125,7 +127,7 @@ def _coerce_c6(df: pd.DataFrame) -> pd.DataFrame:
     df[COL_BY] = pd.to_numeric(df[COL_BY], errors="coerce").fillna(0).astype(int)
     df[COL_Y] = pd.to_numeric(df[COL_Y], errors="coerce").fillna(0.0)
 
-    # filtra tudo a partir de 01/01/2026 (para memorizar o que importa)
+    # Filtra a partir de 01/01/2026
     df = df[df[COL_T].notna()].copy()
     df = df[df[COL_T] >= START_DATE].copy()
 
@@ -137,30 +139,51 @@ def _coerce_c6(df: pd.DataFrame) -> pd.DataFrame:
 def _read_hist(path: str, key_col: str) -> pd.DataFrame:
     if not os.path.exists(path):
         return pd.DataFrame(columns=[key_col, "valor"])
-    df = pd.read_csv(path)
+    df = pd.read_csv(path, dtype={key_col: "string"})
     if key_col not in df.columns:
         return pd.DataFrame(columns=[key_col, "valor"])
+    df[key_col] = df[key_col].astype("string").fillna("").str.strip()
     df["valor"] = pd.to_numeric(df["valor"], errors="coerce").fillna(0).astype(int)
+    df = df[df[key_col] != ""].copy()
     return df
 
 def _write_hist(df: pd.DataFrame, path: str):
     df.to_csv(path, index=False)
 
+def _sort_hist(df: pd.DataFrame, key_col: str) -> pd.DataFrame:
+    # dia: YYYY-MM-DD | mes: YYYY-MM
+    if key_col == "dia":
+        k = pd.to_datetime(df[key_col], errors="coerce")
+        df = df.assign(_k=k).sort_values("_k").drop(columns=["_k"])
+    elif key_col == "mes":
+        k = pd.to_datetime(df[key_col] + "-01", errors="coerce")
+        df = df.assign(_k=k).sort_values("_k").drop(columns=["_k"])
+    else:
+        df = df.sort_values(key_col)
+    return df
+
 def _upsert_hist(path: str, key_col: str, new_df: pd.DataFrame):
     """
-    new_df: colunas [key_col, "valor"]
+    new_df: colunas [key_col, "valor"] com key_col SEMPRE string padronizada
     Regra: se existir a chave, sobrescreve com o novo valor.
     """
     base = _read_hist(path, key_col)
+
+    base[key_col] = base[key_col].astype("string").fillna("").str.strip()
+    new_df[key_col] = new_df[key_col].astype("string").fillna("").str.strip()
+
     base = base.set_index(key_col)
     new_df = new_df.set_index(key_col)
 
-    base.update(new_df)  # sobrescreve existentes
+    base.update(new_df)
     missing = new_df.index.difference(base.index)
     if len(missing) > 0:
         base = pd.concat([base, new_df.loc[missing]], axis=0)
 
-    base = base.reset_index().sort_values(key_col)
+    base = base.reset_index()
+    base = base[base[key_col] != ""].copy()
+    base = _sort_hist(base, key_col)
+
     _write_hist(base, path)
 
 # =========================
@@ -183,14 +206,17 @@ def _pix_info(df: pd.DataFrame):
     return qtd_com, qtd_sem, por_chave
 
 def _aberturas_por_dia(df: pd.DataFrame) -> pd.DataFrame:
+    # Chave padronizada: YYYY-MM-DD (string)
+    s = pd.Series(df[COL_T]).dropna().apply(lambda d: d.strftime("%Y-%m-%d") if isinstance(d, dt.date) else "")
+    s = s[s != ""]
     return (
-        pd.Series(df[COL_T]).dropna()
-        .value_counts().sort_index()
+        s.value_counts().sort_index()
         .rename_axis("dia")
         .reset_index(name="valor")
     )
 
 def _aberturas_por_mes(df: pd.DataFrame) -> pd.DataFrame:
+    # Chave padronizada: YYYY-MM (string)
     t = pd.to_datetime(df[COL_T], errors="coerce")
     m = t.dropna().dt.to_period("M").astype(str)
     return (
@@ -271,7 +297,6 @@ def _payout_from_max(dfq: pd.DataFrame):
     levels = dfq2["Nível considerado"].astype(int)
     levels = levels[levels > 0]
 
-    # Tabela por critério considerado
     crit_tbl = (
         dfq2[dfq2["Nível considerado"] > 0]["Critério considerado"]
         .value_counts()
@@ -327,9 +352,11 @@ def _load_leads_dates(df_leads: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
     return out, str(col_used)
 
 def _cadastros_por_dia(df_dates: pd.DataFrame) -> pd.DataFrame:
+    # Chave padronizada: YYYY-MM-DD (string)
+    s = df_dates["dia"].dropna().apply(lambda d: d.strftime("%Y-%m-%d") if isinstance(d, dt.date) else "")
+    s = s[s != ""]
     return (
-        df_dates["dia"]
-        .value_counts().sort_index()
+        s.value_counts().sort_index()
         .rename_axis("dia")
         .reset_index(name="valor")
     )
@@ -353,7 +380,7 @@ def _pct_table_daily() -> pd.DataFrame:
     df["valor_abertas"] = df["valor_abertas"].astype(int)
     df["valor_cad"] = df["valor_cad"].astype(int)
     df["percentual"] = df.apply(lambda r: (r["valor_cad"] / r["valor_abertas"]) if r["valor_abertas"] > 0 else 0.0, axis=1)
-    df = df.sort_values("dia")
+    df = _sort_hist(df, "dia")
     return df
 
 def _pct_table_month() -> pd.DataFrame:
@@ -363,19 +390,11 @@ def _pct_table_month() -> pd.DataFrame:
     df["valor_abertas"] = df["valor_abertas"].astype(int)
     df["valor_cad"] = df["valor_cad"].astype(int)
     df["percentual"] = df.apply(lambda r: (r["valor_cad"] / r["valor_abertas"]) if r["valor_abertas"] > 0 else 0.0, axis=1)
-    df = df.sort_values("mes")
+    df = _sort_hist(df, "mes")
     return df
 
-def _style_pct(df: pd.DataFrame):
-    def cell_color(v):
-        try:
-            return "background-color: #cfe9ff;" if float(v) >= 0.20 else "background-color: #ffd6d6;"
-        except Exception:
-            return ""
-    return df.style.applymap(cell_color, subset=["percentual"])
-
 # =========================
-# Snapshot (ontem x hoje) - continua
+# Snapshot (ontem x hoje)
 # =========================
 def _snapshot_to_disk(tag: str, file_hash: str, metrics: Dict):
     payload = {
@@ -421,11 +440,12 @@ def login_gate():
 # =========================
 st.set_page_config(page_title="Assis & Mollerke", layout="wide")
 
-# Logo
+# Logo (confere nomes comuns no repositório)
 logo_paths = [
     "assets/logo.png",
     "logo.png",
     "LOGO CORRETA.png",
+    "LOGO_CORRETA.png",
     "LOGO%20CORRETA.png",
 ]
 logo_found = next((p for p in logo_paths if os.path.exists(p)), None)
@@ -451,9 +471,6 @@ with col_up2:
 
 prev, latest_saved = _load_prev_latest()
 
-# =========================
-# PROCESSAMENTO DO DIA
-# =========================
 lead_col_used = None
 
 if uploaded_c6:
@@ -463,13 +480,13 @@ if uploaded_c6:
     df = _load_excel(file_bytes)
     df = _coerce_c6(df)
 
-    # Atualiza HISTÓRICO de aberturas (diário e mensal)
-    open_daily = _aberturas_por_dia(df)     # dia, valor
-    open_month = _aberturas_por_mes(df)     # mes, valor
+    # Atualiza HISTÓRICO de aberturas
+    open_daily = _aberturas_por_dia(df)
+    open_month = _aberturas_por_mes(df)
     _upsert_hist(HIST_OPEN_DAILY, "dia", open_daily)
     _upsert_hist(HIST_OPEN_MONTH, "mes", open_month)
 
-    # Métricas do arquivo atual (para resumo do dia)
+    # Métricas do arquivo atual
     qtd_com_pix, qtd_sem_pix, pix_por_chave = _pix_info(df)
     saldo_total = _sum_saldo(df)
     status_tbl = _status_counts(df)
@@ -478,6 +495,7 @@ if uploaded_c6:
     dfq = _qualificadas(df)
     br_counts = _br_counts(dfq)
     payout_tbl, total_payout, crit_tbl, dfq_view = _payout_from_max(dfq)
+
     total_contas_arquivo = int(df.shape[0])
     total_qualificadas = int(dfq.shape[0])
 
@@ -486,12 +504,12 @@ if uploaded_c6:
         df_leads = _load_excel(uploaded_leads.getvalue())
         df_dates, lead_col_used = _load_leads_dates(df_leads)
 
-        cad_daily = _cadastros_por_dia(df_dates)  # dia, valor
-        cad_month = _cadastros_por_mes(df_dates)  # mes, valor
+        cad_daily = _cadastros_por_dia(df_dates)
+        cad_month = _cadastros_por_mes(df_dates)
+
         _upsert_hist(HIST_CAD_DAILY, "dia", cad_daily)
         _upsert_hist(HIST_CAD_MONTH, "mes", cad_month)
 
-    # Snapshot do "arquivo do dia" (para comparação hoje vs ontem)
     metrics = {
         "total_contas": total_contas_arquivo,
         "qtd_com_pix": qtd_com_pix,
@@ -504,9 +522,6 @@ if uploaded_c6:
     _snapshot_to_disk(tag=uploaded_c6.name, file_hash=file_hash, metrics=metrics)
     prev, latest_saved = _load_prev_latest()
 
-# =========================
-# RESUMO / PAINEL
-# =========================
 st.divider()
 
 if latest_saved:
@@ -514,42 +529,38 @@ if latest_saved:
 
     st.subheader("Resumo do dia (arquivo enviado)")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Contas abertas (arquivo)", fmt_int(m["total_contas"]))
+    c1.metric("Contas abertas", fmt_int(m["total_contas"]))
     c2.metric("Saldo total", fmt_money(m["saldo_total"]))
     c3.metric("Clientes com Pix", fmt_int(m["qtd_com_pix"]))
     c4.metric("Clientes sem Pix", fmt_int(m["qtd_sem_pix"]))
 
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Domicílio C6", fmt_int(m["qtd_c6"]))
+    c5.metric("Clientes com domicílio C6", fmt_int(m["qtd_c6"]))
     c6.metric("Contas qualificadas", fmt_int(m["total_qualificadas"]))
     c7.metric("Receita estimada", fmt_money(m["total_payout"]))
     c8.metric("Arquivo", latest_saved.get("tag", "-"))
 
-    st.subheader("Diferença (arquivo de hoje vs arquivo anterior)")
+    st.subheader("Diferença (arquivo de hoje vs anterior)")
     if prev and prev.get("metrics"):
         pm = prev["metrics"]
         d1, d2, d3, d4 = st.columns(4)
-        d1.metric("Δ Contas", f"{(m['total_contas'] - pm.get('total_contas', 0)):+,}".replace(",", "."))
+        d1.metric("Δ Abertas", f"{(m['total_contas'] - pm.get('total_contas', 0)):+,}".replace(",", "."))
         d2.metric("Δ Saldo", fmt_money(m["saldo_total"] - pm.get("saldo_total", 0.0)))
         d3.metric("Δ Qualificadas", f"{(m['total_qualificadas'] - pm.get('total_qualificadas', 0)):+,}".replace(",", "."))
         d4.metric("Δ Receita", fmt_money(m["total_payout"] - pm.get("total_payout", 0)))
     else:
         st.info("Ainda não existe arquivo anterior para comparar. Envie pelo menos 2 dias.")
-
 else:
     st.info("Envie a planilha principal (C6) para gerar o resumo do dia. O histórico será acumulado a partir de 01/01/2026.")
 
-# =========================
-# TABS (HISTÓRICO)
-# =========================
 st.divider()
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Histórico de Aberturas",
     "Fundações",
     "Pix e Status",
     "Qualificadas e Receita",
     "Cadastro vs Abertura (%)",
-    "Backup do histórico",
 ])
 
 with tab1:
@@ -560,7 +571,7 @@ with tab1:
         st.info("Sem histórico diário ainda.")
     else:
         show = h_daily.copy()
-        show["Dia"] = show["dia"].apply(lambda x: fmt_date_br(pd.to_datetime(x).date()))
+        show["Dia"] = show["dia"].apply(fmt_date_br)
         show = show[["Dia", "valor"]].rename(columns={"valor": "Contas abertas"})
         st.dataframe(show, use_container_width=True, hide_index=True)
 
@@ -610,7 +621,7 @@ with tab4:
     if not uploaded_c6:
         st.info("Envie a planilha principal para ver as qualificadas.")
     else:
-        st.markdown("#### Critério (maior) atingido")
+        st.markdown("#### Critério (maior) considerado")
         st.dataframe(crit_tbl, use_container_width=True, hide_index=True)
 
         st.markdown("#### Receita por nível")
@@ -638,7 +649,7 @@ with tab5:
     st.markdown("### Cadastro ÷ Abertura (%) — histórico desde 01/01/2026")
     st.caption("Azul: >= 20% | Vermelho: < 20%")
 
-    if not os.path.exists(HIST_OPEN_DAILY) or not os.path.exists(HIST_CAD_DAILY):
+    if (not os.path.exists(HIST_OPEN_DAILY)) or (not os.path.exists(HIST_CAD_DAILY)):
         st.warning("Envie as duas planilhas (C6 e Leads) pelo menos uma vez para criar o histórico.")
     else:
         pct_d = _pct_table_daily()
@@ -646,49 +657,19 @@ with tab5:
             st.info("Sem dados suficientes ainda.")
         else:
             show = pct_d.copy()
-            show["Dia"] = show["dia"].apply(lambda x: fmt_date_br(pd.to_datetime(x).date()))
+            show["Dia"] = show["dia"].apply(fmt_date_br)
             show = show.rename(columns={
-                "valor_abertas": "Contas abertas",
-                "valor_cad": "Contas cadastradas",
-                "percentual": "Percentual",
-            })
-            show = show[["Dia", "Contas abertas", "Contas cadastradas", "Percentual"]]
-
-            # estilo pela coluna Percentual (numérica)
-            styled = _style_pct(pct_d.rename(columns={
-                "valor_abertas": "Contas abertas",
-                "valor_cad": "Contas cadastradas",
-                "percentual": "Percentual",
-            }))
-            styled = styled.format({"Percentual": lambda x: fmt_pct(x)})
-
-            # mostra já com dia formatado
-            styled_df = pct_d.copy()
-            styled_df["Dia"] = styled_df["dia"].apply(lambda x: fmt_date_br(pd.to_datetime(x).date()))
-            styled_df = styled_df.rename(columns={
                 "valor_abertas": "Contas abertas",
                 "valor_cad": "Contas cadastradas",
                 "percentual": "Percentual",
             })[["Dia", "Contas abertas", "Contas cadastradas", "Percentual"]]
 
-            # Como o .style não aplica no df com Dia já formatado de forma simples,
-            # aplicamos o estilo no df numérico e depois mostramos o df formatado.
-            # Resultado prático: cor funciona e o usuário vê data em dd/mm/aaaa.
-            colored = pct_d.copy()
-            colored = colored.rename(columns={
-                "valor_abertas": "Contas abertas",
-                "valor_cad": "Contas cadastradas",
-                "percentual": "Percentual",
-            })
-            colored["Dia"] = colored["dia"].apply(lambda x: fmt_date_br(pd.to_datetime(x).date()))
-            colored = colored[["Dia", "Contas abertas", "Contas cadastradas", "Percentual"]]
-
-            # Para manter a cor, criamos uma coluna auxiliar interna
-            aux = colored.copy()
+            aux = show.copy()
             aux["Percentual_num"] = pct_d["percentual"].values
+
             def style_row(row):
                 v = row["Percentual_num"]
-                color = "#cfe9ff" if v >= 0.20 else "#ffd6d6"
+                color = "#cfe9ff" if float(v) >= 0.20 else "#ffd6d6"
                 return ["background-color: %s" % color if c == "Percentual" else "" for c in row.index]
 
             st.dataframe(
@@ -713,9 +694,10 @@ with tab5:
 
             auxm = mm.copy()
             auxm["Percentual_num"] = pct_m["percentual"].values
+
             def style_row_m(row):
                 v = row["Percentual_num"]
-                color = "#cfe9ff" if v >= 0.20 else "#ffd6d6"
+                color = "#cfe9ff" if float(v) >= 0.20 else "#ffd6d6"
                 return ["background-color: %s" % color if c == "Percentual" else "" for c in row.index]
 
             st.dataframe(
@@ -724,26 +706,3 @@ with tab5:
                     .format({"Percentual": lambda x: fmt_pct(float(x))}),
                 use_container_width=True
             )
-
-with tab6:
-    st.markdown("### Backup do histórico (recomendado)")
-    st.caption("Baixe para guardar. Isso evita perder a memória se o app for reiniciado/recriado.")
-
-    files = [
-        (HIST_OPEN_DAILY, "aberturas_diario.csv"),
-        (HIST_OPEN_MONTH, "aberturas_mensal.csv"),
-        (HIST_CAD_DAILY, "cadastros_diario.csv"),
-        (HIST_CAD_MONTH, "cadastros_mensal.csv"),
-    ]
-
-    for path, name in files:
-        if os.path.exists(path):
-            with open(path, "rb") as f:
-                st.download_button(
-                    label=f"Baixar {name}",
-                    data=f,
-                    file_name=name,
-                    mime="text/csv"
-                )
-        else:
-            st.info(f"Ainda não existe: {name} (vai aparecer após você enviar os arquivos).")
