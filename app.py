@@ -362,4 +362,3 @@ if latest_saved:
             st.success(f"Total a receber: R$ {total_payout:,}".replace(",", "."))
 else:
     st.info("Envie a planilha Excel do dia para gerar o painel.")
-
