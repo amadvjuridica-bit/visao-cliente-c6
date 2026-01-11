@@ -23,7 +23,7 @@ COL_X = "CHAVES_PIX_FORTE"                # tipo chave pix
 COL_Y = "VL_SALDO_MEDIO_MENSALIZADO"      # saldo
 COL_V = "STATUS_CC"                       # status
 COL_AQ = "BANCO_DOMICILIO"                # domicílio
-COL_BY = "FL_QUALIFICADO_COMISS"          # qualificada (0/1)
+COL_BY = "FL_QUALIFICADO_COMISS"          # flag comissão (0/1)
 COL_BR = "MES_REF_COMISS"                 # M0/M1/M2
 COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"   # critérios texto
 
@@ -56,7 +56,6 @@ HIST_CAD_MONTH  = os.path.join(DATA_DIR, "hist_cadastros_mensal.csv")
 # ESTILO
 # =========================
 NAVY = "#1f2852"
-NAVY_2 = "#2b3570"
 OK = "#1e88e5"
 BAD = "#e53935"
 SOFT_BG = "#f6f8ff"
@@ -75,7 +74,6 @@ st.markdown(
       div[data-testid="metric-container"] {{
         border: 1px solid #e7eaf6; padding: 14px 14px; border-radius: 14px; background: {SOFT_BG};
       }}
-      table {{ width: 100%; border-collapse: collapse; }}
       thead th {{ text-align:left; border-bottom:1px solid #e7eaf6; padding:10px; color:{NAVY}; }}
       tbody td {{ border-bottom:1px solid #f0f2ff; padding:10px; }}
     </style>
@@ -97,7 +95,6 @@ def fmt_date_br(d) -> str:
     return dd.strftime("%d/%m/%Y")
 
 def fmt_month_br(s: str) -> str:
-    # "YYYY-MM" -> "MM/YYYY"
     if not isinstance(s, str) or len(s) < 7:
         return str(s)
     try:
@@ -192,7 +189,7 @@ def _upsert_hist(path: str, key_col: str, new_df: pd.DataFrame):
     _write_hist(base, path)
 
 # =========================
-# COERCE C6 (SEM SUMIR LINHAS)
+# COERCE C6
 # =========================
 def _coerce_c6_all(df: pd.DataFrame) -> pd.DataFrame:
     required = [COL_T, COL_P, COL_X, COL_Y, COL_V, COL_AQ, COL_BY, COL_BR, COL_CRIT]
@@ -212,16 +209,13 @@ def _coerce_c6_all(df: pd.DataFrame) -> pd.DataFrame:
     df[COL_BY] = pd.to_numeric(df[COL_BY], errors="coerce").fillna(0).astype(int)
     df[COL_Y] = pd.to_numeric(df[COL_Y], errors="coerce").fillna(0.0)
 
-    # FILTRO A PARTIR DE 01/01/2026:
-    # - Se a linha tem DT_CONTA_CRIADA, filtra pela data
-    # - Se NÃO tem DT_CONTA_CRIADA, mantém a linha (para não errar qualificadas)
+    # filtro desde 01/01/2026:
+    # mantém linhas sem DT_CONTA_CRIADA (para não “sumir” coisas), mas corta se tiver data anterior
     mask = df[COL_T].isna() | (df[COL_T] >= START_DATE)
     df = df[mask].copy()
-
     return df
 
 def _df_aberturas(df_all: pd.DataFrame) -> pd.DataFrame:
-    # Somente linhas que têm data de abertura válida (é isso que conta "abertas por dia/mês")
     dfo = df_all[df_all[COL_T].notna()].copy()
     dfo = dfo[dfo[COL_T] >= START_DATE].copy()
     return dfo
@@ -245,10 +239,8 @@ def _pix_info(df_all: pd.DataFrame):
     has_pix = ~s.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
     qtd_com = int(has_pix.sum())
     qtd_sem = int((~has_pix).sum())
-
     por_chave = (
-        s.loc[has_pix]
-        .value_counts()
+        s.loc[has_pix].value_counts()
         .rename_axis("Tipo de chave Pix")
         .reset_index(name="Quantidade")
     )
@@ -268,17 +260,15 @@ def _status_counts(df_all: pd.DataFrame) -> pd.DataFrame:
 def _domicilio_c6_count(df_all: pd.DataFrame) -> int:
     return int(df_all[COL_AQ].fillna("").astype(str).apply(_contains_c6).sum())
 
-def _qualificadas(df_all: pd.DataFrame) -> pd.DataFrame:
-    return df_all[df_all[COL_BY] == 1].copy()
-
-def _br_counts(dfq: pd.DataFrame) -> pd.DataFrame:
-    s = dfq[COL_BR].fillna("").astype(str).str.upper().str.strip()
-    return s.replace("", "SEM").value_counts().rename_axis("Referência").reset_index(name="Quantidade")
-
 # =========================
-# QUALIFICAÇÃO: MAIOR VALOR + CRITÉRIO
+# QUALIFICAÇÃO (B) + RECEITA (MAIOR VALOR)
 # =========================
 def _parse_criterios_max(txt: str) -> Tuple[int, str]:
+    """
+    Retorna:
+      - maior nível (0..4)
+      - nome do critério "vitorioso"
+    """
     if not isinstance(txt, str) or not txt.strip():
         return 0, "N/A"
 
@@ -303,38 +293,25 @@ def _parse_criterios_max(txt: str) -> Tuple[int, str]:
     best_val = max(0, min(best_val, 4))
     return best_val, best_name
 
-def _payout_from_max(dfq: pd.DataFrame):
+def _qualificadas_B(df_all: pd.DataFrame) -> pd.DataFrame:
+    """
+    REGRA B:
+      qualificada = (BY == 1) E (maior_criterio >= 1)
+    """
+    df = df_all.copy()
+    parsed = df[COL_CRIT].apply(_parse_criterios_max)
+    df["Critério principal"] = parsed.apply(lambda x: x[1])
+    df["Nível principal"] = parsed.apply(lambda x: int(x[0]))
+    df["Receita estimada"] = df["Nível principal"].apply(lambda n: PAYOUT.get(int(n), 0))
+
+    dfq = df[(df[COL_BY] == 1) & (df["Nível principal"] >= 1)].copy()
+    return dfq
+
+def _payout_table_from_dfq(dfq: pd.DataFrame) -> Tuple[pd.DataFrame, int]:
     if dfq.empty:
-        return (
-            pd.DataFrame(columns=["Nível", "Quantidade", "Valor unitário", "Total"]),
-            0,
-            pd.DataFrame(columns=["Critério (principal)", "Quantidade"]),
-            pd.DataFrame()
-        )
+        return pd.DataFrame(columns=["Nível", "Quantidade", "Valor unitário", "Total"]), 0
 
-    parsed = dfq[COL_CRIT].apply(_parse_criterios_max)
-    dfq2 = dfq.copy()
-    dfq2["Critério principal"] = parsed.apply(lambda x: x[1])
-    dfq2["Nível principal"] = parsed.apply(lambda x: int(x[0]))
-    dfq2["Receita estimada"] = dfq2["Nível principal"].apply(lambda n: PAYOUT.get(int(n), 0))
-
-    crit_tbl = (
-        dfq2[dfq2["Nível principal"] > 0]["Critério principal"]
-        .value_counts()
-        .rename_axis("Critério (principal)")
-        .reset_index(name="Quantidade")
-    )
-
-    levels = dfq2["Nível principal"]
-    levels = levels[levels > 0]
-    if levels.empty:
-        return (
-            pd.DataFrame(columns=["Nível", "Quantidade", "Valor unitário", "Total"]),
-            0,
-            crit_tbl,
-            dfq2
-        )
-
+    levels = dfq["Nível principal"].astype(int)
     counts = levels.value_counts().sort_index()
     rows = []
     for level, qty in counts.items():
@@ -342,12 +319,28 @@ def _payout_from_max(dfq: pd.DataFrame):
         total = int(qty) * int(unit)
         rows.append([int(level), int(qty), unit, total])
 
-    payout_tbl = pd.DataFrame(rows, columns=["Nível", "Quantidade", "Valor unitário", "Total"])
-    total_payout = int(payout_tbl["Total"].sum()) if not payout_tbl.empty else 0
-    return payout_tbl, total_payout, crit_tbl, dfq2
+    tbl = pd.DataFrame(rows, columns=["Nível", "Quantidade", "Valor unitário", "Total"])
+    total_payout = int(tbl["Total"].sum()) if not tbl.empty else 0
+    return tbl, total_payout
+
+def _crit_principal_table(dfq: pd.DataFrame) -> pd.DataFrame:
+    if dfq.empty:
+        return pd.DataFrame(columns=["Critério (principal)", "Quantidade"])
+    return (
+        dfq["Critério principal"].fillna("N/A").replace("", "N/A")
+        .value_counts()
+        .rename_axis("Critério (principal)")
+        .reset_index(name="Quantidade")
+    )
+
+def _br_counts(dfq: pd.DataFrame) -> pd.DataFrame:
+    if dfq.empty:
+        return pd.DataFrame(columns=["Referência", "Quantidade"])
+    s = dfq[COL_BR].fillna("").astype(str).str.upper().str.strip()
+    return s.replace("", "SEM").value_counts().rename_axis("Referência").reset_index(name="Quantidade")
 
 # =========================
-# FUNDAÇÕES: POR DIA → MÊS/ANO
+# FUNDAÇÕES (MÊS/ANO POR DIA)
 # =========================
 def _fundacoes_mes_por_dia(df_open: pd.DataFrame, dia: dt.date) -> pd.DataFrame:
     x = df_open[df_open[COL_T] == dia][[COL_P]].dropna().copy()
@@ -385,16 +378,14 @@ def _cadastros_por_mes(df_dates: pd.DataFrame) -> pd.DataFrame:
     return m.value_counts().sort_index().rename_axis("mes").reset_index(name="valor")
 
 # =========================
-# % ABERTAS SOBRE CADASTRADAS (CORRIGIDO)
+# % ABERTAS SOBRE CADASTRADAS
 # =========================
 def _pct_daily_table() -> pd.DataFrame:
     o = _read_hist(HIST_OPEN_DAILY, "dia").rename(columns={"valor": "abertas"})
     c = _read_hist(HIST_CAD_DAILY, "dia").rename(columns={"valor": "cadastradas"})
     df = pd.merge(o, c, on="dia", how="outer").fillna(0)
-    df["abertas"] = df["abertas"].astype(int)
-    df["cadastradas"] = df["cadastradas"].astype(int)
-
-    # CORRIGIDO: abertas ÷ cadastradas
+    df["abertas"] = pd.to_numeric(df["abertas"], errors="coerce").fillna(0).astype(int)
+    df["cadastradas"] = pd.to_numeric(df["cadastradas"], errors="coerce").fillna(0).astype(int)
     df["percentual"] = df.apply(lambda r: (r["abertas"] / r["cadastradas"]) if r["cadastradas"] > 0 else 0.0, axis=1)
     df = _sort_hist(df, "dia")
     return df
@@ -403,10 +394,8 @@ def _pct_month_table() -> pd.DataFrame:
     o = _read_hist(HIST_OPEN_MONTH, "mes").rename(columns={"valor": "abertas"})
     c = _read_hist(HIST_CAD_MONTH, "mes").rename(columns={"valor": "cadastradas"})
     df = pd.merge(o, c, on="mes", how="outer").fillna(0)
-    df["abertas"] = df["abertas"].astype(int)
-    df["cadastradas"] = df["cadastradas"].astype(int)
-
-    # CORRIGIDO: abertas ÷ cadastradas
+    df["abertas"] = pd.to_numeric(df["abertas"], errors="coerce").fillna(0).astype(int)
+    df["cadastradas"] = pd.to_numeric(df["cadastradas"], errors="coerce").fillna(0).astype(int)
     df["percentual"] = df.apply(lambda r: (r["abertas"] / r["cadastradas"]) if r["cadastradas"] > 0 else 0.0, axis=1)
     df = _sort_hist(df, "mes")
     return df
@@ -495,10 +484,12 @@ df_open = None
 qtd_com_pix = qtd_sem_pix = 0
 pix_por_chave = pd.DataFrame()
 status_tbl = pd.DataFrame()
+
+dfq = pd.DataFrame()
 dfq_view = pd.DataFrame()
 payout_tbl = pd.DataFrame()
 crit_tbl = pd.DataFrame()
-br_counts = pd.DataFrame()
+br_counts_tbl = pd.DataFrame()
 total_payout = 0
 
 # Processa C6
@@ -507,8 +498,8 @@ if uploaded_c6:
     file_hash = _hash_bytes(file_bytes)
 
     df_raw = _load_excel(file_bytes)
-    df_all = _coerce_c6_all(df_raw)     # SEM SUMIR QUALIFICADAS
-    df_open = _df_aberturas(df_all)     # SOMENTE ABERTURAS COM DATA
+    df_all = _coerce_c6_all(df_raw)
+    df_open = _df_aberturas(df_all)
 
     # Históricos (aberturas)
     open_daily = _aberturas_por_dia(df_open)
@@ -516,18 +507,21 @@ if uploaded_c6:
     _upsert_hist(HIST_OPEN_DAILY, "dia", open_daily)
     _upsert_hist(HIST_OPEN_MONTH, "mes", open_month)
 
-    # Métricas gerais (com base no arquivo todo filtrado >= 01/01/2026)
+    # Métricas gerais
     qtd_com_pix, qtd_sem_pix, pix_por_chave = _pix_info(df_all)
     saldo_total = _sum_saldo(df_all)
     status_tbl = _status_counts(df_all)
     qtd_c6 = _domicilio_c6_count(df_all)
 
-    # Qualificadas (BY=1)
-    dfq = _qualificadas(df_all)
-    br_counts = _br_counts(dfq)
-    payout_tbl, total_payout, crit_tbl, dfq_view = _payout_from_max(dfq)
+    # Qualificadas (REGRA B)
+    dfq = _qualificadas_B(df_all)
+    dfq_view = dfq.copy()
 
-    # TOTAL DE CONTAS ABERTAS NO ARQUIVO = linhas com DT_CONTA_CRIADA (df_open)
+    # Receita por nível (maior valor)
+    payout_tbl, total_payout = _payout_table_from_dfq(dfq)
+    crit_tbl = _crit_principal_table(dfq)
+    br_counts_tbl = _br_counts(dfq)
+
     total_abertas_arquivo = int(df_open.shape[0])
     total_qualificadas = int(dfq.shape[0])
 
@@ -654,15 +648,15 @@ with tab3:
 
 with tab4:
     st.markdown("#### Qualificadas e Receita")
-    st.caption("Contas qualificadas = linhas com FL_QUALIFICADO_COMISS = 1 (não removemos linhas sem data de abertura).")
+    st.caption("Regra: qualificada = BY=1 e maior nível do texto de critérios >= 1. Receita usa somente o maior nível.")
 
     if df_all is None:
         st.info("Envie a planilha C6 para ver as qualificadas.")
     else:
-        st.markdown("##### Critério principal (maior nível por cliente)")
+        st.markdown("##### Critério principal (vitorioso)")
         st.dataframe(crit_tbl, use_container_width=True, hide_index=True)
 
-        st.markdown("##### Receita por nível (considerando somente o maior nível)")
+        st.markdown("##### Receita por nível (maior valor por cliente)")
         payout_show = payout_tbl.copy()
         if not payout_show.empty:
             payout_show["Valor unitário"] = payout_show["Valor unitário"].apply(fmt_money)
@@ -670,7 +664,7 @@ with tab4:
         st.dataframe(payout_show, use_container_width=True, hide_index=True)
         st.success(f"Receita estimada: {fmt_money(total_payout)}")
 
-        st.markdown("##### Visualização por cliente (auditoria)")
+        st.markdown("##### Auditoria por cliente (para você enxergar o nível e o critério)")
         cols_show = []
         if COL_DOC in dfq_view.columns:
             cols_show.append(COL_DOC)
@@ -684,11 +678,10 @@ with tab4:
         st.dataframe(view, use_container_width=True, hide_index=True)
 
         st.markdown("##### Referência (M0/M1/M2)")
-        st.dataframe(br_counts, use_container_width=True, hide_index=True)
+        st.dataframe(br_counts_tbl, use_container_width=True, hide_index=True)
 
 with tab5:
     st.markdown("#### Conversão: Abertas sobre Cadastradas")
-    st.caption("Histórico diário e mensal a partir de 01/01/2026.")
 
     daily_ok = os.path.exists(HIST_OPEN_DAILY) and os.path.exists(HIST_CAD_DAILY)
     month_ok = os.path.exists(HIST_OPEN_MONTH) and os.path.exists(HIST_CAD_MONTH)
