@@ -12,7 +12,7 @@ import streamlit as st
 # CONFIG GERAL
 # =========================
 START_DATE = dt.date(2026, 1, 1)  # memorizar a partir de 01/01/2026
-META_PCT = 0.20                  # meta 20%
+META_PCT = 0.20                  # 20%
 
 # =========================
 # COLUNAS (PLANILHA C6)
@@ -25,7 +25,7 @@ COL_V = "STATUS_CC"                       # status
 COL_AQ = "BANCO_DOMICILIO"                # domicílio
 COL_BY = "FL_QUALIFICADO_COMISS"          # qualificada (0/1)
 COL_BR = "MES_REF_COMISS"                 # M0/M1/M2
-COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"   # texto critérios
+COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"   # critérios texto
 
 COL_NOME = "NOME_CLIENTE"
 COL_DOC  = "CD_CPF_CNPJ_CLIENTE"
@@ -36,8 +36,7 @@ PAYOUT = {1: 210, 2: 345, 3: 600, 4: 810}
 # =========================
 # PLANILHA LEADS (CADASTRO)
 # =========================
-# Coluna M por posição (13ª coluna => índice 12)
-LEADS_DATE_COL_INDEX = 12
+LEADS_DATE_COL_INDEX = 12  # coluna M (13ª)
 
 # =========================
 # PERSISTÊNCIA
@@ -54,7 +53,7 @@ HIST_CAD_DAILY  = os.path.join(DATA_DIR, "hist_cadastros_diario.csv")
 HIST_CAD_MONTH  = os.path.join(DATA_DIR, "hist_cadastros_mensal.csv")
 
 # =========================
-# ESTILO (cores combinando com a logo)
+# ESTILO
 # =========================
 NAVY = "#1f2852"
 NAVY_2 = "#2b3570"
@@ -67,56 +66,18 @@ st.set_page_config(page_title="Assis & Mollerke", layout="wide")
 st.markdown(
     f"""
     <style>
-      .block-container {{
-        padding-top: 1.2rem;
-        padding-bottom: 2rem;
-      }}
-      .am-card {{
-        border: 1px solid #e7eaf6;
-        background: white;
-        padding: 14px 16px;
-        border-radius: 14px;
-        box-shadow: 0 4px 18px rgba(0,0,0,.04);
-      }}
-      .am-title {{
-        font-size: 28px;
-        font-weight: 800;
-        color: {NAVY};
-        margin: 0;
-      }}
-      .am-sub {{
-        color: #5b6280;
-        margin-top: 4px;
-      }}
-      .chip {{
-        display: inline-block;
-        padding: 6px 10px;
-        border-radius: 999px;
-        font-weight: 700;
-        font-size: 12px;
-        line-height: 1;
-      }}
-      .chip-ok {{
-        background: rgba(30,136,229,.12);
-        color: {OK};
-        border: 1px solid rgba(30,136,229,.25);
-      }}
-      .chip-bad {{
-        background: rgba(229,57,53,.10);
-        color: {BAD};
-        border: 1px solid rgba(229,57,53,.22);
-      }}
-      .chip-neutral {{
-        background: rgba(43,53,112,.08);
-        color: {NAVY_2};
-        border: 1px solid rgba(43,53,112,.18);
-      }}
+      .block-container {{ padding-top: 1.2rem; padding-bottom: 2rem; }}
+      .am-title {{ font-size: 28px; font-weight: 800; color: {NAVY}; margin: 0; }}
+      .am-sub {{ color: #5b6280; margin-top: 4px; }}
+      .chip {{ display:inline-block; padding:6px 10px; border-radius:999px; font-weight:700; font-size:12px; }}
+      .chip-ok {{ background: rgba(30,136,229,.12); color:{OK}; border:1px solid rgba(30,136,229,.25); }}
+      .chip-bad {{ background: rgba(229,57,53,.10); color:{BAD}; border:1px solid rgba(229,57,53,.22); }}
       div[data-testid="metric-container"] {{
-        border: 1px solid #e7eaf6;
-        padding: 14px 14px;
-        border-radius: 14px;
-        background: {SOFT_BG};
+        border: 1px solid #e7eaf6; padding: 14px 14px; border-radius: 14px; background: {SOFT_BG};
       }}
+      table {{ width: 100%; border-collapse: collapse; }}
+      thead th {{ text-align:left; border-bottom:1px solid #e7eaf6; padding:10px; color:{NAVY}; }}
+      tbody td {{ border-bottom:1px solid #f0f2ff; padding:10px; }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -231,9 +192,9 @@ def _upsert_hist(path: str, key_col: str, new_df: pd.DataFrame):
     _write_hist(base, path)
 
 # =========================
-# COERCE C6
+# COERCE C6 (SEM SUMIR LINHAS)
 # =========================
-def _coerce_c6(df: pd.DataFrame) -> pd.DataFrame:
+def _coerce_c6_all(df: pd.DataFrame) -> pd.DataFrame:
     required = [COL_T, COL_P, COL_X, COL_Y, COL_V, COL_AQ, COL_BY, COL_BR, COL_CRIT]
     for c in required:
         if c not in df.columns:
@@ -251,26 +212,35 @@ def _coerce_c6(df: pd.DataFrame) -> pd.DataFrame:
     df[COL_BY] = pd.to_numeric(df[COL_BY], errors="coerce").fillna(0).astype(int)
     df[COL_Y] = pd.to_numeric(df[COL_Y], errors="coerce").fillna(0.0)
 
-    df = df[df[COL_T].notna()].copy()
-    df = df[df[COL_T] >= START_DATE].copy()
+    # FILTRO A PARTIR DE 01/01/2026:
+    # - Se a linha tem DT_CONTA_CRIADA, filtra pela data
+    # - Se NÃO tem DT_CONTA_CRIADA, mantém a linha (para não errar qualificadas)
+    mask = df[COL_T].isna() | (df[COL_T] >= START_DATE)
+    df = df[mask].copy()
 
     return df
+
+def _df_aberturas(df_all: pd.DataFrame) -> pd.DataFrame:
+    # Somente linhas que têm data de abertura válida (é isso que conta "abertas por dia/mês")
+    dfo = df_all[df_all[COL_T].notna()].copy()
+    dfo = dfo[dfo[COL_T] >= START_DATE].copy()
+    return dfo
 
 # =========================
 # MÉTRICAS C6
 # =========================
-def _aberturas_por_dia(df: pd.DataFrame) -> pd.DataFrame:
-    s = pd.Series(df[COL_T]).dropna().apply(lambda d: d.strftime("%Y-%m-%d") if isinstance(d, dt.date) else "")
+def _aberturas_por_dia(df_open: pd.DataFrame) -> pd.DataFrame:
+    s = df_open[COL_T].dropna().apply(lambda d: d.strftime("%Y-%m-%d") if isinstance(d, dt.date) else "")
     s = s[s != ""]
     return s.value_counts().sort_index().rename_axis("dia").reset_index(name="valor")
 
-def _aberturas_por_mes(df: pd.DataFrame) -> pd.DataFrame:
-    t = pd.to_datetime(df[COL_T], errors="coerce")
+def _aberturas_por_mes(df_open: pd.DataFrame) -> pd.DataFrame:
+    t = pd.to_datetime(df_open[COL_T], errors="coerce")
     m = t.dropna().dt.to_period("M").astype(str)
     return m.value_counts().sort_index().rename_axis("mes").reset_index(name="valor")
 
-def _pix_info(df: pd.DataFrame):
-    s = df[COL_X].astype("string").fillna("").str.strip().str.upper()
+def _pix_info(df_all: pd.DataFrame):
+    s = df_all[COL_X].astype("string").fillna("").str.strip().str.upper()
     s = s.str.replace("'", "", regex=False)
     has_pix = ~s.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
     qtd_com = int(has_pix.sum())
@@ -284,22 +254,22 @@ def _pix_info(df: pd.DataFrame):
     )
     return qtd_com, qtd_sem, por_chave
 
-def _sum_saldo(df: pd.DataFrame) -> float:
-    return float(df[COL_Y].sum())
+def _sum_saldo(df_all: pd.DataFrame) -> float:
+    return float(df_all[COL_Y].sum())
 
-def _status_counts(df: pd.DataFrame) -> pd.DataFrame:
+def _status_counts(df_all: pd.DataFrame) -> pd.DataFrame:
     return (
-        df[COL_V].fillna("SEM STATUS").replace("", "SEM STATUS")
+        df_all[COL_V].fillna("SEM STATUS").replace("", "SEM STATUS")
         .value_counts()
         .rename_axis("Status")
         .reset_index(name="Quantidade")
     )
 
-def _domicilio_c6_count(df: pd.DataFrame) -> int:
-    return int(df[COL_AQ].fillna("").astype(str).apply(_contains_c6).sum())
+def _domicilio_c6_count(df_all: pd.DataFrame) -> int:
+    return int(df_all[COL_AQ].fillna("").astype(str).apply(_contains_c6).sum())
 
-def _qualificadas(df: pd.DataFrame) -> pd.DataFrame:
-    return df[df[COL_BY] == 1].copy()
+def _qualificadas(df_all: pd.DataFrame) -> pd.DataFrame:
+    return df_all[df_all[COL_BY] == 1].copy()
 
 def _br_counts(dfq: pd.DataFrame) -> pd.DataFrame:
     s = dfq[COL_BR].fillna("").astype(str).str.upper().str.strip()
@@ -379,8 +349,8 @@ def _payout_from_max(dfq: pd.DataFrame):
 # =========================
 # FUNDAÇÕES: POR DIA → MÊS/ANO
 # =========================
-def _fundacoes_mes_por_dia(df: pd.DataFrame, dia: dt.date) -> pd.DataFrame:
-    x = df[df[COL_T] == dia][[COL_P]].dropna().copy()
+def _fundacoes_mes_por_dia(df_open: pd.DataFrame, dia: dt.date) -> pd.DataFrame:
+    x = df_open[df_open[COL_T] == dia][[COL_P]].dropna().copy()
     if x.empty:
         return pd.DataFrame(columns=["Mês de fundação", "Quantidade"])
     x["Mês de fundação"] = x[COL_P].apply(lambda d: d.strftime("%m/%Y") if isinstance(d, dt.date) else "")
@@ -415,7 +385,7 @@ def _cadastros_por_mes(df_dates: pd.DataFrame) -> pd.DataFrame:
     return m.value_counts().sort_index().rename_axis("mes").reset_index(name="valor")
 
 # =========================
-# % Cadastro ÷ Abertura (SEM STYLER, ZERO ERROS)
+# % ABERTAS SOBRE CADASTRADAS (CORRIGIDO)
 # =========================
 def _pct_daily_table() -> pd.DataFrame:
     o = _read_hist(HIST_OPEN_DAILY, "dia").rename(columns={"valor": "abertas"})
@@ -423,7 +393,9 @@ def _pct_daily_table() -> pd.DataFrame:
     df = pd.merge(o, c, on="dia", how="outer").fillna(0)
     df["abertas"] = df["abertas"].astype(int)
     df["cadastradas"] = df["cadastradas"].astype(int)
-    df["percentual"] = df.apply(lambda r: (r["cadastradas"] / r["abertas"]) if r["abertas"] > 0 else 0.0, axis=1)
+
+    # CORRIGIDO: abertas ÷ cadastradas
+    df["percentual"] = df.apply(lambda r: (r["abertas"] / r["cadastradas"]) if r["cadastradas"] > 0 else 0.0, axis=1)
     df = _sort_hist(df, "dia")
     return df
 
@@ -433,12 +405,13 @@ def _pct_month_table() -> pd.DataFrame:
     df = pd.merge(o, c, on="mes", how="outer").fillna(0)
     df["abertas"] = df["abertas"].astype(int)
     df["cadastradas"] = df["cadastradas"].astype(int)
-    df["percentual"] = df.apply(lambda r: (r["cadastradas"] / r["abertas"]) if r["abertas"] > 0 else 0.0, axis=1)
+
+    # CORRIGIDO: abertas ÷ cadastradas
+    df["percentual"] = df.apply(lambda r: (r["abertas"] / r["cadastradas"]) if r["cadastradas"] > 0 else 0.0, axis=1)
     df = _sort_hist(df, "mes")
     return df
 
 def _chip_pct(p: float) -> str:
-    # HTML chip com cor
     if float(p) >= META_PCT:
         return f'<span class="chip chip-ok">OK • {fmt_pct(p)}</span>'
     return f'<span class="chip chip-bad">Atenção • {fmt_pct(p)}</span>'
@@ -473,7 +446,7 @@ def _load_prev_latest() -> Tuple[Optional[dict], Optional[dict]]:
     return prev, latest
 
 # =========================
-# LOGIN (simples)
+# LOGIN
 # =========================
 def login_gate():
     st.sidebar.markdown("### Acesso")
@@ -486,14 +459,9 @@ def login_gate():
     return st.session_state.get("logged_in", False)
 
 # =========================
-# TOPO (LOGO + TITULO)
+# TOPO (LOGO + TÍTULO)
 # =========================
-logo_candidates = [
-    "LOGO CORRETA.png",
-    "logo.png",
-    "assets/logo.png",
-    "LOGO_CORRETA.png",
-]
+logo_candidates = ["LOGO CORRETA.png", "logo.png", "assets/logo.png", "LOGO_CORRETA.png"]
 logo_found = next((p for p in logo_candidates if os.path.exists(p)), None)
 
 header_l, header_r = st.columns([1, 3])
@@ -504,7 +472,6 @@ with header_r:
     st.markdown('<p class="am-title">Assis & Mollerke</p>', unsafe_allow_html=True)
     st.markdown('<p class="am-sub">Painel executivo com memória desde 01/01/2026.</p>', unsafe_allow_html=True)
 
-# Login
 if not login_gate():
     st.stop()
 
@@ -521,8 +488,10 @@ with col_up2:
 
 prev, latest_saved = _load_prev_latest()
 
-# variáveis para as abas (só existem se upload)
-df = None
+# variáveis
+df_all = None
+df_open = None
+
 qtd_com_pix = qtd_sem_pix = 0
 pix_por_chave = pd.DataFrame()
 status_tbl = pd.DataFrame()
@@ -532,36 +501,38 @@ crit_tbl = pd.DataFrame()
 br_counts = pd.DataFrame()
 total_payout = 0
 
-# Processa upload C6
+# Processa C6
 if uploaded_c6:
     file_bytes = uploaded_c6.getvalue()
     file_hash = _hash_bytes(file_bytes)
 
     df_raw = _load_excel(file_bytes)
-    df = _coerce_c6(df_raw)
+    df_all = _coerce_c6_all(df_raw)     # SEM SUMIR QUALIFICADAS
+    df_open = _df_aberturas(df_all)     # SOMENTE ABERTURAS COM DATA
 
-    # Atualiza histórico aberturas
-    open_daily = _aberturas_por_dia(df)
-    open_month = _aberturas_por_mes(df)
+    # Históricos (aberturas)
+    open_daily = _aberturas_por_dia(df_open)
+    open_month = _aberturas_por_mes(df_open)
     _upsert_hist(HIST_OPEN_DAILY, "dia", open_daily)
     _upsert_hist(HIST_OPEN_MONTH, "mes", open_month)
 
-    # Métricas do dia (arquivo)
-    qtd_com_pix, qtd_sem_pix, pix_por_chave = _pix_info(df)
-    saldo_total = _sum_saldo(df)
-    status_tbl = _status_counts(df)
-    qtd_c6 = _domicilio_c6_count(df)
+    # Métricas gerais (com base no arquivo todo filtrado >= 01/01/2026)
+    qtd_com_pix, qtd_sem_pix, pix_por_chave = _pix_info(df_all)
+    saldo_total = _sum_saldo(df_all)
+    status_tbl = _status_counts(df_all)
+    qtd_c6 = _domicilio_c6_count(df_all)
 
-    # Qualificadas
-    dfq = _qualificadas(df)
+    # Qualificadas (BY=1)
+    dfq = _qualificadas(df_all)
     br_counts = _br_counts(dfq)
     payout_tbl, total_payout, crit_tbl, dfq_view = _payout_from_max(dfq)
 
-    total_contas_arquivo = int(df.shape[0])
+    # TOTAL DE CONTAS ABERTAS NO ARQUIVO = linhas com DT_CONTA_CRIADA (df_open)
+    total_abertas_arquivo = int(df_open.shape[0])
     total_qualificadas = int(dfq.shape[0])
 
     metrics = {
-        "total_contas": total_contas_arquivo,
+        "total_abertas": total_abertas_arquivo,
         "qtd_com_pix": qtd_com_pix,
         "qtd_sem_pix": qtd_sem_pix,
         "saldo_total": float(saldo_total),
@@ -573,12 +544,11 @@ if uploaded_c6:
     _snapshot_to_disk(tag=uploaded_c6.name, file_hash=file_hash, metrics=metrics)
     prev, latest_saved = _load_prev_latest()
 
-# Processa upload Leads
-lead_col_used = None
+# Processa Leads
 if uploaded_leads:
     try:
         df_leads = _load_excel(uploaded_leads.getvalue())
-        df_dates, lead_col_used = _load_leads_dates(df_leads)
+        df_dates, _ = _load_leads_dates(df_leads)
 
         cad_daily = _cadastros_por_dia(df_dates)
         cad_month = _cadastros_por_mes(df_dates)
@@ -591,7 +561,7 @@ if uploaded_leads:
 st.divider()
 
 # =========================
-# RESUMO EXECUTIVO
+# RESUMO
 # =========================
 if latest_saved:
     m = latest_saved["metrics"]
@@ -599,14 +569,14 @@ if latest_saved:
     st.markdown("### Resumo executivo")
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Contas abertas (arquivo)", fmt_int(m["total_contas"]))
+    c1.metric("Contas abertas (arquivo)", fmt_int(m["total_abertas"]))
     c2.metric("Saldo total", fmt_money(m["saldo_total"]))
     c3.metric("Clientes com Pix", fmt_int(m["qtd_com_pix"]))
     c4.metric("Clientes sem Pix", fmt_int(m["qtd_sem_pix"]))
 
     c5, c6, c7, c8 = st.columns(4)
     c5.metric("Domicílio C6", fmt_int(m["qtd_c6"]))
-    c6.metric("Qualificadas", fmt_int(m["total_qualificadas"]))
+    c6.metric("Contas qualificadas", fmt_int(m["total_qualificadas"]))
     c7.metric("Receita estimada", fmt_money(m["total_payout"]))
     c8.metric("Arquivo processado", latest_saved.get("tag", "-"))
 
@@ -614,14 +584,14 @@ if latest_saved:
     if prev and prev.get("metrics"):
         pm = prev["metrics"]
         d1, d2, d3, d4 = st.columns(4)
-        d1.metric("Abertas", fmt_int(m["total_contas"]), delta=f"{m['total_contas']-pm.get('total_contas',0):+d}")
-        d2.metric("Saldo total", fmt_money(m["saldo_total"]), delta=fmt_money(m["saldo_total"]-pm.get("saldo_total",0.0)))
+        d1.metric("Abertas", fmt_int(m["total_abertas"]), delta=f"{m['total_abertas']-pm.get('total_abertas',0):+d}")
+        d2.metric("Saldo", fmt_money(m["saldo_total"]), delta=fmt_money(m["saldo_total"]-pm.get("saldo_total",0.0)))
         d3.metric("Qualificadas", fmt_int(m["total_qualificadas"]), delta=f"{m['total_qualificadas']-pm.get('total_qualificadas',0):+d}")
         d4.metric("Receita", fmt_money(m["total_payout"]), delta=fmt_money(m["total_payout"]-pm.get("total_payout",0)))
     else:
         st.info("Envie pelo menos 2 dias para aparecer a variação.")
 else:
-    st.info("Envie a planilha C6 para gerar o resumo do dia e alimentar o histórico.")
+    st.info("Envie a planilha C6 para gerar o resumo e alimentar o histórico.")
 
 st.divider()
 
@@ -659,20 +629,17 @@ with tab1:
 
 with tab2:
     st.markdown("#### Fundações por dia (mês/ano)")
-    if df is None or df.empty:
+    if df_open is None or df_open.empty:
         st.info("Envie a planilha C6 para ver este relatório.")
     else:
-        dias = sorted(pd.Series(df[COL_T]).dropna().unique().tolist())
-        if not dias:
-            st.info("Sem datas de abertura no arquivo.")
-        else:
-            dia_sel = st.selectbox("Selecione a data de abertura", dias, format_func=fmt_date_br)
-            fund = _fundacoes_mes_por_dia(df, dia_sel)
-            st.dataframe(fund, use_container_width=True, hide_index=True)
+        dias = sorted(pd.Series(df_open[COL_T]).dropna().unique().tolist())
+        dia_sel = st.selectbox("Selecione a data de abertura", dias, format_func=fmt_date_br)
+        fund = _fundacoes_mes_por_dia(df_open, dia_sel)
+        st.dataframe(fund, use_container_width=True, hide_index=True)
 
 with tab3:
     st.markdown("#### Pix")
-    if df is None:
+    if df_all is None:
         st.info("Envie a planilha C6 para ver Pix e Status.")
     else:
         a, b = st.columns(2)
@@ -687,15 +654,15 @@ with tab3:
 
 with tab4:
     st.markdown("#### Qualificadas e Receita")
-    st.caption("O cálculo considera apenas o MAIOR nível dos critérios por cliente (ex.: SALDO MEDIO: 4).")
+    st.caption("Contas qualificadas = linhas com FL_QUALIFICADO_COMISS = 1 (não removemos linhas sem data de abertura).")
 
-    if df is None:
+    if df_all is None:
         st.info("Envie a planilha C6 para ver as qualificadas.")
     else:
-        st.markdown("##### Critério principal (por maior nível)")
+        st.markdown("##### Critério principal (maior nível por cliente)")
         st.dataframe(crit_tbl, use_container_width=True, hide_index=True)
 
-        st.markdown("##### Receita por nível")
+        st.markdown("##### Receita por nível (considerando somente o maior nível)")
         payout_show = payout_tbl.copy()
         if not payout_show.empty:
             payout_show["Valor unitário"] = payout_show["Valor unitário"].apply(fmt_money)
@@ -703,7 +670,7 @@ with tab4:
         st.dataframe(payout_show, use_container_width=True, hide_index=True)
         st.success(f"Receita estimada: {fmt_money(total_payout)}")
 
-        st.markdown("##### Visualização por cliente (para entendimento)")
+        st.markdown("##### Visualização por cliente (auditoria)")
         cols_show = []
         if COL_DOC in dfq_view.columns:
             cols_show.append(COL_DOC)
@@ -720,8 +687,8 @@ with tab4:
         st.dataframe(br_counts, use_container_width=True, hide_index=True)
 
 with tab5:
-    st.markdown("#### Cadastro x Abertura (acumulado)")
-    st.caption("Painel diário e mensal, com indicador automático de desempenho.")
+    st.markdown("#### Conversão: Abertas sobre Cadastradas")
+    st.caption("Histórico diário e mensal a partir de 01/01/2026.")
 
     daily_ok = os.path.exists(HIST_OPEN_DAILY) and os.path.exists(HIST_CAD_DAILY)
     month_ok = os.path.exists(HIST_OPEN_MONTH) and os.path.exists(HIST_CAD_MONTH)
@@ -743,13 +710,9 @@ with tab5:
                 view = view.rename(columns={
                     "abertas": "Contas abertas",
                     "cadastradas": "Contas cadastradas",
-                })[["Data", "Contas abertas", "Contas cadastradas", "Indicador", "Percentual"]]
+                })[["Data", "Contas cadastradas", "Contas abertas", "Indicador", "Percentual"]]
 
-                # Renderiza “Indicador” como HTML
-                st.markdown(
-                    view.to_html(index=False, escape=False),
-                    unsafe_allow_html=True
-                )
+                st.markdown(view.to_html(index=False, escape=False), unsafe_allow_html=True)
 
         st.divider()
 
@@ -767,9 +730,6 @@ with tab5:
                 viewm = viewm.rename(columns={
                     "abertas": "Contas abertas",
                     "cadastradas": "Contas cadastradas",
-                })[["Mês", "Contas abertas", "Contas cadastradas", "Indicador", "Percentual"]]
+                })[["Mês", "Contas cadastradas", "Contas abertas", "Indicador", "Percentual"]]
 
-                st.markdown(
-                    viewm.to_html(index=False, escape=False),
-                    unsafe_allow_html=True
-                )
+                st.markdown(viewm.to_html(index=False, escape=False), unsafe_allow_html=True)
