@@ -225,24 +225,18 @@ def _diff(a: Optional[float], b: Optional[float]) -> Optional[float]:
 # ---------------------------
 def login_gate():
     st.sidebar.title("Acesso")
-    users = st.secrets.get("users", {})
-    auth = st.secrets.get("auth", {})
 
-    st.sidebar.caption(auth.get("name", "Login"))
-
-    u = st.sidebar.text_input("Usuário", value="", key="login_user")
-    p = st.sidebar.text_input("Senha", value="", type="password", key="login_pass")
+    u = st.sidebar.text_input("Usuário", value="")
+    p = st.sidebar.text_input("Senha", value="", type="password")
 
     if st.sidebar.button("Entrar"):
-        if u in users and str(users[u]) == str(p):
+        if u == "admin" and p == "123456":
             st.session_state["logged_in"] = True
-            st.session_state["user"] = u
         else:
             st.session_state["logged_in"] = False
             st.sidebar.error("Usuário ou senha inválidos.")
 
     return st.session_state.get("logged_in", False)
-
 # ---------------------------
 # App
 # ---------------------------
