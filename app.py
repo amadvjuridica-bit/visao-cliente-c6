@@ -9,848 +9,986 @@ from typing import Optional, Dict, Tuple, List
 import pandas as pd
 import streamlit as st
 
-# =========================================================
-# CONFIGURAÇÕES (colunas)
-# =========================================================
+# ============================================================
+# CONFIGURAÇÕES PRINCIPAIS
+# ============================================================
 
-# Planilha C6 (Visão Cliente) - diária
-COL_OPEN_DATE = "DT_CONTA_CRIADA"            # data abertura/conta criada (você chama de "coluna T")
-COL_FOUND_DATE = "DT_FUNDACAO_EMPRESA"       # data fundação (você chama de "coluna P")
-COL_PIX_TYPE = "CHAVES_PIX_FORTE"            # (você chama de "coluna X")
-COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"     # (você chama de "coluna Y")
-COL_STATUS = "STATUS_CC"                     # (você chama de "coluna V")
-COL_DOMICILIO = "BANCO_DOMICILIO"            # (você chama de "coluna AQ")
+APP_TITLE = "Assis & Mollerke"
+APP_SUBTITLE = "Painel executivo — Visão Cliente C6 + Leads + Remuneração incremental"
+LOGO_PATH = "LOGO CORRETA.png"  # arquivo no seu repositório (mesmo nome)
 
-# Coluna de critérios (vale para tudo: diária e mensal)
-COL_CRITERIOS = "CRITERIOS_ATINGIDOS_COMISS"
+# A partir de quando guardar histórico (clientes somem do arquivo do dia seguinte)
+HIST_START_DATE = dt.date(2026, 1, 1)
 
-# Coluna do CNPJ (você confirmou SIM)
-COL_CNPJ = "CD_CPF_CNPJ_CLIENTE"
-
-# Planilha Leads - diária
-LEADS_COL_DATE = "DATA_CADASTRO"  # você disse "coluna M tem a data do cadastro"
-# Caso sua planilha venha com outro nome, o app tenta achar automaticamente.
-
-# =========================================================
-# Regras de remuneração por faixa
-# =========================================================
-# Faixa definida pela quantidade total de QUALIFICADAS no mês
-# (nível: 1..4)
-PAYOUT_TIERS = [
-    # (min_qualificadas, multiplicador_nome, tabela_nivel)
-    (0,   "Até 49 qualificadas (1.0)",  {1: 140.00, 2: 230.00, 3: 400.00, 4: 540.00}),
-    (50,  "50 a 149 qualificadas (1.1)", {1: 154.00, 2: 253.00, 3: 440.00, 4: 594.00}),
-    (150, "150 a 349 qualificadas (1.25)", {1: 175.00, 2: 287.50, 3: 500.00, 4: 675.00}),
-    (350, "350+ qualificadas (1.5)",  {1: 210.00, 2: 345.00, 3: 600.00, 4: 810.00}),
-]
-
-# =========================================================
-# Persistência local (histórico) - OBS: em Streamlit Cloud, pode resetar após redeploy
-# =========================================================
+# Diretório de armazenamento local (Streamlit Cloud mantém entre execuções)
 DATA_DIR = "data_store"
 os.makedirs(DATA_DIR, exist_ok=True)
 
-HIST_OPEN_DAILY = os.path.join(DATA_DIR, "hist_open_daily.csv")     # aberturas por dia
-HIST_LEADS_DAILY = os.path.join(DATA_DIR, "hist_leads_daily.csv")   # cadastradas por dia
-HIST_MONTHLY_PAY = os.path.join(DATA_DIR, "hist_monthly_pay.csv")   # remuneração mensal incremental
+# Arquivos de histórico (CSV simples e robusto)
+HIST_OPEN_DAILY = os.path.join(DATA_DIR, "hist_aberturas_diario.csv")   # dia, abertas
+HIST_LEADS_DAILY = os.path.join(DATA_DIR, "hist_cadastros_diario.csv")  # dia, cadastradas
+HIST_SNAP_LATEST = os.path.join(DATA_DIR, "latest_snapshot.json")
+HIST_SNAP_PREV = os.path.join(DATA_DIR, "prev_snapshot.json")
 
-# =========================================================
-# Helpers
-# =========================================================
+# Remuneração incremental (por CNPJ ao longo dos meses)
+HIST_PAYMENTS = os.path.join(DATA_DIR, "hist_pagamentos_incremental.json")  # {cnpj: max_pago_ate_agora}
+
+# ============================================================
+# NOMES DE COLUNAS (quando existirem por nome)
+# ============================================================
+
+# Planilha diária (Visão Cliente)
+COL_DATA_CONTA = "DT_CONTA_CRIADA"                 # data de abertura da conta (T)
+COL_FUNDACAO = "DT_FUNDACAO_EMPRESA"               # data fundação (P)
+COL_PIX_TIPO = "CHAVES_PIX_FORTE"                  # tipo de chave pix
+COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"           # saldo
+COL_STATUS = "STATUS_CC"                           # status
+COL_DOMICILIO = "BANCO_DOMICILIO"                  # banco domicílio
+COL_CNPJ = "CD_CPF_CNPJ_CLIENTE"                   # CNPJ/CPF (você confirmou)
+
+# Critérios (pode vir com nome — nos antigos vem assim)
+COL_CRITERIOS_NOME = "CRITERIOS_ATINGIDOS_COMISS"
+
+# Planilha Leads (cadastros) — você falou: COLUNA M = data do cadastro.
+# Como o nome pode variar, vamos localizar por posição (M = 13) se não acharmos por nome.
+# Se existir um nome padrão, você pode colocar aqui depois.
+LEADS_DATE_NAME_CANDIDATES = ["DATA_CADASTRO", "DT_CADASTRO", "DATA", "DT"]
+
+# ============================================================
+# TABELA DE REMUNERAÇÃO POR FAIXA (conforme sua regra)
+# ============================================================
+# Faixa definida pela quantidade total de qualificadas do mês.
+# Cada faixa define o valor cheio por nível.
+PAYOUT_TIERS = [
+    # (min_qualificadas, multiplicador_label, {nivel: valor})
+    (0,   "1.0 (até 49)",   {1: 140.00, 2: 230.00, 3: 400.00, 4: 540.00}),
+    (50,  "1.1 (50 a 149)", {1: 154.00, 2: 253.00, 3: 440.00, 4: 594.00}),
+    (150, "1.25 (150 a 349)", {1: 175.00, 2: 287.50, 3: 500.00, 4: 675.00}),
+    (350, "1.5 (350+)",     {1: 210.00, 2: 345.00, 3: 600.00, 4: 810.00}),
+]
+
+# ============================================================
+# FUNÇÕES UTILITÁRIAS
+# ============================================================
+
+def br_money(x: float) -> str:
+    try:
+        s = f"{float(x):,.2f}"
+        return "R$ " + s.replace(",", "X").replace(".", ",").replace("X", ".")
+    except Exception:
+        return "R$ 0,00"
+
+def br_int(n: int) -> str:
+    try:
+        return f"{int(n):,}".replace(",", ".")
+    except Exception:
+        return "0"
+
 def br_date(d: Optional[dt.date]) -> str:
-    if pd.isna(d) or d is None:
-        return ""
-    if isinstance(d, pd.Timestamp):
-        d = d.date()
+    if not d:
+        return "-"
     return d.strftime("%d/%m/%Y")
 
-def br_money(v: float) -> str:
-    try:
-        v = float(v)
-    except:
-        v = 0.0
-    s = f"{v:,.2f}"
-    # troca padrão americano para BR
-    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R$ {s}"
-
-def _hash_bytes(b: bytes) -> str:
+def sha_bytes(b: bytes) -> str:
+    import hashlib
     return hashlib.sha256(b).hexdigest()
 
-def _read_excel(file_bytes: bytes) -> pd.DataFrame:
-    return pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
-
-def _to_date_series(s: pd.Series) -> pd.Series:
+def to_date_series(s: pd.Series) -> pd.Series:
     return pd.to_datetime(s, errors="coerce").dt.date
 
-def _norm_str(s: pd.Series) -> pd.Series:
+def normalize_str(s: pd.Series) -> pd.Series:
     return s.astype("string").fillna("").str.strip()
 
-def _contains_c6(x: str) -> bool:
-    return "c6" in str(x).lower()
+def read_excel_bytes(file_bytes: bytes) -> pd.DataFrame:
+    return pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
 
-def _ensure_cols(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
-    for c in cols:
-        if c not in df.columns:
-            df[c] = pd.NA
-    return df
+def excel_col_letter_to_index(letter: str) -> int:
+    # A->1, B->2... Z->26, AA->27... BY->77
+    letter = letter.upper().strip()
+    num = 0
+    for ch in letter:
+        if "A" <= ch <= "Z":
+            num = num * 26 + (ord(ch) - ord("A") + 1)
+    return num  # 1-based
 
-# =========================================================
-# REGRA DE QUALIFICAÇÃO (ÚNICA E OFICIAL)
-# - Qualifica se CRITERIOS_ATINGIDOS_COMISS tiver qualquer 1..4
-# - Nível = MAIOR número encontrado (1..4)
-# =========================================================
-CRIT_RE = re.compile(r":\s*(\d+)")
-def parse_level_from_criterios(txt: str) -> int:
-    if not isinstance(txt, str):
+def get_col_by_excel_letter(df: pd.DataFrame, letter: str) -> Optional[str]:
+    idx_1based = excel_col_letter_to_index(letter)
+    idx_0 = idx_1based - 1
+    if 0 <= idx_0 < len(df.columns):
+        return df.columns[idx_0]
+    return None
+
+def safe_get_column(df: pd.DataFrame, col_name: str) -> pd.Series:
+    if col_name in df.columns:
+        return df[col_name]
+    return pd.Series([pd.NA] * len(df))
+
+def contains_c6(val: str) -> bool:
+    return "c6" in str(val).lower()
+
+# ============================================================
+# REGRAS DE CRITÉRIOS (QUALIFICAÇÃO E NÍVEL)
+# ============================================================
+
+CRIT_PATTERN = re.compile(r":\s*(\d+)")
+
+def extract_max_level_from_criteria(val) -> int:
+    """
+    Retorna:
+      - 0 se não qualifica (0, vazio, texto sem números 1..4)
+      - 1..4 (maior valor encontrado) se qualifica
+    """
+    if val is None:
         return 0
-    nums = [int(n) for n in CRIT_RE.findall(txt)]
-    nums = [n for n in nums if n in (1, 2, 3, 4)]
-    return max(nums) if nums else 0
+    t = str(val).strip().upper()
+    if t == "" or t in {"0", "NAN", "NONE", "-"}:
+        return 0
 
-def add_qual_columns(df: pd.DataFrame) -> pd.DataFrame:
-    df = _ensure_cols(df, [COL_CRITERIOS])
-    df["Nivel_Qualificacao"] = df[COL_CRITERIOS].astype(str).apply(parse_level_from_criterios).astype(int)
-    df["Qualificada"] = (df["Nivel_Qualificacao"] >= 1).astype(int)
-    return df
+    nums = [int(x) for x in CRIT_PATTERN.findall(t)]
+    if not nums:
+        return 0
 
-# =========================================================
-# Pix
-# =========================================================
+    # Considera apenas 1..4
+    nums = [n for n in nums if 1 <= n <= 4]
+    if not nums:
+        return 0
+    return max(nums)
+
+def find_criteria_column(df: pd.DataFrame) -> str:
+    """
+    Prioridade:
+      1) coluna nomeada CRITERIOS_ATINGIDOS_COMISS (para Nov/Dez e quando vier por nome)
+      2) senão, usa a coluna BY (posição 77 no Excel)
+    """
+    if COL_CRITERIOS_NOME in df.columns:
+        return COL_CRITERIOS_NOME
+
+    by_col = get_col_by_excel_letter(df, "BY")
+    if by_col is not None:
+        return by_col
+
+    # Se não achar, devolve um "fake" para não quebrar (vai dar tudo 0)
+    return "__CRITERIOS_NAO_ENCONTRADO__"
+
+# ============================================================
+# PIX (com e sem)
+# ============================================================
+
 def pix_summary(df: pd.DataFrame) -> Tuple[int, int, pd.DataFrame]:
-    df = _ensure_cols(df, [COL_PIX_TYPE])
-    s = df[COL_PIX_TYPE].astype("string").fillna("").str.strip().str.upper()
+    s = normalize_str(safe_get_column(df, COL_PIX_TIPO)).str.upper()
     s = s.str.replace("'", "", regex=False)
 
-    # considera sem pix: vazio, "-", "0", "NAN", etc
-    sem = s.isin(["", "-", "0", "NAN", "NONE", "SEM", "SEM PIX"])
-    com = ~sem
+    # Regra: tem pix se não for vazio e não for "-"
+    has = ~s.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
+    com = int(has.sum())
+    sem = int((~has).sum())
 
-    qtd_com = int(com.sum())
-    qtd_sem = int(sem.sum())
-
-    por_tipo = (
-        s.loc[com]
-        .value_counts(dropna=True)
-        .rename_axis("Tipo de chave Pix")
+    dist = (
+        s[has]
+        .value_counts()
+        .rename_axis("Tipo de chave")
         .reset_index(name="Quantidade")
     )
-    return qtd_com, qtd_sem, por_tipo
+    return com, sem, dist
 
-# =========================================================
-# Aberturas (contas criadas) e fundações
-# =========================================================
-def contas_por_dia(df: pd.DataFrame) -> pd.DataFrame:
-    df = _ensure_cols(df, [COL_OPEN_DATE])
-    d = _to_date_series(df[COL_OPEN_DATE])
-    out = (
-        pd.Series(d).dropna()
-        .value_counts()
+# ============================================================
+# ABERTURAS (contas abertas) — por dia e por mês
+# ============================================================
+
+def openings_daily_monthly(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, int]:
+    s = to_date_series(safe_get_column(df, COL_DATA_CONTA))
+    s = s.dropna()
+    total = int(len(s))
+
+    by_day = (
+        s.value_counts()
         .sort_index()
         .rename_axis("Dia")
         .reset_index(name="Contas abertas")
     )
-    return out
 
-def contas_por_mes(df: pd.DataFrame) -> pd.DataFrame:
-    df = _ensure_cols(df, [COL_OPEN_DATE])
-    t = pd.to_datetime(df[COL_OPEN_DATE], errors="coerce")
-    out = (
-        t.dropna().dt.to_period("M").astype(str)
-        .value_counts().sort_index()
+    t = pd.to_datetime(s, errors="coerce")
+    by_month = (
+        t.dt.to_period("M")
+        .astype(str)
+        .value_counts()
+        .sort_index()
         .rename_axis("Mês")
         .reset_index(name="Contas abertas")
     )
-    return out
+    return by_day, by_month, total
 
-def fundacoes_mes_por_dia(df: pd.DataFrame) -> pd.DataFrame:
-    df = _ensure_cols(df, [COL_OPEN_DATE, COL_FOUND_DATE])
-    d_open = _to_date_series(df[COL_OPEN_DATE])
-    d_found = pd.to_datetime(df[COL_FOUND_DATE], errors="coerce")
+def fundacao_month_distribution_for_day(df: pd.DataFrame, day: dt.date) -> pd.DataFrame:
+    d_open = to_date_series(safe_get_column(df, COL_DATA_CONTA))
+    d_fund = to_date_series(safe_get_column(df, COL_FUNDACAO))
 
-    tmp = pd.DataFrame({
-        "Dia": d_open,
-        "Mes_Fundacao": d_found.dt.to_period("M").astype(str)
-    }).dropna()
+    aux = pd.DataFrame({"abertura": d_open, "fundacao": d_fund})
+    aux = aux[(aux["abertura"] == day) & aux["fundacao"].notna()].copy()
+    if aux.empty:
+        return pd.DataFrame(columns=["Mês de fundação", "Quantidade"])
 
-    if tmp.empty:
-        return pd.DataFrame(columns=["Dia", "Mês de fundação", "Quantidade"])
-
+    # mês de referência da fundação (mm/aaaa)
+    mf = pd.to_datetime(aux["fundacao"]).dt.to_period("M").astype(str)
     out = (
-        tmp.groupby(["Dia", "Mes_Fundacao"])
-        .size()
+        mf.value_counts()
+        .sort_index()
+        .rename_axis("Mês de fundação")
         .reset_index(name="Quantidade")
-        .rename(columns={"Mes_Fundacao": "Mês de fundação"})
-        .sort_values(["Dia", "Mês de fundação"])
     )
     return out
 
-# =========================================================
-# Status
-# =========================================================
+# ============================================================
+# STATUS
+# ============================================================
+
 def status_counts(df: pd.DataFrame) -> pd.DataFrame:
-    df = _ensure_cols(df, [COL_STATUS])
-    s = df[COL_STATUS].fillna("").astype(str).str.strip()
+    s = normalize_str(safe_get_column(df, COL_STATUS))
     s = s.replace("", "Sem status")
-    out = (
+    return (
         s.value_counts()
         .rename_axis("Status")
         .reset_index(name="Quantidade")
     )
-    return out
 
-# =========================================================
-# Domicílio C6
-# =========================================================
+# ============================================================
+# DOMICÍLIO C6
+# ============================================================
+
 def domicilio_c6_count(df: pd.DataFrame) -> int:
-    df = _ensure_cols(df, [COL_DOMICILIO])
-    s = df[COL_DOMICILIO].fillna("").astype(str)
-    return int(s.apply(_contains_c6).sum())
+    s = normalize_str(safe_get_column(df, COL_DOMICILIO))
+    return int(s.apply(contains_c6).sum())
 
-# =========================================================
-# Leads (cadastradas)
-# =========================================================
-def guess_leads_date_col(df: pd.DataFrame) -> str:
-    # tenta achar automaticamente algo com "DATA" e "CAD" se não for exatamente DATA_CADASTRO
-    if LEADS_COL_DATE in df.columns:
-        return LEADS_COL_DATE
+# ============================================================
+# QUALIFICADAS / RECEITA (NÍVEL VITORIOSO)
+# ============================================================
 
-    cols = [c for c in df.columns if isinstance(c, str)]
-    for c in cols:
-        cu = c.upper()
-        if "DATA" in cu and ("CAD" in cu or "CADAST" in cu):
-            return c
-    # fallback: primeira coluna com datetime-like
-    for c in cols:
-        try:
-            s = pd.to_datetime(df[c], errors="coerce")
-            if s.notna().sum() > 0:
-                return c
-        except:
-            pass
-    return LEADS_COL_DATE  # cria vazio depois
+def qualified_levels_table(df: pd.DataFrame) -> Tuple[pd.DataFrame, int]:
+    crit_col = find_criteria_column(df)
+    crit = safe_get_column(df, crit_col)
 
-def leads_por_dia(df: pd.DataFrame) -> pd.DataFrame:
-    col = guess_leads_date_col(df)
-    df = _ensure_cols(df, [col])
-    d = _to_date_series(df[col])
-    out = (
-        pd.Series(d).dropna()
-        .value_counts()
+    levels = crit.apply(extract_max_level_from_criteria)
+    dfq = df.copy()
+    dfq["Nivel"] = levels
+
+    dfq = dfq[dfq["Nivel"] >= 1].copy()
+    total_qual = int(len(dfq))
+
+    dist = (
+        dfq["Nivel"].value_counts()
+        .sort_index()
+        .rename_axis("Nível")
+        .reset_index(name="Quantidade")
+    )
+    return dist, total_qual
+
+def tier_for_qualified_count(qty: int) -> Tuple[str, Dict[int, float]]:
+    # pega a maior faixa cujo min_qualificadas <= qty
+    chosen_label = PAYOUT_TIERS[0][1]
+    chosen_map = PAYOUT_TIERS[0][2]
+    for min_q, label, mapping in PAYOUT_TIERS:
+        if qty >= min_q:
+            chosen_label = label
+            chosen_map = mapping
+    return chosen_label, chosen_map
+
+# ============================================================
+# HISTÓRICO (SALVAR ABERTURAS / CADASTROS)
+# ============================================================
+
+def upsert_hist(csv_path: str, key_col: str, df_new: pd.DataFrame) -> pd.DataFrame:
+    """
+    Une histórico existente com df_new pelo key_col.
+    df_new deve conter key_col + demais colunas (ex.: abertas).
+    """
+    if os.path.exists(csv_path):
+        base = pd.read_csv(csv_path)
+    else:
+        base = pd.DataFrame(columns=df_new.columns)
+
+    # garante tipos
+    if key_col in base.columns:
+        base[key_col] = pd.to_datetime(base[key_col], errors="coerce").dt.date
+    if key_col in df_new.columns:
+        df_new[key_col] = pd.to_datetime(df_new[key_col], errors="coerce").dt.date
+
+    # remove duplicados pelo dia (mantém o mais novo)
+    merged = pd.concat([base, df_new], ignore_index=True)
+    merged = merged.dropna(subset=[key_col])
+    merged = merged.sort_values(key_col)
+    merged = merged.drop_duplicates(subset=[key_col], keep="last")
+
+    # filtra a partir de HIST_START_DATE
+    merged = merged[merged[key_col] >= HIST_START_DATE].copy()
+
+    merged.to_csv(csv_path, index=False)
+    return merged
+
+def load_hist(csv_path: str, key_col: str) -> pd.DataFrame:
+    if not os.path.exists(csv_path):
+        return pd.DataFrame(columns=[key_col])
+    df = pd.read_csv(csv_path)
+    df[key_col] = pd.to_datetime(df[key_col], errors="coerce").dt.date
+    df = df.dropna(subset=[key_col]).sort_values(key_col)
+    df = df[df[key_col] >= HIST_START_DATE].copy()
+    return df
+
+# ============================================================
+# LEADS (cadastros) — conta por dia e por mês
+# ============================================================
+
+def detect_leads_date_column(df: pd.DataFrame) -> str:
+    # 1) tenta por nomes candidatos
+    cols_up = {c.upper(): c for c in df.columns}
+    for cand in LEADS_DATE_NAME_CANDIDATES:
+        if cand.upper() in cols_up:
+            return cols_up[cand.upper()]
+
+    # 2) fallback: coluna M (13)
+    m_col = get_col_by_excel_letter(df, "M")
+    if m_col is not None:
+        return m_col
+
+    return "__LEADS_DATA_NAO_ENCONTRADA__"
+
+def leads_daily_monthly(df_leads: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, int]:
+    date_col = detect_leads_date_column(df_leads)
+    s = to_date_series(safe_get_column(df_leads, date_col)).dropna()
+    total = int(len(s))
+
+    by_day = (
+        s.value_counts()
         .sort_index()
         .rename_axis("Dia")
         .reset_index(name="Contas cadastradas")
     )
-    return out
-
-# =========================================================
-# Histórico (upsert)
-# =========================================================
-def _load_hist(path: str, key_col: str) -> pd.DataFrame:
-    if not os.path.exists(path):
-        return pd.DataFrame(columns=[key_col])
-    try:
-        return pd.read_csv(path)
-    except:
-        return pd.DataFrame(columns=[key_col])
-
-def _save_hist(path: str, df: pd.DataFrame) -> None:
-    df.to_csv(path, index=False)
-
-def upsert_hist(path: str, key_col: str, new_df: pd.DataFrame) -> pd.DataFrame:
-    base = _load_hist(path, key_col)
-    if base.empty:
-        base = pd.DataFrame(columns=new_df.columns)
-
-    merged = pd.concat([base, new_df], ignore_index=True)
-
-    # remove duplicados mantendo o último
-    if key_col in merged.columns:
-        merged = merged.drop_duplicates(subset=[key_col], keep="last")
-
-    # ordena (tenta converter para date)
-    try:
-        merged[key_col] = pd.to_datetime(merged[key_col], errors="coerce").dt.date.astype(str)
-        merged = merged.sort_values(by=key_col)
-    except:
-        pass
-
-    _save_hist(path, merged)
-    return merged
-
-# =========================================================
-# Cadastro x Abertura (abertas / cadastradas)
-# =========================================================
-def cadastro_x_abertura(open_daily: pd.DataFrame, leads_daily: pd.DataFrame) -> pd.DataFrame:
-    # open_daily: Dia, Contas abertas
-    # leads_daily: Dia, Contas cadastradas
-    a = open_daily.copy()
-    b = leads_daily.copy()
-    if a.empty and b.empty:
-        return pd.DataFrame(columns=["Dia", "Cadastradas", "Abertas", "Percentual"])
-
-    a["Dia"] = pd.to_datetime(a["Dia"], errors="coerce").dt.date.astype(str)
-    b["Dia"] = pd.to_datetime(b["Dia"], errors="coerce").dt.date.astype(str)
-
-    a = a.rename(columns={"Contas abertas": "Abertas"})
-    b = b.rename(columns={"Contas cadastradas": "Cadastradas"})
-
-    aux = pd.merge(b, a, on="Dia", how="outer").fillna(0)
-    aux["Cadastradas"] = aux["Cadastradas"].astype(int)
-    aux["Abertas"] = aux["Abertas"].astype(int)
-
-    # fórmula correta: abertas / cadastradas
-    aux["Percentual_num"] = aux.apply(
-        lambda r: (r["Abertas"] / r["Cadastradas"]) if r["Cadastradas"] > 0 else 0.0,
-        axis=1
+    t = pd.to_datetime(s, errors="coerce")
+    by_month = (
+        t.dt.to_period("M")
+        .astype(str)
+        .value_counts()
+        .sort_index()
+        .rename_axis("Mês")
+        .reset_index(name="Contas cadastradas")
     )
-    aux["Percentual"] = aux["Percentual_num"].apply(lambda x: f"{x*100:.1f}%".replace(".", ","))
+    return by_day, by_month, total
 
-    # formato BR para exibição
-    aux["Dia"] = pd.to_datetime(aux["Dia"], errors="coerce").dt.date.apply(lambda d: br_date(d))
+# ============================================================
+# SNAPSHOT (HOJE VS ONTEM) — apenas para resumo diário rápido
+# ============================================================
 
-    aux = aux.sort_values(by="Dia")
-    return aux
+def save_snapshot(file_hash: str, metrics: Dict, tag: str):
+    payload = {
+        "saved_at": dt.datetime.now().isoformat(),
+        "file_hash": file_hash,
+        "tag": tag,
+        "metrics": metrics,
+    }
+    # move latest -> prev
+    if os.path.exists(HIST_SNAP_LATEST):
+        with open(HIST_SNAP_LATEST, "r", encoding="utf-8") as f:
+            old = f.read()
+        with open(HIST_SNAP_PREV, "w", encoding="utf-8") as f:
+            f.write(old)
 
-def monthly_ratio_table(daily_ratio: pd.DataFrame) -> pd.DataFrame:
-    if daily_ratio.empty:
-        return pd.DataFrame(columns=["Mês", "Cadastradas", "Abertas", "Percentual"])
+    with open(HIST_SNAP_LATEST, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
 
-    tmp = daily_ratio.copy()
-    # reconverte "Dia" BR para date
-    tmp["_dia"] = pd.to_datetime(tmp["Dia"], format="%d/%m/%Y", errors="coerce")
-    tmp["_mes"] = tmp["_dia"].dt.to_period("M").astype(str)
+def load_snapshots() -> Tuple[Optional[dict], Optional[dict]]:
+    prev = latest = None
+    if os.path.exists(HIST_SNAP_LATEST):
+        with open(HIST_SNAP_LATEST, "r", encoding="utf-8") as f:
+            latest = json.load(f)
+    if os.path.exists(HIST_SNAP_PREV):
+        with open(HIST_SNAP_PREV, "r", encoding="utf-8") as f:
+            prev = json.load(f)
+    return prev, latest
 
-    out = tmp.groupby("_mes")[["Cadastradas", "Abertas"]].sum().reset_index()
-    out = out.rename(columns={"_mes": "Mês"})
-    out["Percentual_num"] = out.apply(
-        lambda r: (r["Abertas"] / r["Cadastradas"]) if r["Cadastradas"] > 0 else 0.0,
-        axis=1
-    )
-    out["Percentual"] = out["Percentual_num"].apply(lambda x: f"{x*100:.1f}%".replace(".", ","))
-    return out
+# ============================================================
+# REMUNERAÇÃO INCREMENTAL (POR MÊS)
+# ============================================================
 
-# =========================================================
-# Remuneração mensal incremental
-# =========================================================
-def pick_payout_table(total_qual: int) -> Tuple[str, Dict[int, float]]:
-    chosen_name = PAYOUT_TIERS[0][1]
-    chosen_table = PAYOUT_TIERS[0][2]
-    for minq, name, table in PAYOUT_TIERS:
-        if total_qual >= minq:
-            chosen_name = name
-            chosen_table = table
-    return chosen_name, chosen_table
+def parse_month_from_filename(name: str) -> Optional[str]:
+    # tenta achar "NOVEMBRO2025" etc
+    base = os.path.splitext(os.path.basename(name))[0].upper()
+    # se tiver YYYYMM ou YYYY-MM
+    m = re.search(r"(20\d{2})[^\d]?(0[1-9]|1[0-2])", base)
+    if m:
+        return f"{m.group(1)}-{m.group(2)}"
 
-def month_key_from_filename(filename: str) -> str:
-    # tenta extrair "NOVEMBRO2025" / "DEZEMBRO2025"
-    # se não achar, usa data de hoje
-    base = os.path.splitext(os.path.basename(filename))[0].upper()
-    # tenta achar padrão MMMMYYYY
-    m = re.search(r"(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)", base)
+    # mapas de mês por nome PT
+    months = {
+        "JANEIRO": "01", "FEVEREIRO": "02", "MARCO": "03", "MARÇO": "03",
+        "ABRIL": "04", "MAIO": "05", "JUNHO": "06", "JULHO": "07",
+        "AGOSTO": "08", "SETEMBRO": "09", "OUTUBRO": "10", "NOVEMBRO": "11", "DEZEMBRO": "12"
+    }
     y = re.search(r"(20\d{2})", base)
-    if m and y:
-        mon = m.group(1)
-        yr = y.group(1)
-        map_pt = {
-            "JAN":"01","FEV":"02","MAR":"03","ABR":"04","MAI":"05","JUN":"06",
-            "JUL":"07","AGO":"08","SET":"09","OUT":"10","NOV":"11","DEZ":"12"
-        }
-        return f"{yr}-{map_pt[mon]}"
-    # fallback
-    today = dt.date.today()
-    return f"{today.year}-{today.month:02d}"
-
-def calc_monthly_incremental(month_dfs: List[Tuple[str, pd.DataFrame]]) -> pd.DataFrame:
-    """
-    month_dfs: lista de (month_key 'YYYY-MM', df do mês)
-    Retorna tabela mensal com:
-      Mês, Qualificadas, Faixa, Receita cheia, Já recebido (acumulado), Receita do mês
-    """
-    # ordena meses
-    month_dfs = sorted(month_dfs, key=lambda x: x[0])
-
-    paid_max_by_cnpj: Dict[str, float] = {}  # maior valor cheio já pago por CNPJ até agora
-    received_acc = 0.0
-
-    rows = []
-    for mkey, df in month_dfs:
-        df = _ensure_cols(df, [COL_CNPJ, COL_CRITERIOS])
-        df[COL_CNPJ] = _norm_str(df[COL_CNPJ])
-
-        df = add_qual_columns(df)
-        dfq = df[df["Qualificada"] == 1].copy()
-
-        total_qual = int(dfq.shape[0])
-
-        faixa_nome, payout_table = pick_payout_table(total_qual)
-
-        # receita cheia por CNPJ = valor do nível (vitorioso) na faixa do mês
-        dfq["Valor_Cheio"] = dfq["Nivel_Qualificacao"].map(payout_table).fillna(0.0).astype(float)
-
-        # por CNPJ, se tiver duplicado, fica com o maior valor do mês (segurança)
-        by_cnpj = dfq.groupby(COL_CNPJ)["Valor_Cheio"].max().reset_index()
-
-        # incremental por CNPJ
-        inc_list = []
-        for _, r in by_cnpj.iterrows():
-            cnpj = str(r[COL_CNPJ]).strip()
-            cheio = float(r["Valor_Cheio"])
-            prev_paid = float(paid_max_by_cnpj.get(cnpj, 0.0))
-            inc = max(0.0, cheio - prev_paid)
-            inc_list.append(inc)
-            # atualiza histórico de "maior pago"
-            paid_max_by_cnpj[cnpj] = max(prev_paid, cheio)
-
-        receita_mes = float(sum(inc_list))
-        receita_cheia = float(by_cnpj["Valor_Cheio"].sum()) if not by_cnpj.empty else 0.0
-
-        rows.append({
-            "Mês": mkey,
-            "Qualificadas": total_qual,
-            "Faixa aplicada": faixa_nome,
-            "Receita cheia (mês)": receita_cheia,
-            "Já recebido (acumulado até mês anterior)": received_acc,
-            "Receita do mês (incremental)": receita_mes,
-        })
-
-        received_acc += receita_mes
-
-    out = pd.DataFrame(rows)
-    return out
-
-# =========================================================
-# UI / Branding
-# =========================================================
-def inject_css():
-    st.markdown(
-        """
-        <style>
-          .block-container { padding-top: 1.0rem; }
-          [data-testid="stSidebar"] { background: linear-gradient(180deg, #1f2a4a 0%, #0f172a 100%); }
-          [data-testid="stSidebar"] * { color: #ffffff !important; }
-          .am-title { font-size: 2.0rem; font-weight: 800; color: #1f2a4a; margin-bottom: 0.2rem; }
-          .am-sub { color: #6b7280; margin-top: -0.2rem; }
-          .kpi-card { border-radius: 16px; padding: 14px 16px; border: 1px solid #e5e7eb; background: #ffffff; }
-          .kpi-label { font-size: 0.8rem; color: #6b7280; }
-          .kpi-value { font-size: 1.4rem; font-weight: 800; color: #111827; }
-          .pill { display:inline-block; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; }
-          .pill-blue { background:#dbeafe; color:#1d4ed8; }
-          .pill-red { background:#fee2e2; color:#b91c1c; }
-          .pill-gray { background:#f3f4f6; color:#374151; }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-def load_logo():
-    # tenta carregar sua logo do repositório
-    for p in ["LOGO CORRETA.png", "logo.png", "LOGO.png"]:
-        if os.path.exists(p):
-            return p
+    for k, v in months.items():
+        if k in base and y:
+            return f"{y.group(1)}-{v}"
     return None
 
-# =========================================================
-# Login simples
-# =========================================================
+def load_paid_history() -> Dict[str, float]:
+    if not os.path.exists(HIST_PAYMENTS):
+        return {}
+    with open(HIST_PAYMENTS, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def save_paid_history(hist: Dict[str, float]):
+    with open(HIST_PAYMENTS, "w", encoding="utf-8") as f:
+        json.dump(hist, f, ensure_ascii=False, indent=2)
+
+def normalize_cnpj(v) -> str:
+    s = str(v).strip()
+    s = re.sub(r"\D", "", s)
+    return s
+
+def remun_month_calc(df_month: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
+    """
+    Retorna:
+      - detalhe por CNPJ com: nível, valor cheio, já pago, incremental (>=0)
+      - resumo do mês
+    """
+    # CNPJ
+    if COL_CNPJ not in df_month.columns:
+        df_month[COL_CNPJ] = pd.NA
+    cnpj = df_month[COL_CNPJ].apply(normalize_cnpj)
+
+    # Critérios
+    crit_col = find_criteria_column(df_month)
+    crit = safe_get_column(df_month, crit_col)
+
+    # nível vitorioso por linha
+    lvl = crit.apply(extract_max_level_from_criteria)
+
+    aux = pd.DataFrame({
+        "CNPJ": cnpj,
+        "Nivel": lvl,
+        "Criterios": crit.astype("string").fillna("").astype(str),
+    })
+
+    # remove sem CNPJ
+    aux = aux[aux["CNPJ"].str.len() > 0].copy()
+
+    # só qualificados
+    auxq = aux[aux["Nivel"] >= 1].copy()
+
+    # nível vitorioso por cliente (se tiver repetido)
+    auxq = (
+        auxq.groupby("CNPJ", as_index=False)
+            .agg(Nivel=("Nivel", "max"),
+                 Criterios=("Criterios", "first"))
+    )
+
+    total_qual = int(len(auxq))
+    tier_label, payout_map = tier_for_qualified_count(total_qual)
+
+    auxq["Valor_cheio"] = auxq["Nivel"].map(payout_map).fillna(0.0).astype(float)
+
+    # incremental por CNPJ
+    paid_hist = load_paid_history()
+    ja_pago = []
+    incremental = []
+    novo_hist = dict(paid_hist)  # copia
+
+    for _, row in auxq.iterrows():
+        c = row["CNPJ"]
+        full = float(row["Valor_cheio"])
+        prev_paid = float(paid_hist.get(c, 0.0))
+        inc = max(0.0, full - prev_paid)
+        ja_pago.append(prev_paid)
+        incremental.append(inc)
+        # atualiza histórico para o MAIOR valor cheio já atingido
+        novo_hist[c] = max(prev_paid, full)
+
+    auxq["Ja_pago_ate_agora"] = ja_pago
+    auxq["Incremental_no_mes"] = incremental
+
+    # salva histórico atualizado
+    save_paid_history(novo_hist)
+
+    resumo = {
+        "qualificadas": total_qual,
+        "faixa": tier_label,
+        "receita_cheia": float(auxq["Valor_cheio"].sum()),
+        "receita_incremental": float(auxq["Incremental_no_mes"].sum()),
+        "cnpjs_no_mes": int(auxq["CNPJ"].nunique()),
+        "nivel_dist": auxq["Nivel"].value_counts().sort_index().to_dict(),
+    }
+
+    # ordena para visualização
+    auxq = auxq.sort_values(["Nivel", "Incremental_no_mes"], ascending=[False, False])
+
+    return auxq, resumo
+
+# ============================================================
+# LOGIN SIMPLES
+# ============================================================
+
 def login_gate() -> bool:
-    st.sidebar.markdown("## Acesso")
+    st.sidebar.markdown("### Acesso")
     u = st.sidebar.text_input("Usuário", value="")
     p = st.sidebar.text_input("Senha", value="", type="password")
     if st.sidebar.button("Entrar"):
-        if u == "admin" and p == "123456":
-            st.session_state["logged_in"] = True
-        else:
-            st.session_state["logged_in"] = False
+        st.session_state["logged_in"] = (u == "admin" and p == "123456")
+        if not st.session_state["logged_in"]:
             st.sidebar.error("Usuário ou senha inválidos.")
-    return st.session_state.get("logged_in", False)
+    return bool(st.session_state.get("logged_in", False))
 
-# =========================================================
-# APP
-# =========================================================
-st.set_page_config(page_title="Assis & Mollerke", layout="wide")
-inject_css()
+# ============================================================
+# UI — ESTILO LIMPO + CORES PRÓXIMAS DA MARCA
+# ============================================================
+
+st.set_page_config(page_title=APP_TITLE, layout="wide")
+
+# CSS básico (sem exagero)
+st.markdown(
+    """
+    <style>
+      .block-container { padding-top: 1.2rem; padding-bottom: 2.5rem; }
+      [data-testid="stMetricValue"] { font-size: 1.6rem; }
+      .am-chip-ok {
+        display:inline-block; padding:4px 10px; border-radius: 999px;
+        background:#E8F0FE; color:#1A4FD6; font-weight:600; font-size:0.92rem;
+      }
+      .am-chip-bad {
+        display:inline-block; padding:4px 10px; border-radius: 999px;
+        background:#FDE8E8; color:#B42318; font-weight:700; font-size:0.92rem;
+      }
+      .am-title { font-weight:800; font-size:2.1rem; }
+      .am-sub { color:#5b6472; margin-top:-6px; }
+      .am-card { border:1px solid #eef0f4; border-radius:18px; padding:14px 16px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# Header com logo
+h1, h2 = st.columns([1, 5])
+with h1:
+    if os.path.exists(LOGO_PATH):
+        st.image(LOGO_PATH, use_container_width=True)
+with h2:
+    st.markdown(f"<div class='am-title'>{APP_TITLE}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='am-sub'>{APP_SUBTITLE}</div>", unsafe_allow_html=True)
+
+st.divider()
 
 if not login_gate():
     st.stop()
 
-logo_path = load_logo()
+# ============================================================
+# UPLOADS
+# ============================================================
 
-colA, colB = st.columns([1, 6])
-with colA:
-    if logo_path:
-        st.image(logo_path, use_container_width=True)
-with colB:
-    st.markdown('<div class="am-title">Assis & Mollerke</div>', unsafe_allow_html=True)
-    st.markdown('<div class="am-sub">Painel executivo — Aberturas, Leads e Remuneração Incremental</div>', unsafe_allow_html=True)
+st.markdown("## Importação do dia")
+cA, cB = st.columns(2)
+
+with cA:
+    up_c6 = st.file_uploader("Planilha C6 (Visão Cliente) — diária (.xlsx)", type=["xlsx"], key="c6_daily")
+
+with cB:
+    up_leads = st.file_uploader("Planilha Leads — diária (.xlsx)", type=["xlsx"], key="leads_daily")
+
+st.markdown("## Importação mensal (Remuneração incremental)")
+up_months = st.file_uploader(
+    "Envie 1 ou mais arquivos mensais (Nov/25 em diante) — você pode enviar vários de uma vez",
+    type=["xlsx"],
+    accept_multiple_files=True,
+    key="months_upload",
+)
 
 st.divider()
 
-# ==========================
-# Uploads
-# ==========================
-st.markdown("### Importação do dia")
+# ============================================================
+# PROCESSAMENTO DIÁRIO (C6)
+# ============================================================
 
-up1, up2 = st.columns(2)
-with up1:
-    st.caption("Planilha C6 (Visão Cliente) — diária")
-    file_c6 = st.file_uploader("Enviar arquivo C6 (.xlsx)", type=["xlsx"], key="c6")
-with up2:
-    st.caption("Planilha Leads — diária")
-    file_leads = st.file_uploader("Enviar arquivo Leads (.xlsx)", type=["xlsx"], key="leads")
+daily_metrics = None
+daily_details = {}
 
-st.markdown("### Remuneração (mensal)")
-st.caption("Envie os arquivos mensais (ex.: NOVEMBRO2025.xlsx, DEZEMBRO2025.xlsx...). O sistema calcula incremental por CNPJ.")
-files_month = st.file_uploader("Enviar arquivos mensais (.xlsx) — múltiplos", type=["xlsx"], accept_multiple_files=True, key="monthfiles")
+if up_c6 is not None:
+    b = up_c6.getvalue()
+    df = read_excel_bytes(b)
 
-# ==========================
-# Processar C6 diário
-# ==========================
-daily_open = pd.DataFrame()
-daily_found = pd.DataFrame()
-pix_types = pd.DataFrame()
-status_df = pd.DataFrame()
-saldo_total = 0.0
-dom_c6 = 0
-qual_count = 0
-qual_by_level = pd.DataFrame()
+    # Coerções mínimas
+    df[COL_DATA_CONTA] = to_date_series(safe_get_column(df, COL_DATA_CONTA))
+    df[COL_FUNDACAO] = to_date_series(safe_get_column(df, COL_FUNDACAO))
+    df[COL_PIX_TIPO] = normalize_str(safe_get_column(df, COL_PIX_TIPO))
+    df[COL_STATUS] = normalize_str(safe_get_column(df, COL_STATUS))
+    df[COL_DOMICILIO] = normalize_str(safe_get_column(df, COL_DOMICILIO))
+    df[COL_SALDO] = pd.to_numeric(safe_get_column(df, COL_SALDO), errors="coerce").fillna(0.0)
 
-if file_c6:
-    df_c6 = _read_excel(file_c6.getvalue())
-    df_c6 = _ensure_cols(df_c6, [COL_OPEN_DATE, COL_FOUND_DATE, COL_PIX_TYPE, COL_SALDO, COL_STATUS, COL_DOMICILIO, COL_CRITERIOS, COL_CNPJ])
-    df_c6[COL_OPEN_DATE] = _to_date_series(df_c6[COL_OPEN_DATE])
-    df_c6[COL_FOUND_DATE] = pd.to_datetime(df_c6[COL_FOUND_DATE], errors="coerce")
-    df_c6[COL_SALDO] = pd.to_numeric(df_c6[COL_SALDO], errors="coerce").fillna(0.0)
+    # Aberturas
+    open_day, open_month, open_total = openings_daily_monthly(df)
 
-    df_c6 = add_qual_columns(df_c6)
+    # Atualiza histórico diário (somente datas >= 01/01/2026)
+    open_hist_new = open_day.rename(columns={"Dia": "dia", "Contas abertas": "abertas"}).copy()
+    open_hist_new = open_hist_new[open_hist_new["dia"] >= HIST_START_DATE]
+    upsert_hist(HIST_OPEN_DAILY, "dia", open_hist_new)
 
-    daily_open = contas_por_dia(df_c6)
-    daily_found = fundacoes_mes_por_dia(df_c6)
+    # Pix
+    pix_com, pix_sem, pix_dist = pix_summary(df)
 
-    qtd_pix, qtd_sem_pix, pix_types = pix_summary(df_c6)
-    status_df = status_counts(df_c6)
-    saldo_total = float(df_c6[COL_SALDO].sum())
-    dom_c6 = domicilio_c6_count(df_c6)
+    # Saldo
+    saldo_total = float(df[COL_SALDO].sum())
 
-    qual_count = int(df_c6["Qualificada"].sum())
-    qual_by_level = (
-        df_c6[df_c6["Qualificada"] == 1]["Nivel_Qualificacao"]
-        .value_counts().sort_index()
-        .rename_axis("Nível")
-        .reset_index(name="Quantidade")
+    # Status
+    st_dist = status_counts(df)
+
+    # Domicílio C6
+    dom_c6 = domicilio_c6_count(df)
+
+    # Qualificadas por critérios (coluna BY ou CRITERIOS_ATINGIDOS_COMISS)
+    level_dist, total_qual = qualified_levels_table(df)
+    tier_label, payout_map = tier_for_qualified_count(total_qual)
+
+    # Receita cheia estimada (DIÁRIA apenas como indicador, sem incremental)
+    # Regra: por linha, nível vitorioso (>=1). Se tiver repetido por CNPJ, aqui é apenas indicador do arquivo,
+    # então somamos por linha qualificada.
+    crit_col = find_criteria_column(df)
+    lvl_line = safe_get_column(df, crit_col).apply(extract_max_level_from_criteria)
+    receita_estimada = float(pd.Series(lvl_line).map(payout_map).fillna(0.0).sum())
+
+    daily_metrics = {
+        "abertas_total": int(open_total),
+        "saldo_total": float(saldo_total),
+        "pix_com": int(pix_com),
+        "pix_sem": int(pix_sem),
+        "dom_c6": int(dom_c6),
+        "qualificadas": int(total_qual),
+        "receita_estimada": float(receita_estimada),
+        "arquivo": up_c6.name,
+    }
+
+    # snapshot hoje vs ontem
+    save_snapshot(file_hash=sha_bytes(b), metrics=daily_metrics, tag=up_c6.name)
+
+    daily_details = {
+        "open_day": open_day,
+        "open_month": open_month,
+        "pix_dist": pix_dist,
+        "status_dist": st_dist,
+        "level_dist": level_dist,
+        "df": df,
+    }
+
+# ============================================================
+# PROCESSAMENTO DIÁRIO (LEADS) + HISTÓRICO + PERCENTUAL
+# ============================================================
+
+leads_metrics = None
+leads_details = {}
+
+if up_leads is not None:
+    b = up_leads.getvalue()
+    dfL = read_excel_bytes(b)
+
+    date_col = detect_leads_date_column(dfL)
+    dfL[date_col] = to_date_series(safe_get_column(dfL, date_col))
+
+    leads_day, leads_month, leads_total = leads_daily_monthly(dfL)
+
+    # Atualiza histórico de cadastros (somente >= 01/01/2026)
+    leads_hist_new = leads_day.rename(columns={"Dia": "dia", "Contas cadastradas": "cadastradas"}).copy()
+    leads_hist_new = leads_hist_new[leads_hist_new["dia"] >= HIST_START_DATE]
+    upsert_hist(HIST_LEADS_DAILY, "dia", leads_hist_new)
+
+    leads_metrics = {
+        "cadastradas_total": int(leads_total),
+        "arquivo": up_leads.name,
+    }
+
+    leads_details = {
+        "leads_day": leads_day,
+        "leads_month": leads_month,
+        "date_col": date_col,
+    }
+
+# ============================================================
+# RESUMO EXECUTIVO (DIA)
+# ============================================================
+
+st.markdown("## Resumo executivo (dia)")
+
+prev_snap, latest_snap = load_snapshots()
+
+if latest_snap and latest_snap.get("metrics"):
+    m = latest_snap["metrics"]
+
+    r1 = st.columns(4)
+    r1[0].metric("Contas abertas (arquivo)", br_int(m.get("abertas_total", 0)))
+    r1[1].metric("Saldo total", br_money(m.get("saldo_total", 0.0)))
+    r1[2].metric("Clientes com Pix", br_int(m.get("pix_com", 0)))
+    r1[3].metric("Clientes sem Pix", br_int(m.get("pix_sem", 0)))
+
+    r2 = st.columns(4)
+    r2[0].metric("Domicílio C6", br_int(m.get("dom_c6", 0)))
+    r2[1].metric("Contas qualificadas (arquivo)", br_int(m.get("qualificadas", 0)))
+    r2[2].metric("Receita estimada (arquivo)", br_money(m.get("receita_estimada", 0.0)))
+    r2[3].metric("Arquivo", m.get("arquivo", "-"))
+
+    if prev_snap and prev_snap.get("metrics"):
+        st.markdown("### Evolução (hoje vs último envio)")
+        pm = prev_snap["metrics"]
+        d = st.columns(4)
+        d[0].metric("Δ Abertas", f"{int(m.get('abertas_total',0) - pm.get('abertas_total',0)):+,}".replace(",", "."))
+        d[1].metric("Δ Saldo", br_money(m.get("saldo_total",0.0) - pm.get("saldo_total",0.0)))
+        d[2].metric("Δ Qualificadas", f"{int(m.get('qualificadas',0) - pm.get('qualificadas',0)):+,}".replace(",", "."))
+        d[3].metric("Δ Receita estimada", br_money(m.get("receita_estimada",0.0) - pm.get("receita_estimada",0.0)))
+else:
+    st.info("Envie a planilha C6 do dia para o painel gerar o resumo.")
+
+st.divider()
+
+# ============================================================
+# CADASTRO x ABERTURA — HISTÓRICO A PARTIR DE JAN/2026
+# ============================================================
+
+st.markdown("## Conversão — Cadastros x Aberturas (histórico)")
+
+open_hist = load_hist(HIST_OPEN_DAILY, "dia")
+leads_hist = load_hist(HIST_LEADS_DAILY, "dia")
+
+if open_hist.empty or leads_hist.empty:
+    st.info("Envie as duas planilhas (C6 e Leads) de um dia para começar a formar o histórico a partir de 01/01/2026.")
+else:
+    base = pd.merge(leads_hist, open_hist, on="dia", how="outer").fillna(0)
+    base["cadastradas"] = base["cadastradas"].astype(int)
+    base["abertas"] = base["abertas"].astype(int)
+    base = base.sort_values("dia")
+
+    # percentual correto: abertas / cadastradas
+    base["percentual"] = base.apply(
+        lambda r: (r["abertas"] / r["cadastradas"] * 100.0) if r["cadastradas"] > 0 else 0.0,
+        axis=1
     )
 
-    # grava histórico de ABERTURAS por dia (para não "sumir" se o cliente sair amanhã)
-    if not daily_open.empty:
-        hist = daily_open.copy()
-        hist["Dia"] = pd.to_datetime(hist["Dia"], errors="coerce").dt.date.astype(str)
-        upsert_hist(HIST_OPEN_DAILY, "Dia", hist)
+    # visão diária
+    base_view = base.copy()
+    base_view["Dia"] = base_view["dia"].apply(br_date)
+    base_view["Cadastradas"] = base_view["cadastradas"].astype(int)
+    base_view["Abertas"] = base_view["abertas"].astype(int)
+    base_view["% Abertas/Cadastradas"] = base_view["percentual"].map(lambda x: f"{x:.1f}%".replace(".", ","))
 
-# ==========================
-# Processar Leads diário
-# ==========================
-daily_leads = pd.DataFrame()
+    def chip(pct: float) -> str:
+        # regra interna (não mostrar "≥20% azul ...")
+        if pct >= 20.0:
+            return "<span class='am-chip-ok'>Dentro do alvo</span>"
+        return "<span class='am-chip-bad'>Abaixo do alvo</span>"
 
-if file_leads:
-    df_leads = _read_excel(file_leads.getvalue())
-    col_ld = guess_leads_date_col(df_leads)
-    df_leads = _ensure_cols(df_leads, [col_ld])
-    df_leads[col_ld] = _to_date_series(df_leads[col_ld])
-    daily_leads = leads_por_dia(df_leads)
+    base_view["Indicador"] = base_view["percentual"].apply(chip)
 
-    if not daily_leads.empty:
-        hist = daily_leads.copy()
-        hist["Dia"] = pd.to_datetime(hist["Dia"], errors="coerce").dt.date.astype(str)
-        upsert_hist(HIST_LEADS_DAILY, "Dia", hist)
+    # resumo do mês atual (pelo histórico)
+    base["mes"] = pd.to_datetime(base["dia"]).dt.to_period("M").astype(str)
+    mes_sel = st.selectbox("Selecione o mês (histórico)", sorted(base["mes"].unique()), index=len(sorted(base["mes"].unique()))-1)
 
-# ==========================
-# Carregar histórico para cálculo a partir de Jan/2026
-# ==========================
-hist_open = _load_hist(HIST_OPEN_DAILY, "Dia")
-hist_leads = _load_hist(HIST_LEADS_DAILY, "Dia")
+    mdf = base[base["mes"] == mes_sel].copy()
+    cad_mes = int(mdf["cadastradas"].sum())
+    ab_mes = int(mdf["abertas"].sum())
+    pct_mes = (ab_mes / cad_mes * 100.0) if cad_mes > 0 else 0.0
 
-def filter_from_jan_2026(df: pd.DataFrame, key="Dia") -> pd.DataFrame:
-    if df.empty or key not in df.columns:
-        return df
-    d = pd.to_datetime(df[key], errors="coerce")
-    df2 = df.copy()
-    df2["_d"] = d
-    df2 = df2[df2["_d"] >= pd.Timestamp("2026-01-01")].drop(columns=["_d"])
-    return df2
+    colm = st.columns(4)
+    colm[0].metric("Cadastradas no mês", br_int(cad_mes))
+    colm[1].metric("Abertas no mês", br_int(ab_mes))
+    colm[2].metric("% Abertas/Cadastradas (mês)", f"{pct_mes:.1f}%".replace(".", ","))
+    colm[3].metric("Mês", mes_sel)
 
-hist_open = filter_from_jan_2026(hist_open, "Dia")
-hist_leads = filter_from_jan_2026(hist_leads, "Dia")
-
-# ==========================
-# KPI Resumo do dia
-# ==========================
-st.markdown("### Resumo executivo (dia)")
-
-k1, k2, k3, k4 = st.columns(4)
-abertas_hoje_total = int(daily_open["Contas abertas"].sum()) if not daily_open.empty else 0
-pix_com = int(qtd_pix) if file_c6 else 0
-pix_sem = int(qtd_sem_pix) if file_c6 else 0
-
-with k1:
-    st.markdown(f"""
-      <div class="kpi-card">
-        <div class="kpi-label">Contas abertas (arquivo)</div>
-        <div class="kpi-value">{abertas_hoje_total:,}".replace(",", ".")}</div>
-      </div>
-    """, unsafe_allow_html=True)
-
-with k2:
-    st.markdown(f"""
-      <div class="kpi-card">
-        <div class="kpi-label">Saldo total</div>
-        <div class="kpi-value">{br_money(saldo_total)}</div>
-      </div>
-    """, unsafe_allow_html=True)
-
-with k3:
-    st.markdown(f"""
-      <div class="kpi-card">
-        <div class="kpi-label">Clientes com Pix</div>
-        <div class="kpi-value">{pix_com:,}".replace(",", ".")}</div>
-      </div>
-    """, unsafe_allow_html=True)
-
-with k4:
-    st.markdown(f"""
-      <div class="kpi-card">
-        <div class="kpi-label">Clientes sem Pix</div>
-        <div class="kpi-value">{pix_sem:,}".replace(",", ".")}</div>
-      </div>
-    """, unsafe_allow_html=True)
-
-k5, k6, k7, k8 = st.columns(4)
-
-with k5:
-    st.markdown(f"""
-      <div class="kpi-card">
-        <div class="kpi-label">Clientes com domicílio C6</div>
-        <div class="kpi-value">{dom_c6:,}".replace(",", ".")}</div>
-      </div>
-    """, unsafe_allow_html=True)
-
-with k6:
-    st.markdown(f"""
-      <div class="kpi-card">
-        <div class="kpi-label">Contas qualificadas</div>
-        <div class="kpi-value">{qual_count:,}".replace(",", ".")}</div>
-      </div>
-    """, unsafe_allow_html=True)
-
-with k7:
-    # Receita "cheia" do dia não é incremental mensal.
-    # Aqui mostramos apenas uma leitura rápida do dia pela regra da faixa 350+ (não é o cálculo incremental).
-    # Para a receita oficial, use a aba Remuneração.
-    st.markdown(f"""
-      <div class="kpi-card">
-        <div class="kpi-label">Receita (use aba Remuneração)</div>
-        <div class="kpi-value"><span class="pill pill-gray">ver mensal</span></div>
-      </div>
-    """, unsafe_allow_html=True)
-
-with k8:
-    st.markdown(f"""
-      <div class="kpi-card">
-        <div class="kpi-label">Arquivo C6</div>
-        <div class="kpi-value">{file_c6.name if file_c6 else "-"}</div>
-      </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### Diário (histórico)")
+    st.dataframe(
+        base_view[["Dia", "Cadastradas", "Abertas", "% Abertas/Cadastradas", "Indicador"]],
+        use_container_width=True,
+        hide_index=True
+    )
+    st.markdown(
+        "<div style='color:#5b6472; font-size:0.9rem;'>Observação: o histórico é guardado a partir de 01/01/2026 mesmo que o cliente não apareça no dia seguinte.</div>",
+        unsafe_allow_html=True
+    )
 
 st.divider()
 
-# ==========================
-# Abas principais
-# ==========================
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "Aberturas",
-    "Fundações",
-    "Pix e Status",
-    "Cadastro x Abertura",
-    "Remuneração"
-])
+# ============================================================
+# DETALHES (DIÁRIO)
+# ============================================================
 
-# ---- TAB 1: Aberturas
-with tab1:
-    cA, cB = st.columns(2)
+st.markdown("## Relatórios (diário)")
 
-    with cA:
-        st.markdown("#### Aberturas por dia (arquivo enviado)")
-        if daily_open.empty:
-            st.info("Envie a planilha C6 diária para exibir.")
+if up_c6 is None:
+    st.info("Envie a planilha C6 do dia para ver os relatórios detalhados.")
+else:
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Aberturas",
+        "Fundações (por dia)",
+        "Pix e Status",
+        "Qualificação (níveis e critérios)",
+    ])
+
+    with tab1:
+        st.markdown("### Contas abertas por dia (arquivo)")
+        df1 = daily_details["open_day"].copy()
+        df1["Dia"] = df1["Dia"].apply(br_date)
+        st.dataframe(df1[["Dia", "Contas abertas"]], use_container_width=True, hide_index=True)
+
+        st.markdown("### Contas abertas por mês (arquivo)")
+        st.dataframe(daily_details["open_month"], use_container_width=True, hide_index=True)
+
+    with tab2:
+        st.markdown("### Distribuição do mês de fundação — por dia de abertura")
+        open_day = daily_details["open_day"].copy()
+        if open_day.empty:
+            st.info("Não há datas de abertura válidas no arquivo.")
         else:
-            df_show = daily_open.copy()
-            df_show["Dia"] = pd.to_datetime(df_show["Dia"], errors="coerce").dt.date.apply(br_date)
-            st.dataframe(df_show, hide_index=True, use_container_width=True)
+            days = open_day["Dia"].dropna().tolist()
+            # seleciona dia (drill-down)
+            day_sel = st.selectbox(
+                "Selecione o dia de abertura",
+                options=days,
+                format_func=lambda d: br_date(d) if isinstance(d, dt.date) else str(d)
+            )
+            dist = fundacao_month_distribution_for_day(daily_details["df"], day_sel)
+            if dist.empty:
+                st.info("Sem datas de fundação para esse dia.")
+            else:
+                st.dataframe(dist, use_container_width=True, hide_index=True)
 
-    with cB:
-        st.markdown("#### Aberturas por mês (arquivo enviado)")
-        if file_c6:
-            st.dataframe(contas_por_mes(df_c6), hide_index=True, use_container_width=True)
+    with tab3:
+        st.markdown("### Pix — distribuição por tipo de chave")
+        com, sem, dist = pix_summary(daily_details["df"])
+        c1, c2 = st.columns(2)
+        c1.metric("Clientes com Pix", br_int(com))
+        c2.metric("Clientes sem Pix", br_int(sem))
+        st.dataframe(dist, use_container_width=True, hide_index=True)
+
+        st.markdown("### Status — distribuição")
+        st.dataframe(daily_details["status_dist"], use_container_width=True, hide_index=True)
+
+    with tab4:
+        st.markdown("### Distribuição de nível (vitorioso)")
+        st.dataframe(daily_details["level_dist"], use_container_width=True, hide_index=True)
+
+        st.markdown("### Critérios — exemplos (para auditoria)")
+        # Mostra amostra de critérios e nível vitorioso (sem expor "coluna BY")
+        df_show = daily_details["df"].copy()
+        crit_col = find_criteria_column(df_show)
+        df_show["Nivel"] = safe_get_column(df_show, crit_col).apply(extract_max_level_from_criteria)
+        df_show = df_show[df_show["Nivel"] >= 1].copy()
+
+        if df_show.empty:
+            st.info("Nenhuma conta qualificada pelo critério (1 a 4) no arquivo.")
         else:
-            st.info("Envie a planilha C6 diária para exibir.")
+            # colunas elegantes
+            cols = []
+            if COL_CNPJ in df_show.columns:
+                cols.append(COL_CNPJ)
+            cols += [COL_DATA_CONTA, "Nivel", crit_col]
 
-# ---- TAB 2: Fundações
-with tab2:
-    st.markdown("#### Fundações por dia (mês/ano de fundação)")
-    st.caption("Selecione um dia para ver a distribuição por mês de fundação das empresas abertas naquele dia.")
+            out = df_show[cols].head(50).copy()
+            out.rename(columns={
+                COL_CNPJ: "CNPJ",
+                COL_DATA_CONTA: "Data de abertura",
+                crit_col: "Critérios",
+                "Nivel": "Nível"
+            }, inplace=True)
 
-    if daily_found.empty:
-        st.info("Envie a planilha C6 diária para exibir.")
-    else:
-        # prepara lista de dias
-        dias = sorted(daily_found["Dia"].dropna().unique())
-        dias_br = [br_date(pd.to_datetime(d, errors="coerce").date()) for d in dias]
-        dia_sel = st.selectbox("Escolha o dia", dias_br)
+            out["Data de abertura"] = out["Data de abertura"].apply(br_date)
+            st.dataframe(out, use_container_width=True, hide_index=True)
 
-        # filtra
-        dia_sel_date = pd.to_datetime(dia_sel, format="%d/%m/%Y", errors="coerce").date()
-        df_day = daily_found[daily_found["Dia"] == dia_sel_date].copy()
+st.divider()
 
-        # formata mês fundação como MM/AAAA
-        def mes_br(period_str: str) -> str:
-            # period_str "YYYY-MM"
-            try:
-                y, m = period_str.split("-")
-                return f"{m}/{y}"
-            except:
-                return str(period_str)
+# ============================================================
+# REMUNERAÇÃO INCREMENTAL — MENSAL
+# ============================================================
 
-        df_day["Mês de fundação"] = df_day["Mês de fundação"].apply(mes_br)
-        st.dataframe(df_day[["Mês de fundação", "Quantidade"]], hide_index=True, use_container_width=True)
+st.markdown("## Remuneração incremental (mensal)")
 
-# ---- TAB 3: Pix e Status
-with tab3:
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("#### Chaves Pix")
-        if file_c6:
-            st.dataframe(pix_types, hide_index=True, use_container_width=True)
-        else:
-            st.info("Envie a planilha C6 diária para exibir.")
+if not up_months:
+    st.info("Envie os arquivos mensais (ex.: NOVEMBRO2025.xlsx, DEZEMBRO2025.xlsx...) para calcular a remuneração incremental.")
+else:
+    # Processa em ordem por mês
+    month_rows = []
+    detail_by_month = {}
 
-    with c2:
-        st.markdown("#### Status das contas")
-        if file_c6:
-            st.dataframe(status_df, hide_index=True, use_container_width=True)
-        else:
-            st.info("Envie a planilha C6 diária para exibir.")
+    # Ordenar arquivos pela data inferida do nome (se não achar, fica no final)
+    def month_key(f):
+        m = parse_month_from_filename(f.name) or "9999-99"
+        return m
 
-    st.markdown("#### Qualificadas por nível (no arquivo do dia)")
-    if file_c6:
-        st.dataframe(qual_by_level, hide_index=True, use_container_width=True)
-    else:
-        st.info("Envie a planilha C6 diária para exibir.")
+    files_sorted = sorted(up_months, key=month_key)
 
-# ---- TAB 4: Cadastro x Abertura
-with tab4:
-    st.markdown("#### Percentual de Aberturas sobre Cadastradas")
-    st.caption("Cálculo: Abertas / Cadastradas. Destaque: azul se ≥ 20%, vermelho se < 20%.")
+    for f in files_sorted:
+        b = f.getvalue()
+        dfm = read_excel_bytes(b)
 
-    # usa históricos (a partir de Jan/2026)
-    if hist_open.empty or hist_leads.empty:
-        st.info("Envie a planilha C6 diária e a Leads diária para alimentar o histórico (a partir de 01/01/2026).")
-    else:
-        # prepara dataframes diários do histórico
-        ho = hist_open.copy()
-        hl = hist_leads.copy()
+        month_id = parse_month_from_filename(f.name) or f.name
+        det, resumo = remun_month_calc(dfm)
+        resumo["mes"] = month_id
+        resumo["arquivo"] = f.name
 
-        ho["Dia"] = pd.to_datetime(ho["Dia"], errors="coerce").dt.date
-        hl["Dia"] = pd.to_datetime(hl["Dia"], errors="coerce").dt.date
+        month_rows.append(resumo)
+        detail_by_month[month_id] = det
 
-        ho = ho.rename(columns={"Contas abertas": "Contas abertas"})
-        hl = hl.rename(columns={"Contas cadastradas": "Contas cadastradas"})
+    resumo_df = pd.DataFrame(month_rows)
 
-        # reconstrói no formato esperado
-        open_daily_hist = ho[["Dia", "Contas abertas"]].dropna()
-        leads_daily_hist = hl[["Dia", "Contas cadastradas"]].dropna()
+    # organiza e formata
+    if not resumo_df.empty:
+        # ordena mês (quando estiver no formato YYYY-MM)
+        def sort_month_val(x: str):
+            m = re.match(r"^(\d{4})-(\d{2})$", str(x))
+            if m:
+                return int(m.group(1)) * 100 + int(m.group(2))
+            return 999999
 
-        # volta pra formato padrão das funções
-        open_daily_hist = open_daily_hist.rename(columns={"Contas abertas": "Contas abertas"})
-        leads_daily_hist = leads_daily_hist.rename(columns={"Contas cadastradas": "Contas cadastradas"})
+        resumo_df = resumo_df.sort_values("mes", key=lambda s: s.map(sort_month_val))
 
-        # para o cálculo
-        open_daily_hist = open_daily_hist.rename(columns={"Contas abertas": "Contas abertas"})
-        open_daily_hist = open_daily_hist.rename(columns={"Contas abertas": "Contas abertas"})
+        resumo_view = resumo_df.copy()
+        resumo_view.rename(columns={
+            "mes": "Mês",
+            "qualificadas": "Qualificadas",
+            "faixa": "Faixa aplicada",
+            "receita_cheia": "Receita cheia (mês)",
+            "receita_incremental": "Receita incremental (mês)",
+            "arquivo": "Arquivo",
+        }, inplace=True)
 
-        # cria nos nomes que funções esperam
-        od = open_daily_hist.rename(columns={"Contas abertas": "Contas abertas"})
-        ld = leads_daily_hist.rename(columns={"Contas cadastradas": "Contas cadastradas"})
+        resumo_view["Receita cheia (mês)"] = resumo_view["Receita cheia (mês)"].apply(br_money)
+        resumo_view["Receita incremental (mês)"] = resumo_view["Receita incremental (mês)"].apply(br_money)
+        resumo_view["Qualificadas"] = resumo_view["Qualificadas"].apply(br_int)
 
-        # adapta para função
-        od2 = od.rename(columns={"Contas abertas": "Contas abertas"})
-        od2 = od2.rename(columns={"Contas abertas": "Contas abertas"})
-        od2 = od2.rename(columns={"Contas abertas": "Contas abertas"})
-        # (simples: monta igual as tabelas originais)
-        od_table = pd.DataFrame({"Dia": od["Dia"], "Contas abertas": od["Contas abertas"].astype(int)})
-        ld_table = pd.DataFrame({"Dia": ld["Dia"], "Contas cadastradas": ld["Contas cadastradas"].astype(int)})
-
-        ratio = cadastro_x_abertura(
-            open_daily=od_table.rename(columns={"Contas abertas": "Contas abertas"}),
-            leads_daily=ld_table.rename(columns={"Contas cadastradas": "Contas cadastradas"}),
+        st.markdown("### Resumo por mês")
+        st.dataframe(
+            resumo_view[["Mês", "Qualificadas", "Faixa aplicada", "Receita cheia (mês)", "Receita incremental (mês)", "Arquivo"]],
+            use_container_width=True,
+            hide_index=True
         )
 
-        def style_ratio_row(row):
-            v = row.get("Percentual_num", 0.0)
-            # cor: >=20% azul, <20% vermelho
-            if v >= 0.20:
-                return [""] * 3 + ["background-color: #dbeafe; color: #1d4ed8; font-weight: 800;"]
-            else:
-                return [""] * 3 + ["background-color: #fee2e2; color: #b91c1c; font-weight: 800;"]
+        # Selecionar mês para detalhes
+        meses = resumo_df["mes"].tolist()
+        mes_sel = st.selectbox("Ver detalhes do mês", options=meses, index=len(meses)-1)
 
-        st.markdown("##### Visão diária")
-        show_daily = ratio.copy()
-        # usa styler mantendo Percentual_num internamente
-        sty = show_daily.style.apply(style_ratio_row, axis=1)
-        st.dataframe(sty.hide(axis="index"), use_container_width=True)
+        det = detail_by_month.get(mes_sel)
+        if det is not None and not det.empty:
+            det_view = det.copy()
+            det_view["CNPJ"] = det_view["CNPJ"].astype(str)
+            det_view["Valor_cheio"] = det_view["Valor_cheio"].apply(br_money)
+            det_view["Ja_pago_ate_agora"] = det_view["Ja_pago_ate_agora"].apply(br_money)
+            det_view["Incremental_no_mes"] = det_view["Incremental_no_mes"].apply(br_money)
 
-        st.markdown("##### Visão mensal")
-        mtab = monthly_ratio_table(ratio)
-        def style_month_row(row):
-            v = row.get("Percentual_num", 0.0)
-            if v >= 0.20:
-                return [""] * 3 + ["background-color: #dbeafe; color: #1d4ed8; font-weight: 800;"]
-            else:
-                return [""] * 3 + ["background-color: #fee2e2; color: #b91c1c; font-weight: 800;"]
+            st.markdown("### Detalhe por CNPJ (incremental)")
+            st.dataframe(
+                det_view[["CNPJ", "Nivel", "Valor_cheio", "Ja_pago_ate_agora", "Incremental_no_mes", "Criterios"]],
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.info("Sem detalhes válidos para esse mês.")
 
-        msty = mtab.style.apply(style_month_row, axis=1)
-        st.dataframe(msty.hide(axis="index"), use_container_width=True)
-
-# ---- TAB 5: Remuneração
-with tab5:
-    st.markdown("#### Remuneração incremental (por CNPJ) — a partir de Novembro/2025")
-    st.caption("Regra: nível = MAIOR critério (1..4) dentro do texto. Incremental = max(0, valor do mês - maior valor já pago anteriormente por CNPJ).")
-
-    if not files_month:
-        st.info("Envie os arquivos mensais (ex.: NOVEMBRO2025.xlsx, DEZEMBRO2025.xlsx...) para calcular.")
     else:
-        month_dfs = []
-        for f in files_month:
-            dfm = _read_excel(f.getvalue())
-            # garante colunas essenciais
-            dfm = _ensure_cols(dfm, [COL_CNPJ, COL_CRITERIOS])
-            mkey = month_key_from_filename(f.name)
-            month_dfs.append((mkey, dfm))
+        st.warning("Não foi possível calcular os meses enviados. Verifique se os arquivos possuem CNPJ e critérios.")
 
-        summary = calc_monthly_incremental(month_dfs)
+st.divider()
 
-        # formata pra exibição
-        show = summary.copy()
-        show["Receita cheia (mês)"] = show["Receita cheia (mês)"].apply(br_money)
-        show["Já recebido (acumulado até mês anterior)"] = show["Já recebido (acumulado até mês anterior)"].apply(br_money)
-        show["Receita do mês (incremental)"] = show["Receita do mês (incremental)"].apply(br_money)
-
-        st.markdown("##### Resumo mensal (cheio x já recebido x incremental)")
-        st.dataframe(show, hide_index=True, use_container_width=True)
-
-        # opcional: salvar histórico local da última execução
-        try:
-            raw = summary.copy()
-            raw.to_csv(HIST_MONTHLY_PAY, index=False)
-        except:
-            pass
-
-st.caption("Obs.: o histórico é salvo localmente no servidor. Se a aplicação for redeployada, pode reiniciar. Se quiser histórico permanente, depois ligamos em um Google Sheet/Drive ou banco.")
+st.markdown(
+    "<div style='color:#5b6472; font-size:0.9rem;'>"
+    "Dica: se algo parecer diferente do esperado, o primeiro passo é conferir se o arquivo tem CNPJ preenchido e os critérios com números 1 a 4."
+    "</div>",
+    unsafe_allow_html=True
+)
