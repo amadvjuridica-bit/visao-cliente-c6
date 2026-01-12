@@ -979,24 +979,92 @@ else:
             st.info("Ainda não há mês atual calculado. Importe arquivos diários (Jan/26 em diante).")
 
         # Lista de qualificadas (arquivo)
-        st.markdown("#### Lista de qualificadas (arquivo)")
-        if COL_CNPJ not in dfq.columns:
-            cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
-            dfq[COL_CNPJ] = dfq[cand[0]] if cand else ""
+               st.markdown("#### Lista de qualificadas (arquivo) — Auditoria (de onde vem o total)")
 
-        show = dfq[dfq["_qualificada"] == "Sim"].copy()
-        show = show[[COL_CNPJ, COL_ABERTURA, "_nivel", "_criterio_vencedor", COL_BR]].rename(columns={
-            COL_CNPJ: "CNPJ",
-            COL_ABERTURA: "Data de abertura",
-            "_nivel": "Nível",
-            "_criterio_vencedor": "Critério vencedor",
-            COL_BR: "BR",
-        })
-        show["Data de abertura"] = show["Data de abertura"].apply(fmt_date)
-        show = show.sort_values("Data de abertura", ascending=False)
-        st.dataframe(show, use_container_width=True, hide_index=True)
+        mes_rel_dt = detect_report_month_from_df(df_c6)
+        mes_rel = fmt_month(mes_rel_dt) if mes_rel_dt else None
 
-st.divider()
+        saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
+        prev_pago_mes = safe_json_load(HIST_PREV_PAGO_MES, default={})
+
+        if not mes_rel or mes_rel not in saved:
+            st.warning("Não consegui identificar o mês do arquivo ou o mês ainda não está no histórico de remuneração.")
+        else:
+            info_mes = saved.get(mes_rel, {})
+            faixa_nome = info_mes.get("faixa", "-")
+            precos = faixa_tbl_por_nome(faixa_nome)
+
+            if COL_CNPJ not in dfq.columns:
+                cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
+                dfq[COL_CNPJ] = dfq[cand[0]] if cand else ""
+
+            dfq["_cnpj"] = normalize_str(dfq[COL_CNPJ]).str.replace(r"\D", "", regex=True)
+            dfq["_abertura"] = dfq[COL_ABERTURA]
+            dfq["_criterio_vencedor"] = normalize_str(dfq.get(COL_CRIT, pd.Series([""] * len(dfq)))).apply(criterio_vencedor)
+
+            baseq = dfq[(dfq["_cnpj"] != "") & (dfq["_nivel"] >= 1)].copy()
+
+            if baseq.empty:
+                st.info("Nenhuma qualificada encontrada neste arquivo.")
+            else:
+                by_cnpj = (
+                    baseq.sort_values("_abertura", ascending=False)
+                    .groupby("_cnpj", as_index=False)
+                    .agg({
+                        "_nivel": "max",
+                        "_abertura": "first",
+                        "_criterio_vencedor": "first",
+                        COL_BR: "first" if COL_BR in baseq.columns else "first"
+                    })
+                )
+
+                prev_map = prev_pago_mes.get(mes_rel, {}) or {}
+
+                def calc_vals(row):
+                    cnpj = row["_cnpj"]
+                    lvl = int(row["_nivel"])
+                    cheio = float(precos.get(lvl, 0.0))
+                    ja_pago = float(prev_map.get(cnpj, 0.0))  # acumulado até o mês anterior
+                    liquido = cheio - ja_pago
+                    if liquido < 0:
+                        liquido = 0.0
+                    return pd.Series([ja_pago, cheio, liquido])
+
+                by_cnpj[["Já pago (antes do mês)", "Deveria receber (cheio)", "A receber (líquido)"]] = by_cnpj.apply(calc_vals, axis=1)
+
+                show = by_cnpj.rename(columns={
+                    "_cnpj": "CNPJ",
+                    "_abertura": "Data de abertura",
+                    "_nivel": "Nível",
+                    "_criterio_vencedor": "Critério vencedor",
+                    COL_BR: "BR"
+                })
+
+                show["Mês"] = mes_rel
+                show["Data de abertura"] = show["Data de abertura"].apply(fmt_date)
+
+                # (valores numéricos para somar)
+                total_cheio = by_cnpj["Deveria receber (cheio)"].sum()
+                total_ja = by_cnpj["Já pago (antes do mês)"].sum()
+                total_liq = by_cnpj["A receber (líquido)"].sum()
+
+                # formatar dinheiro para exibição
+                show["Já pago (antes do mês)"] = show["Já pago (antes do mês)"].apply(br_money)
+                show["Deveria receber (cheio)"] = show["Deveria receber (cheio)"].apply(br_money)
+                show["A receber (líquido)"] = show["A receber (líquido)"].apply(br_money)
+
+                show = show.sort_values("Data de abertura", ascending=False)
+
+                cols = ["Mês", "CNPJ", "Data de abertura", "Nível", "Critério vencedor", "BR",
+                        "Já pago (antes do mês)", "Deveria receber (cheio)", "A receber (líquido)"]
+                cols = [c for c in cols if c in show.columns]
+
+                st.dataframe(show[cols], use_container_width=True, hide_index=True)
+
+                r1, r2, r3 = st.columns(3)
+                r1.metric("Total cheio (auditoria)", br_money(float(total_cheio)))
+                r2.metric("Total já pago antes (auditoria)", br_money(float(total_ja)))
+                r3.metric("Total líquido (auditoria)", br_money(float(total_liq)))
 
 # =========================================================
 # COMPARATIVO MENSAL (NÃO CRIA MESES)
