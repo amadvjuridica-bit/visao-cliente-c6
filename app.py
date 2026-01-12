@@ -667,7 +667,6 @@ if len(df_c6.columns) < 25:
 df_c6[COL_SALDO] = df_c6.iloc[:, 24]
 df_c6[COL_SALDO] = parse_brl_number_series(df_c6[COL_SALDO])
 saldo_total_arquivo = float(df_c6[COL_SALDO].sum())
-
     df_c6[COL_ABERTURA] = to_date_series(df_c6[COL_ABERTURA])
     df_c6[COL_FUNDACAO] = to_date_series(df_c6[COL_FUNDACAO])
 
