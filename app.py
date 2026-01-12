@@ -659,11 +659,14 @@ if up_c6:
         df_c6[COL_BY] = ""
 
     # SALDO: se não existir a coluna padrão, tenta pegar a coluna Y (25ª coluna, index 24)
-    if COL_SALDO not in df_c6.columns:
-        if len(df_c6.columns) >= 25:
-            df_c6[COL_SALDO] = df_c6.iloc[:, 24]
-        else:
-            df_c6[COL_SALDO] = 0.0
+  # SALDO: SEMPRE coluna Y (25ª coluna, índice 24)
+if len(df_c6.columns) < 25:
+    st.error("A planilha C6 não tem a coluna Y (25ª coluna). Verifique o arquivo importado.")
+    st.stop()
+
+df_c6[COL_SALDO] = df_c6.iloc[:, 24]
+df_c6[COL_SALDO] = parse_brl_number_series(df_c6[COL_SALDO])
+saldo_total_arquivo = float(df_c6[COL_SALDO].sum())
 
     df_c6[COL_ABERTURA] = to_date_series(df_c6[COL_ABERTURA])
     df_c6[COL_FUNDACAO] = to_date_series(df_c6[COL_FUNDACAO])
