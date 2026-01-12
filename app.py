@@ -403,10 +403,11 @@ def recompute_incremental() -> pd.DataFrame:
     months = sorted(list(month_levels.keys()), key=month_key_str)
 
     paid_max: Dict[str, float] = {}
+        prev_pago_mes: Dict[str, Dict[str, float]] = {}
     resumo: Dict[str, dict] = {}
 
     rows = []
-    for mkey in months:
+    for mkey in months:        prev_pago_mes[mkey] = {}
         cmap: Dict[str, int] = month_levels.get(mkey, {}) or {}
         cmap = {k: int(v) for k, v in cmap.items() if str(k).strip() != ""}
 
@@ -540,9 +541,10 @@ def show_logo_and_title():
 
 def reset_all_data():
     for p in [
-        HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
-        HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL
-    ]:
+    HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
+    HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL,
+    HIST_PREV_PAGO_MES
+]:
         if os.path.exists(p):
             os.remove(p)
 
