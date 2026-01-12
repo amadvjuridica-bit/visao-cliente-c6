@@ -60,7 +60,7 @@ HIST_MONTH_LEVELS = os.path.join(DATA_DIR, "hist_mes_cnpj_nivel.json")        # 
 HIST_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "pago_max_por_cnpj.json")         # cnpj -> max pago acumulado
 HIST_RESUMO_MENSAL = os.path.join(DATA_DIR, "resumo_mensal.json")             # mm/aaaa -> resumo calculado
 HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")         # mm/aaaa -> estado (saldo/pix/domicilio/qualificadas)
-
+HIST_PREV_PAGO_MES = os.path.join(DATA_DIR, "prev_pago_mes.json")             # mm/aaaa -> {cnpj: prev_pago_antes_do_mes}
 
 # =========================================================
 # HELPERS
