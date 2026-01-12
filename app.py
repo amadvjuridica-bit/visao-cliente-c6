@@ -1,180 +1,39 @@
-def apply_theme():
-    st.markdown(
-        """
-        <style>
-            /* =========================================================
-               TEMA AJUSTADO PARA LEGIBILIDADE NO CELULAR
-               - Não mexe em layout/estrutura, só cores/contraste
-               - Funciona melhor em desktop e mobile, light/dark do sistema
-               ========================================================= */
-
-            :root{
-                --am-bg: #ffffff;
-                --am-text: #0b1220;
-                --am-muted: #516079;
-
-                --am-sidebar-bg: #0f1b3a;
-                --am-sidebar-text: #ffffff;
-
-                --am-card-bg: #ffffff;
-                --am-card-border: #d7e2f2;
-
-                /* Cores "suaves" (background) + texto escuro (mobile-friendly) */
-                --am-ok-bg: #e9f2ff;     /* azul bem claro */
-                --am-ok-text: #0b1220;   /* texto escuro */
-                --am-bad-bg: #ffeceb;    /* vermelho bem claro */
-                --am-bad-text: #0b1220;  /* texto escuro */
-            }
-
-            /* Sidebar */
-            section[data-testid="stSidebar"]{
-                background: var(--am-sidebar-bg) !important;
-            }
-            section[data-testid="stSidebar"] *{
-                color: var(--am-sidebar-text) !important;
-            }
-
-            /* Títulos e textos */
-            h1,h2,h3{
-                color: var(--am-text) !important;
-            }
-            p, li, span, div{
-                color: var(--am-text);
-            }
-
-            /* Cards (metric) com contraste mais forte */
-            div[data-testid="stMetric"]{
-                background: var(--am-card-bg) !important;
-                border: 1px solid var(--am-card-border) !important;
-                border-radius: 14px;
-                padding: 12px 14px;
-                box-shadow: 0 2px 10px rgba(15,27,58,0.05);
-            }
-            div[data-testid="stMetric"] *{
-                color: var(--am-text) !important;
-            }
-
-            /* Badges (mantém cor no fundo, texto sempre escuro pra ficar legível no celular) */
-            .am-badge-ok{
-                display:inline-block;
-                padding: 6px 12px;
-                border-radius: 999px;
-                background: var(--am-ok-bg) !important;
-                color: var(--am-ok-text) !important;
-                font-weight: 900;
-                font-size: 12px;
-                border: 1px solid #b8d6ff;
-            }
-            .am-badge-bad{
-                display:inline-block;
-                padding: 6px 12px;
-                border-radius: 999px;
-                background: var(--am-bad-bg) !important;
-                color: var(--am-bad-text) !important;
-                font-weight: 900;
-                font-size: 12px;
-                border: 1px solid #ffc2bf;
-            }
-
-            /* Dataframes: aumenta contraste e evita texto “apagado” no mobile */
-            .stDataFrame, div[data-testid="stDataFrame"]{
-                background: #ffffff !important;
-            }
-            div[data-testid="stDataFrame"] *{
-                color: var(--am-text) !important;
-            }
-
-            /* Se o Streamlit aplicar tema escuro, ainda força legibilidade */
-            @media (prefers-color-scheme: dark){
-                :root{
-                    --am-bg: #0b1220;
-                    --am-text: #f2f5fb;
-                    --am-muted: #c0c9d8;
-                    --am-card-bg: #111a2e;
-                    --am-card-border: #243150;
-                    --am-ok-bg: rgba(0, 122, 255, 0.18);
-                    --am-ok-text: #f2f5fb;
-                    --am-bad-bg: rgba(255, 59, 48, 0.18);
-                    --am-bad-text: #f2f5fb;
-                }
-
-                body, .main{
-                    background: var(--am-bg) !important;
-                }
-
-                h1,h2,h3, p, li, span, div{
-                    color: var(--am-text) !important;
-                }
-
-                div[data-testid="stMetric"]{
-                    background: var(--am-card-bg) !important;
-                    border: 1px solid var(--am-card-border) !important;
-                }
-                div[data-testid="stMetric"] *{
-                    color: var(--am-text) !important;
-                }
-
-                .stDataFrame, div[data-testid="stDataFrame"]{
-                    background: var(--am-card-bg) !important;
-                    border: 1px solid var(--am-card-border) !important;
-                }
-                div[data-testid="stDataFrame"] *{
-                    color: var(--am-text) !important;
-                }
-
-                .am-badge-ok{
-                    border: 1px solid rgba(0,122,255,0.35) !important;
-                }
-                .am-badge-bad{
-                    border: 1px solid rgba(255,59,48,0.35) !important;
-                }
-            }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
 import os
 import io
 import json
-import re
+import hashlib
 import datetime as dt
-from typing import Dict, Tuple, Optional, List
+import re
+from typing import Optional, Dict, Tuple, List
 
 import pandas as pd
 import streamlit as st
 
 # =========================================================
-# CONFIGURAÇÕES (COLUNAS)
+# CONFIGURAÇÕES (NOMES DAS COLUNAS)
 # =========================================================
-# C6 (Visão Cliente)
+# Planilha "Visão Cliente" (C6)
 COL_CNPJ = "CD_CPF_CNPJ_CLIENTE"
-COL_ABERTURA = "DT_CONTA_CRIADA"
-COL_FUNDACAO = "DT_FUNDACAO_EMPRESA"
-COL_PIX = "CHAVES_PIX_FORTE"
-COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"
-COL_STATUS = "STATUS_CC"
-COL_DOMICILIO = "BANCO_DOMICILIO"
-COL_BY = "FL_QUALIFICADO_COMISS"
-COL_BR = "MES_REF_COMISS"  # M0/M1/M2
-COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"
+COL_ABERTURA = "DT_CONTA_CRIADA"                  # data de abertura da conta
+COL_FUNDACAO = "DT_FUNDACAO_EMPRESA"              # data de fundação
+COL_PIX = "CHAVES_PIX_FORTE"                      # tipo de chave pix (CNPJ/EMAIL/PHONE/-)
+COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"          # saldo (valor)
+COL_STATUS = "STATUS_CC"                          # status
+COL_DOMICILIO = "BANCO_DOMICILIO"                 # banco domicílio
+COL_BY = "FL_QUALIFICADO_COMISS"                  # coluna que pode vir 0/1 OU 0/1/2/3/4 OU texto
+COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"           # texto "CASH IN: X | ..."
 
-# Leads (cadastros) – coluna M (13ª col) como fallback
-COL_LEADS_DATA = "DATA_CADASTRO"
+# Planilha "Leads" (cadastros)
+COL_LEADS_DATA = "DATA_CADASTRO"                  # vamos mapear a coluna M para este nome
 
-# Possíveis colunas para detectar o "mês do relatório" (mês do arquivo)
-POSSIVEIS_COL_DATA_BASE = [
-    "DATA_BASE", "DT_BASE", "DATA_REFERENCIA", "DT_REFERENCIA",
-    "DATA_RELATORIO", "DT_RELATORIO", "DATA_ATUALIZACAO", "DT_ATUALIZACAO"
-]
+# Regras de cor do indicador de conversão
+ALVO_CONVERSAO = 0.20  # 20%
 
-# Conversão
-ALVO_CONVERSAO = 0.20
-
-# A partir de Jan/26 salvar histórico diário
+# A partir de qual data você quer "memorizar" histórico diário
 HIST_START = dt.date(2026, 1, 1)
 
 # =========================================================
-# REMUNERAÇÃO (FAIXAS)
+# REGRAS DE REMUNERAÇÃO (POR FAIXA)
 # =========================================================
 FAIXAS = [
     (0,   "Até 49 (1.0)",   {1: 140.00, 2: 230.00, 3: 400.00, 4: 540.00}),
@@ -184,22 +43,66 @@ FAIXAS = [
 ]
 
 # =========================================================
-# MEMÓRIA / STORAGE
+# ARQUIVOS DE MEMÓRIA (HISTÓRICO)
 # =========================================================
 DATA_DIR = "data_store"
 os.makedirs(DATA_DIR, exist_ok=True)
 
-HIST_OPEN_DAILY = os.path.join(DATA_DIR, "hist_aberturas_diario.json")        # dd/mm/aaaa -> aberturas
-HIST_LEADS_DAILY = os.path.join(DATA_DIR, "hist_cadastros_diario.json")       # dd/mm/aaaa -> cadastradas
-HIST_MONTH_LEVELS = os.path.join(DATA_DIR, "hist_mes_cnpj_nivel.json")        # mm/aaaa -> {cnpj: nivel_max_no_mes}
-HIST_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "pago_max_por_cnpj.json")         # cnpj -> max pago acumulado
-HIST_RESUMO_MENSAL = os.path.join(DATA_DIR, "resumo_mensal.json")             # mm/aaaa -> resumo calculado
-HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")         # mm/aaaa -> estado (saldo/pix/domicilio/qualificadas)
+HIST_OPEN_DAILY = os.path.join(DATA_DIR, "hist_aberturas_diario.json")
+HIST_LEADS_DAILY = os.path.join(DATA_DIR, "hist_cadastros_diario.json")
+HIST_LAST_SNAPSHOT = os.path.join(DATA_DIR, "snapshot_ultimo.json")
+
+HIST_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "pago_max_por_cnpj.json")
+HIST_RESUMO_MENSAL = os.path.join(DATA_DIR, "resumo_mensal.json")
 
 
 # =========================================================
-# HELPERS
+# HELPERS GERAIS
 # =========================================================
+def sha(b: bytes) -> str:
+    return hashlib.sha256(b).hexdigest()
+
+
+def br_money(v: float) -> str:
+    s = f"{v:,.2f}"
+    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {s}"
+
+
+def br_int(n: int) -> str:
+    return f"{int(n):,}".replace(",", ".")
+
+
+def fmt_date(d: Optional[dt.date]) -> str:
+    if not d or pd.isna(d):
+        return ""
+    if isinstance(d, pd.Timestamp):
+        d = d.date()
+    return d.strftime("%d/%m/%Y")
+
+
+def fmt_month(d: dt.date) -> str:
+    return d.strftime("%m/%Y")
+
+
+def to_date_series(s: pd.Series) -> pd.Series:
+    return pd.to_datetime(s, errors="coerce").dt.date
+
+
+def normalize_str(s: pd.Series) -> pd.Series:
+    return s.astype("string").fillna("").str.strip()
+
+
+def contains_c6(x) -> bool:
+    if x is None or pd.isna(x):
+        return False
+    return "c6" in str(x).lower()
+
+
+def read_excel_any(file_bytes: bytes) -> pd.DataFrame:
+    return pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
+
+
 def safe_json_load(path: str, default):
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -212,99 +115,13 @@ def safe_json_save(path: str, obj):
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
 
-def br_money(v: float) -> str:
-    s = f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return f"R$ {s}"
-
-
-def br_int(n: int) -> str:
-    return f"{int(n):,}".replace(",", ".")
-
-
-def fmt_date(d) -> str:
-    if d is None or pd.isna(d):
-        return ""
-    if isinstance(d, pd.Timestamp):
-        d = d.date()
-    if isinstance(d, dt.datetime):
-        d = d.date()
-    if not isinstance(d, dt.date):
-        return ""
-    return d.strftime("%d/%m/%Y")
-
-
-def fmt_month(d: dt.date) -> str:
-    return d.strftime("%m/%Y")
-
-
-def month_first(d: dt.date) -> dt.date:
-    return dt.date(d.year, d.month, 1)
-
-
-def month_key_str(m: str) -> int:
-    try:
-        mm, aa = m.split("/")
-        return int(aa) * 100 + int(mm)
-    except Exception:
-        return 0
-
-
-def to_date_series(s: pd.Series) -> pd.Series:
-    return pd.to_datetime(s, errors="coerce").dt.date
-
-
-def normalize_str(s: pd.Series) -> pd.Series:
-    return s.astype("string").fillna("").str.strip()
-
-
-def read_excel_any(file_bytes: bytes) -> pd.DataFrame:
-    return pd.read_excel(io.BytesIO(file_bytes), engine="openpyxl")
-
-
-def contains_c6(x) -> bool:
-    if x is None or pd.isna(x):
-        return False
-    return "c6" in str(x).lower()
-
-
-def hide_index_df(df: pd.DataFrame) -> pd.DataFrame:
-    return df.reset_index(drop=True)
-
-
 # =========================================================
-# DETECÇÃO DO MÊS DO RELATÓRIO (mês do arquivo)
-# =========================================================
-def detect_report_month_from_df(df: pd.DataFrame) -> Optional[dt.date]:
-    """
-    Detecta o mês do relatório (mês do arquivo), NÃO o mês de abertura.
-    Prioridade:
-      1) Colunas tipo DATA_BASE/DT_BASE etc
-      2) Fallback: maior data existente em DT_CONTA_CRIADA
-    """
-    for c in POSSIVEIS_COL_DATA_BASE:
-        if c in df.columns:
-            d = to_date_series(df[c]).dropna()
-            if len(d) > 0:
-                m = pd.Series([dt.date(x.year, x.month, 1) for x in d]).mode()
-                if len(m) > 0:
-                    return m.iloc[0]
-
-    if COL_ABERTURA in df.columns:
-        d = to_date_series(df[COL_ABERTURA]).dropna()
-        if len(d) > 0:
-            mx = max(d)
-            return dt.date(mx.year, mx.month, 1)
-
-    return None
-
-
-# =========================================================
-# QUALIFICAÇÃO (NÍVEL)
+# QUALIFICAÇÃO (NÍVEL VENCEDOR)
 # =========================================================
 def parse_level_from_criterios(txt: str) -> int:
     """
-    Ex.: "CASH IN: 3 | DOMICILIO: 0 | SALDO MEDIO: 4 | ..."
-    Regra: considerar SOMENTE o maior valor (1..4).
+    Ex.: "CASH IN: 3 | DOMICILIO: 0 | SALDO MEDIO: 4 | SPENDING: 0 | CONTA GLOBAL: 0"
+    Regra: considerar SOMENTE o MAIOR valor (vencedor).
     """
     if not isinstance(txt, str) or not txt.strip():
         return 0
@@ -312,44 +129,31 @@ def parse_level_from_criterios(txt: str) -> int:
     if not nums:
         return 0
     m = max(nums)
-    if m < 1:
+    if m < 0:
         return 0
     return min(m, 4)
 
 
 def parse_level(df: pd.DataFrame) -> pd.Series:
     """
-    Regra robusta:
-    - BY pode vir 0/1/2/3/4 ou texto. Se for número 1..4, considera como nível.
-    - CRITERIOS_ATINGIDOS_COMISS também tem níveis por critério -> pega o maior.
-    - nível final = max(nível_BY, nível_CRIT)
+    Regra final:
+    - Se BY tiver número 1..4 => nível = esse número
+    - Senão tenta extrair do CRITERIOS_ATINGIDOS_COMISS (maior valor)
+    - Qualificada = nível >= 1
     """
     by_raw = df.get(COL_BY, pd.Series([None] * len(df)))
-    by_num = pd.to_numeric(by_raw, errors="coerce").fillna(0).astype(int)
-    level_by = by_num.where(by_num.between(1, 4), 0)
+    by_num = pd.to_numeric(by_raw, errors="coerce")
+
+    level_by = by_num.fillna(0).astype(int)
+    level_by = level_by.where(level_by.between(1, 4), 0)
 
     crit_raw = df.get(COL_CRIT, pd.Series([""] * len(df))).astype("string").fillna("")
     level_crit = crit_raw.apply(parse_level_from_criterios).astype(int)
 
-    lvl = pd.concat([level_by, level_crit], axis=1).max(axis=1).astype(int)
-    return lvl.where(lvl.between(1, 4), 0)
-
-
-def criterio_vencedor(txt: str) -> str:
-    if not isinstance(txt, str) or not txt.strip():
-        return ""
-    parts = [p.strip() for p in txt.split("|")]
-    best_name, best_val = "", 0
-    for p in parts:
-        m = re.search(r"(.+):\s*(\d+)", p)
-        if m:
-            nome = m.group(1).strip()
-            val = int(m.group(2))
-            if val > best_val:
-                best_name, best_val = nome, val
-    if best_val <= 0:
-        return ""
-    return f"{best_name} ({best_val})"
+    level = level_by.where(level_by > 0, level_crit)
+    level = level.fillna(0).astype(int)
+    level = level.where(level.between(1, 4), 0)
+    return level
 
 
 # =========================================================
@@ -358,8 +162,8 @@ def criterio_vencedor(txt: str) -> str:
 def pix_summary(df: pd.DataFrame) -> Tuple[int, int, pd.DataFrame]:
     s = normalize_str(df.get(COL_PIX, pd.Series([""] * len(df)))).str.upper()
     s = s.str.replace("'", "", regex=False)
-    has_pix = ~s.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
 
+    has_pix = ~s.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
     com = int(has_pix.sum())
     sem = int((~has_pix).sum())
 
@@ -373,16 +177,18 @@ def pix_summary(df: pd.DataFrame) -> Tuple[int, int, pd.DataFrame]:
 
 
 # =========================================================
-# HISTÓRICO DIÁRIO (SALVA SOMENTE O QUE EXISTE NO ARQUIVO)
+# HISTÓRICO DIÁRIO (MEMÓRIA)
 # =========================================================
-def daily_upsert_many(path: str, counts: Dict[str, int]):
-    """
-    counts: {"dd/mm/aaaa": qty}
-    Salva/atualiza SEM criar datas.
-    """
-    base = safe_json_load(path, default={})
-    for k, v in counts.items():
-        base[k] = int(v)
+def upsert_daily_hist(path: str, key: str, series_counts: pd.DataFrame):
+    base = safe_json_load(path, default={})  # {"dd/mm/aaaa": qty}
+    for _, row in series_counts.iterrows():
+        d = row[key]
+        q = int(row["Quantidade"])
+        if isinstance(d, (dt.date, pd.Timestamp)):
+            d = fmt_date(d if isinstance(d, dt.date) else d.date())
+        if not d:
+            continue
+        base[d] = q
     safe_json_save(path, base)
 
 
@@ -398,122 +204,12 @@ def hist_to_df(path: str, colname: str) -> pd.DataFrame:
             continue
         rows.append((dd, int(v)))
     rows.sort(key=lambda x: x[0])
-    return pd.DataFrame(rows, columns=["Data", colname])
+    out = pd.DataFrame(rows, columns=["Data", colname])
+    return out
 
 
 # =========================================================
-# MENSAL POR CNPJ (NÍVEL MÁXIMO NO MÊS) - A PARTIR DO DIÁRIO
-# =========================================================
-def month_levels_upsert_from_daily_df(df_c6: pd.DataFrame):
-    """
-    Grava qualificação por MÊS DO RELATÓRIO (mês do arquivo),
-    não por DT_CONTA_CRIADA.
-
-    Regra:
-    - Para o mês do arquivo, para cada CNPJ, salva o MAIOR nível visto no mês.
-    - Só a partir de Jan/26 em diante.
-    """
-    store = safe_json_load(HIST_MONTH_LEVELS, default={})
-
-    mes_rel = detect_report_month_from_df(df_c6)
-    if mes_rel is None:
-        return
-
-    if mes_rel < dt.date(2026, 1, 1):
-        return
-
-    mkey = fmt_month(mes_rel)
-
-    df = df_c6.copy()
-
-    # CNPJ
-    if COL_CNPJ not in df.columns:
-        cand = [c for c in df.columns if "CNPJ" in str(c).upper()]
-        df[COL_CNPJ] = df[cand[0]] if cand else ""
-
-    df["_cnpj"] = normalize_str(df[COL_CNPJ]).str.replace(r"\D", "", regex=True)
-
-    # nível por linha
-    df["_nivel"] = parse_level(df)
-
-    q = df[(df["_cnpj"] != "") & (df["_nivel"] >= 1)].copy()
-    if q.empty:
-        store[mkey] = store.get(mkey, {}) or {}
-        safe_json_save(HIST_MONTH_LEVELS, store)
-        return
-
-    by_cnpj = q.groupby("_cnpj")["_nivel"].max().reset_index()
-
-    month_map: Dict[str, int] = store.get(mkey, {}) or {}
-    for _, r in by_cnpj.iterrows():
-        cnpj = str(r["_cnpj"])
-        lvl = int(r["_nivel"])
-        prev = int(month_map.get(cnpj, 0))
-        if lvl > prev:
-            month_map[cnpj] = lvl
-
-    store[mkey] = month_map
-    safe_json_save(HIST_MONTH_LEVELS, store)
-
-
-# =========================================================
-# IMPORTAÇÃO MENSAL (EXCEÇÃO NOV/25 e DEZ/25) - SEED
-# =========================================================
-def detect_month_from_filename(name: str) -> Optional[dt.date]:
-    n = name.upper()
-    if "NOVEMBRO2025" in n or "NOV/2025" in n or "NOV_2025" in n or "NOV-2025" in n:
-        return dt.date(2025, 11, 1)
-    if "DEZEMBRO2025" in n or "DEZ/2025" in n or "DEZ_2025" in n or "DEZ-2025" in n:
-        return dt.date(2025, 12, 1)
-    return None
-
-
-def month_levels_upsert_from_monthly_file(file_name: str, file_bytes: bytes):
-    df = read_excel_any(file_bytes)
-
-    m = None
-    if COL_ABERTURA in df.columns:
-        d = to_date_series(df[COL_ABERTURA]).dropna()
-        if len(d) > 0:
-            mm = pd.Series([dt.date(x.year, x.month, 1) for x in d]).mode()
-            if len(mm) > 0:
-                m = mm.iloc[0]
-    if m is None:
-        m = detect_month_from_filename(file_name)
-    if m is None:
-        return
-
-    store = safe_json_load(HIST_MONTH_LEVELS, default={})
-    mkey = fmt_month(m)
-    month_map: Dict[str, int] = store.get(mkey, {}) or {}
-
-    if COL_CNPJ not in df.columns:
-        cand = [c for c in df.columns if "CNPJ" in str(c).upper()]
-        df[COL_CNPJ] = df[cand[0]] if cand else ""
-
-    df["_cnpj"] = normalize_str(df[COL_CNPJ]).str.replace(r"\D", "", regex=True)
-    df["_nivel"] = parse_level(df)
-
-    q = df[(df["_cnpj"] != "") & (df["_nivel"] >= 1)].copy()
-    if q.empty:
-        store[mkey] = month_map
-        safe_json_save(HIST_MONTH_LEVELS, store)
-        return
-
-    by_cnpj = q.groupby("_cnpj")["_nivel"].max().reset_index()
-    for _, r in by_cnpj.iterrows():
-        cnpj = str(r["_cnpj"])
-        lvl = int(r["_nivel"])
-        prev = int(month_map.get(cnpj, 0))
-        if lvl > prev:
-            month_map[cnpj] = lvl
-
-    store[mkey] = month_map
-    safe_json_save(HIST_MONTH_LEVELS, store)
-
-
-# =========================================================
-# FAIXA
+# REMUNERAÇÃO MENSAL INCREMENTAL
 # =========================================================
 def faixa_por_qtd(qtd_qualificadas: int) -> Tuple[str, Dict[int, float]]:
     chosen_name, chosen_tbl = FAIXAS[0][1], FAIXAS[0][2]
@@ -523,85 +219,126 @@ def faixa_por_qtd(qtd_qualificadas: int) -> Tuple[str, Dict[int, float]]:
     return chosen_name, chosen_tbl
 
 
-def faixa_tbl_por_nome(nome: str) -> Dict[int, float]:
-    for _, nm, tbl in FAIXAS:
-        if nm == nome:
-            return tbl
-    return FAIXAS[0][2]
+def detect_month_from_file(df: pd.DataFrame) -> Optional[dt.date]:
+    if COL_ABERTURA in df.columns:
+        d = to_date_series(df[COL_ABERTURA]).dropna()
+        if len(d) > 0:
+            m = pd.Series([dt.date(x.year, x.month, 1) for x in d]).mode()
+            if len(m) > 0:
+                return m.iloc[0]
+    if "DATA_BASE" in df.columns:
+        d = to_date_series(df["DATA_BASE"]).dropna()
+        if len(d) > 0:
+            m = pd.Series([dt.date(x.year, x.month, 1) for x in d]).mode()
+            if len(m) > 0:
+                return m.iloc[0]
+    return None
 
 
-# =========================================================
-# RECOMPUTE INCREMENTAL (SEM CRIAR MESES)
-# =========================================================
-def recompute_incremental() -> pd.DataFrame:
-    month_levels = safe_json_load(HIST_MONTH_LEVELS, default={})
-    months = sorted(list(month_levels.keys()), key=month_key_str)
+def compute_monthly_incremental(files: List[Tuple[str, bytes]]) -> pd.DataFrame:
+    paid_max = safe_json_load(HIST_PAGO_POR_CNPJ, default={})
+    resumo_mensal = safe_json_load(HIST_RESUMO_MENSAL, default={})
 
-    paid_max: Dict[str, float] = {}
-    resumo: Dict[str, dict] = {}
+    month_rows = []
 
-    rows = []
-    for mkey in months:
-        cmap: Dict[str, int] = month_levels.get(mkey, {}) or {}
-        cmap = {k: int(v) for k, v in cmap.items() if str(k).strip() != ""}
+    parsed = []
+    for name, b in files:
+        df = read_excel_any(b)
 
-        qtd_qual = len(cmap)
+        if COL_CNPJ not in df.columns:
+            cand = [c for c in df.columns if "CNPJ" in str(c).upper()]
+            df[COL_CNPJ] = df[cand[0]] if cand else ""
+        df[COL_CNPJ] = normalize_str(df[COL_CNPJ]).str.replace(r"\D", "", regex=True)
+
+        df["_nivel"] = parse_level(df)
+
+        month = detect_month_from_file(df)
+        if month is None:
+            if "NOVEMBRO" in name.upper():
+                month = dt.date(2025, 11, 1)
+            elif "DEZEMBRO" in name.upper():
+                month = dt.date(2025, 12, 1)
+
+        if month is None:
+            continue
+
+        parsed.append((month, name, df))
+
+    parsed.sort(key=lambda x: x[0])
+
+    for month, name, df in parsed:
+        dfq = df[df["_nivel"] >= 1].copy()
+
+        by_cnpj = (
+            dfq.groupby(COL_CNPJ)["_nivel"]
+            .max()
+            .reset_index()
+            .rename(columns={"_nivel": "Nível"})
+        )
+        by_cnpj = by_cnpj[by_cnpj[COL_CNPJ] != ""]
+
+        qtd_qual = int(by_cnpj.shape[0])
         faixa_nome, precos = faixa_por_qtd(qtd_qual)
 
-        lvl_counts = {1: 0, 2: 0, 3: 0, 4: 0}
-        for _, lvl in cmap.items():
-            if lvl in lvl_counts:
-                lvl_counts[lvl] += 1
+        by_cnpj["Valor cheio (mês)"] = by_cnpj["Nível"].map(lambda n: float(precos.get(int(n), 0.0)))
 
-        total_cheio = 0.0
-        total_receber = 0.0
-
-        for cnpj, lvl in cmap.items():
-            cheio = float(precos.get(int(lvl), 0.0))
-            prev = float(paid_max.get(cnpj, 0.0))
-            diff = cheio - prev
+        ja_pago = []
+        a_receber = []
+        for _, r in by_cnpj.iterrows():
+            cnpj = r[COL_CNPJ]
+            cheio = float(r["Valor cheio (mês)"])
+            prev_max = float(paid_max.get(cnpj, 0.0))
+            diff = cheio - prev_max
             if diff < 0:
                 diff = 0.0
+            ja_pago.append(prev_max)
+            a_receber.append(diff)
 
-            total_cheio += cheio
-            total_receber += diff
+        by_cnpj["Já pago antes (CNPJ)"] = ja_pago
+        by_cnpj["A receber (mês)"] = a_receber
+
+        total_cheio = float(by_cnpj["Valor cheio (mês)"].sum())
+        total_receber = float(by_cnpj["A receber (mês)"].sum())
+        total_japago_ref = total_cheio - total_receber
+
+        for _, r in by_cnpj.iterrows():
+            cnpj = r[COL_CNPJ]
+            cheio = float(r["Valor cheio (mês)"])
+            prev = float(paid_max.get(cnpj, 0.0))
             paid_max[cnpj] = max(prev, cheio)
 
-        ja_pago_ref = total_cheio - total_receber
-
-        resumo[mkey] = {
+        key = fmt_month(month)
+        resumo_mensal[key] = {
+            "arquivo": name,
             "faixa": faixa_nome,
             "qualificadas": qtd_qual,
-            "n1": lvl_counts[1],
-            "n2": lvl_counts[2],
-            "n3": lvl_counts[3],
-            "n4": lvl_counts[4],
             "deveria_receber": total_cheio,
-            "ja_pago_ref": ja_pago_ref,
+            "ja_pago_ref": total_japago_ref,
             "receber_mes": total_receber,
         }
 
-        rows.append([
-            mkey, faixa_nome, qtd_qual,
-            lvl_counts[1], lvl_counts[2], lvl_counts[3], lvl_counts[4],
-            total_cheio, ja_pago_ref, total_receber
-        ])
+        month_rows.append([key, name, faixa_nome, qtd_qual, total_cheio, total_japago_ref, total_receber])
 
     safe_json_save(HIST_PAGO_POR_CNPJ, paid_max)
-    safe_json_save(HIST_RESUMO_MENSAL, resumo)
+    safe_json_save(HIST_RESUMO_MENSAL, resumo_mensal)
 
-    return pd.DataFrame(
-        rows,
+    out = pd.DataFrame(
+        month_rows,
         columns=[
-            "Mês", "Faixa", "Qualificadas",
-            "Nível 1", "Nível 2", "Nível 3", "Nível 4",
-            "Deveria receber (cheio)", "Já pago (referência)", "A receber no mês"
+            "Mês",
+            "Arquivo",
+            "Faixa",
+            "Qualificadas",
+            "Deveria receber (cheio)",
+            "Já pago (referência)",
+            "A receber no mês",
         ],
     )
+    return out
 
 
 # =========================================================
-# LOGIN / TEMA / HEADER
+# LOGIN SIMPLES
 # =========================================================
 def login_gate() -> bool:
     st.sidebar.markdown("### Acesso")
@@ -614,32 +351,59 @@ def login_gate() -> bool:
     return st.session_state.get("logged_in", False)
 
 
+# =========================================================
+# ESTILO (CORES / LOGO / LAYOUT)
+# =========================================================
 def apply_theme():
+    # Ajuste SOMENTE de cores/contraste para ficar legível no celular (dark/light)
     st.markdown(
         """
         <style>
-            section[data-testid="stSidebar"]{ background:#0f1b3a; }
-            section[data-testid="stSidebar"] * { color:#ffffff !important; }
-
-            div[data-testid="stMetric"]{
-                background:#ffffff;
-                border:1px solid #e9eef7;
-                border-radius:14px;
-                padding:12px 14px;
-                box-shadow:0 2px 10px rgba(15,27,58,0.05);
+            /* Sidebar escura */
+            section[data-testid="stSidebar"]{
+                background: #0f1b3a;
+            }
+            section[data-testid="stSidebar"] * {
+                color: #ffffff !important;
             }
 
-            h1,h2,h3{ color:#0f1b3a; }
+            /* Títulos */
+            h1, h2, h3 {
+                color: #0f1b3a !important;
+            }
 
+            /* Cards/metricas: garantir contraste em qualquer tema */
+            div[data-testid="stMetric"]{
+                background: #ffffff !important;
+                border: 1px solid #e6ebf5 !important;
+                border-radius: 14px !important;
+                padding: 12px 14px !important;
+                box-shadow: 0 2px 10px rgba(15,27,58,0.06) !important;
+            }
+            div[data-testid="stMetric"] *{
+                color: #0f1b3a !important; /* força texto escuro no mobile/dark */
+            }
+
+            /* Badges: alto contraste */
             .am-badge-ok{
-                display:inline-block; padding:4px 10px; border-radius:999px;
-                background:rgba(0,122,255,0.12); color:#007AFF;
-                font-weight:900; font-size:12px;
+                display:inline-block;
+                padding: 6px 12px;
+                border-radius: 999px;
+                background: #0B5FFF;
+                color: #ffffff;
+                font-weight: 800;
+                font-size: 12px;
+                letter-spacing: .2px;
             }
             .am-badge-bad{
-                display:inline-block; padding:4px 10px; border-radius:999px;
-                background:rgba(255,59,48,0.12); color:#FF3B30;
-                font-weight:900; font-size:12px;
+                display:inline-block;
+                padding: 6px 12px;
+                border-radius: 999px;
+                background: #D92D20;
+                color: #ffffff;
+                font-weight: 800;
+                font-size: 12px;
+                letter-spacing: .2px;
             }
         </style>
         """,
@@ -649,61 +413,75 @@ def apply_theme():
 
 def show_logo_and_title():
     here = os.path.dirname(__file__)
-    logo_path = os.path.join(here, "LOGO CORRETA.png")
+    logo_path = os.path.join(here, "LOGO CORRETA.png")  # precisa estar na pasta do app.py
 
-    c1, c2 = st.columns([1, 6], vertical_alignment="center")
+    c1, c2 = st.columns([1, 4], vertical_alignment="center")
+
     with c1:
         if os.path.exists(logo_path):
-            st.image(logo_path, width=160)
+            st.image(logo_path, width=140)
         else:
-            st.warning("Logo não encontrada. Coloque 'LOGO CORRETA.png' na mesma pasta do app.py.")
+            st.info("Logo não encontrada: coloque o arquivo 'LOGO CORRETA.png' na mesma pasta do app.py.")
+
     with c2:
         st.markdown(
             """
             <div style="line-height:1.1">
-              <div style="font-size:28px;font-weight:900;color:#0f1b3a;margin-bottom:4px;">
-                Painel de controle Assis e Mollerke parceiro Banco C6
-              </div>
-              <div style="color:#5b6b8c;font-weight:700;">
-                Visão Cliente + Leads + Remuneração
-              </div>
+              <h1 style="margin-bottom:6px;">Painel de controle Assis e Mollerke parceiro Banco C6</h1>
+              <div style="color:#5b6b8c;font-weight:600;">Visão Cliente + Leads + Remuneração incremental (Nov/25 e Dez/25)</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
 
-def reset_all_data():
-    for p in [
-        HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
-        HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL
-    ]:
-        if os.path.exists(p):
-            os.remove(p)
+# =========================================================
+# DATAFRAMES COM ESTILO (SEM HTML VISÍVEL)
+# =========================================================
+def style_conversao_table(df: pd.DataFrame) -> "pd.io.formats.style.Styler":
+    # garante coluna numérica para a cor
+    if "Percentual_num" not in df.columns:
+        df["Percentual_num"] = 0.0
+
+    def row_style(row):
+        v = float(row.get("Percentual_num", 0.0))
+        if v >= ALVO_CONVERSAO:
+            return ["background-color: #E8F0FF !important; color: #0f1b3a !important; font-weight: 700;"] * len(row)
+        else:
+            return ["background-color: #FFE8E6 !important; color: #0f1b3a !important; font-weight: 700;"] * len(row)
+
+    sty = df.style.apply(row_style, axis=1)
+
+    # esconde a coluna técnica e o índice
+    if "Percentual_num" in df.columns:
+        try:
+            sty = sty.hide(columns=["Percentual_num"])
+        except Exception:
+            pass
+    try:
+        sty = sty.hide(axis="index")
+    except Exception:
+        pass
+
+    return sty
 
 
 # =========================================================
 # APP
 # =========================================================
-st.set_page_config(page_title="Assis e Mollerke | Banco C6", layout="wide")
+st.set_page_config(page_title="Assis & Mollerke | Banco C6", layout="wide")
 apply_theme()
 
 if not login_gate():
     st.stop()
 
-# Sidebar reset
-st.sidebar.markdown("---")
-if st.sidebar.button("RESETAR HISTÓRICO (ZERAR TUDO)"):
-    reset_all_data()
-    st.sidebar.success("Histórico resetado. Reimporte Nov/25 e Dez/25 (se quiser) e depois os diários.")
-
 show_logo_and_title()
 st.divider()
 
-# =========================================================
+# -------------------------------
 # IMPORTAÇÃO
-# =========================================================
-st.subheader("Importação diária (Janeiro/26 em diante)")
+# -------------------------------
+st.subheader("Importação do dia")
 
 colA, colB = st.columns(2)
 with colA:
@@ -711,98 +489,73 @@ with colA:
 with colB:
     up_leads = st.file_uploader("Planilha Leads — diária (.xlsx)", type=["xlsx"], key="leads")
 
-st.subheader("Importação mensal (exceção: Nov/25 e Dez/25)")
+st.subheader("Importação mensal (Remuneração incremental)")
 up_monthly = st.file_uploader(
-    "Envie Nov/25 e Dez/25 (apenas se precisar iniciar histórico antigo)",
+    "Envie 1 ou mais arquivos mensais (Nov/25 e Dez/25) — pode enviar vários de uma vez",
     type=["xlsx"],
     accept_multiple_files=True,
     key="monthly",
 )
 
-# Processa mensal (seed)
-if up_monthly and len(up_monthly) > 0:
-    for f in up_monthly:
-        month_levels_upsert_from_monthly_file(f.name, f.getvalue())
+# -------------------------------
+# PROCESSAMENTO: C6 (DIÁRIO)
+# -------------------------------
+daily_ready = False
+leads_ready = False
 
-# =========================================================
-# PROCESSA DIÁRIO (SEM DATA REFERÊNCIA)
-# =========================================================
 df_c6 = None
 df_leads = None
 
 if up_c6:
-    df_c6 = read_excel_any(up_c6.getvalue())
+    b = up_c6.getvalue()
+    df_c6 = read_excel_any(b)
 
-    # garantias
+    # CNPJ
+    if COL_CNPJ not in df_c6.columns:
+        cand = [c for c in df_c6.columns if "CNPJ" in str(c).upper()]
+        df_c6[COL_CNPJ] = df_c6[cand[0]] if cand else ""
+    df_c6[COL_CNPJ] = normalize_str(df_c6[COL_CNPJ]).str.replace(r"\D", "", regex=True)
+
+    # datas
     if COL_ABERTURA not in df_c6.columns:
         df_c6[COL_ABERTURA] = pd.NA
     if COL_FUNDACAO not in df_c6.columns:
         df_c6[COL_FUNDACAO] = pd.NA
-    if COL_SALDO not in df_c6.columns:
-        df_c6[COL_SALDO] = 0.0
-    if COL_BR not in df_c6.columns:
-        df_c6[COL_BR] = ""
-    if COL_CRIT not in df_c6.columns:
-        df_c6[COL_CRIT] = ""
-    if COL_BY not in df_c6.columns:
-        df_c6[COL_BY] = ""
-
     df_c6[COL_ABERTURA] = to_date_series(df_c6[COL_ABERTURA])
     df_c6[COL_FUNDACAO] = to_date_series(df_c6[COL_FUNDACAO])
+
+    # valores
+    if COL_SALDO not in df_c6.columns:
+        df_c6[COL_SALDO] = 0.0
     df_c6[COL_SALDO] = pd.to_numeric(df_c6[COL_SALDO], errors="coerce").fillna(0.0)
-    df_c6[COL_BR] = normalize_str(df_c6[COL_BR]).str.upper()
-    df_c6[COL_CRIT] = normalize_str(df_c6[COL_CRIT])
 
-    # histórico diário de aberturas (apenas datas existentes no arquivo e >= Jan/26)
-    opened_counts = (
-        df_c6[df_c6[COL_ABERTURA].notna()]
-        .assign(_d=df_c6[COL_ABERTURA])
-        .query("_d >= @HIST_START")
-        .groupby("_d")
-        .size()
-        .to_dict()
+    # strings
+    df_c6[COL_PIX] = normalize_str(df_c6.get(COL_PIX, pd.Series([""] * len(df_c6))))
+    df_c6[COL_STATUS] = normalize_str(df_c6.get(COL_STATUS, pd.Series([""] * len(df_c6))))
+    df_c6[COL_DOMICILIO] = normalize_str(df_c6.get(COL_DOMICILIO, pd.Series([""] * len(df_c6))))
+    df_c6[COL_CRIT] = normalize_str(df_c6.get(COL_CRIT, pd.Series([""] * len(df_c6))))
+    df_c6[COL_BY] = df_c6.get(COL_BY, pd.Series([""] * len(df_c6)))
+
+    por_dia_abert = (
+        pd.Series(df_c6[COL_ABERTURA]).dropna().value_counts().sort_index()
+        .rename_axis("Data")
+        .reset_index(name="Quantidade")
     )
-    opened_counts = {fmt_date(k): int(v) for k, v in opened_counts.items()}
-    if opened_counts:
-        daily_upsert_many(HIST_OPEN_DAILY, opened_counts)
+    por_dia_abert["Data"] = por_dia_abert["Data"].apply(lambda d: fmt_date(d))
+    upsert_daily_hist(HIST_OPEN_DAILY, "Data", por_dia_abert)
 
-    # grava níveis por mês do relatório (mês do arquivo)
-    month_levels_upsert_from_daily_df(df_c6)
-
-    # snapshot mensal (estado do arquivo para cards do mês)
-    mes_rel = detect_report_month_from_df(df_c6)
-    if mes_rel and mes_rel >= dt.date(2026, 1, 1):
-        mkey = fmt_month(mes_rel)
-
-        df_tmp = df_c6.copy()
-        df_tmp["_nivel"] = parse_level(df_tmp)
-
-        pix_com, pix_sem, _ = pix_summary(df_tmp)
-        domicilio_c6 = int(df_tmp.get(COL_DOMICILIO, pd.Series([""] * len(df_tmp))).apply(contains_c6).sum())
-        qualificadas = int((df_tmp["_nivel"] >= 1).sum())
-        saldo_total = float(df_tmp[COL_SALDO].sum())
-
-        snap = safe_json_load(HIST_SNAPSHOT_MENSAL, default={})
-        snap[mkey] = {
-            "saldo_total": saldo_total,
-            "pix_com": pix_com,
-            "pix_sem": pix_sem,
-            "domicilio_c6": domicilio_c6,
-            "qualificadas_arquivo": qualificadas,
-            "arquivo_c6": up_c6.name if up_c6 else "",
-        }
-        safe_json_save(HIST_SNAPSHOT_MENSAL, snap)
+    daily_ready = True
 
 if up_leads:
-    df_leads = read_excel_any(up_leads.getvalue())
+    b = up_leads.getvalue()
+    df_leads = read_excel_any(b)
 
-    # mapear DATA_CADASTRO
+    # Coluna M -> DATA_CADASTRO
     if COL_LEADS_DATA not in df_leads.columns:
         cand = [c for c in df_leads.columns if "CADAST" in str(c).upper() and "DATA" in str(c).upper()]
         if cand:
             df_leads[COL_LEADS_DATA] = df_leads[cand[0]]
         else:
-            # fallback coluna M (13ª)
             if len(df_leads.columns) >= 13:
                 df_leads[COL_LEADS_DATA] = df_leads.iloc[:, 12]
             else:
@@ -810,196 +563,145 @@ if up_leads:
 
     df_leads[COL_LEADS_DATA] = to_date_series(df_leads[COL_LEADS_DATA])
 
-    leads_counts = (
-        df_leads[df_leads[COL_LEADS_DATA].notna()]
-        .assign(_d=df_leads[COL_LEADS_DATA])
-        .query("_d >= @HIST_START")
-        .groupby("_d")
-        .size()
-        .to_dict()
+    por_dia_cad = (
+        pd.Series(df_leads[COL_LEADS_DATA]).dropna().value_counts().sort_index()
+        .rename_axis("Data")
+        .reset_index(name="Quantidade")
     )
-    leads_counts = {fmt_date(k): int(v) for k, v in leads_counts.items()}
-    if leads_counts:
-        daily_upsert_many(HIST_LEADS_DAILY, leads_counts)
+    por_dia_cad["Data"] = por_dia_cad["Data"].apply(lambda d: fmt_date(d))
+    upsert_daily_hist(HIST_LEADS_DAILY, "Data", por_dia_cad)
 
-st.divider()
+    leads_ready = True
 
-# =========================================================
-# RECOMPUTE REMUNERAÇÃO (INCREMENTAL CONSOLIDADA)
-# =========================================================
-_ = recompute_incremental()
-saved_resumo = safe_json_load(HIST_RESUMO_MENSAL, default={})
+# -------------------------------
+# RESUMO EXECUTIVO (DIA) - mantido como estava
+# -------------------------------
+if daily_ready:
+    qtd_abert_arquivo = int(pd.Series(df_c6[COL_ABERTURA]).dropna().shape[0])
+    saldo_total = float(df_c6[COL_SALDO].sum())
+    pix_com, pix_sem, pix_por_chave = pix_summary(df_c6)
+    domicilio_c6 = int(df_c6[COL_DOMICILIO].apply(contains_c6).sum())
 
-# =========================================================
-# RESUMO EXECUTIVO (MÊS) + % GERAL DO MÊS
-# =========================================================
-st.subheader("Resumo executivo (mês)")
+    df_c6["_nivel"] = parse_level(df_c6)
+    qualificadas = int((df_c6["_nivel"] >= 1).sum())
+
+    st.subheader("Resumo executivo (dia)")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Contas abertas (arquivo)", br_int(qtd_abert_arquivo))
+    c2.metric("Saldo total", br_money(saldo_total))
+    c3.metric("Clientes com Pix", br_int(pix_com))
+    c4.metric("Clientes sem Pix", br_int(pix_sem))
+
+    c5, c6, c7, c8 = st.columns(4)
+    c5.metric("Domicílio C6", br_int(domicilio_c6))
+    c6.metric("Contas qualificadas (arquivo)", br_int(qualificadas))
+    c7.metric("Arquivo do dia", up_c6.name)
+    c8.metric("Mês detectado", fmt_month(detect_month_from_file(df_c6) or dt.date.today()))
+
+    st.divider()
+
+# -------------------------------
+# CONVERSÃO: ABERTAS / CADASTRADAS
+# -------------------------------
+st.subheader("Conversão do mês")
 
 hist_open = hist_to_df(HIST_OPEN_DAILY, "Abertas")
 hist_leads = hist_to_df(HIST_LEADS_DAILY, "Cadastradas")
 
 if hist_open.empty or hist_leads.empty:
-    st.info("Importe C6 + Leads (diário) para montar o mês.")
-else:
-    base = pd.merge(hist_leads, hist_open, on="Data", how="outer").fillna(0)
-    base["Abertas"] = base["Abertas"].astype(int)
-    base["Cadastradas"] = base["Cadastradas"].astype(int)
-    base["Mes_ref"] = base["Data"].map(month_first)
-
-    meses = sorted(base["Mes_ref"].unique())
-    mes_atual = meses[-1]
-    mes_lbl = fmt_month(mes_atual)
-
-    mes_df = base[base["Mes_ref"] == mes_atual].copy()
-    total_ab_mes = int(mes_df["Abertas"].sum())
-    total_cad_mes = int(mes_df["Cadastradas"].sum())
-    perc_mes = (total_ab_mes / total_cad_mes) if total_cad_mes > 0 else 0.0
-
-    badge = "am-badge-ok" if perc_mes >= ALVO_CONVERSAO else "am-badge-bad"
-    st.markdown(
-        f"<div class='{badge}'>Conversão do mês: {str(round(perc_mes*100,1)).replace('.',',')}%</div>",
-        unsafe_allow_html=True
-    )
-
-    snap = safe_json_load(HIST_SNAPSHOT_MENSAL, default={})
-    s = snap.get(mes_lbl, {})
-
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Mês", mes_lbl)
-    c2.metric("Cadastradas (mês)", br_int(total_cad_mes))
-    c3.metric("Abertas (mês)", br_int(total_ab_mes))
-    c4.metric("% geral (mês)", f"{str(round(perc_mes*100,1)).replace('.',',')}%")
-
-    c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Saldo total (snapshot)", br_money(float(s.get("saldo_total", 0.0))))
-    c6.metric("Pix (snapshot)", f'{br_int(int(s.get("pix_com",0)))} com | {br_int(int(s.get("pix_sem",0)))} sem')
-    c7.metric("Domicílio C6 (snapshot)", br_int(int(s.get("domicilio_c6", 0))))
-    c8.metric("Qualificadas (arquivo)", br_int(int(s.get("qualificadas_arquivo", 0))))
-
-st.divider()
-
-# =========================================================
-# REMUNERAÇÃO DO MÊS ATUAL (NO TOPO)
-# =========================================================
-st.subheader("Remuneração do mês atual (incremental)")
-
-if saved_resumo:
-    months_sorted = sorted(saved_resumo.keys(), key=month_key_str)
-    mes_atual = months_sorted[-1]
-    info = saved_resumo.get(mes_atual, {})
-
-    faixa = info.get("faixa", "-")
-    qual = int(info.get("qualificadas", 0))
-    n1 = int(info.get("n1", 0))
-    n2 = int(info.get("n2", 0))
-    n3 = int(info.get("n3", 0))
-    n4 = int(info.get("n4", 0))
-    cheio = float(info.get("deveria_receber", 0.0))
-    japago = float(info.get("ja_pago_ref", 0.0))
-    receber = float(info.get("receber_mes", 0.0))
-
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Mês", mes_atual)
-    m2.metric("Faixa", faixa)
-    m3.metric("Qualificadas", br_int(qual))
-    m4.metric("A receber (mês)", br_money(receber))
-
-    m5, m6, m7 = st.columns(3)
-    m5.metric("Receita cheia (mês)", br_money(cheio))
-    m6.metric("Já pago (referência)", br_money(japago))
-    m7.metric("Níveis (1/2/3/4)", f"{br_int(n1)} / {br_int(n2)} / {br_int(n3)} / {br_int(n4)}")
-
-else:
-    st.info("Ainda não há histórico de remuneração. Importe os diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
-
-st.divider()
-
-# =========================================================
-# CONVERSÃO DO MÊS (TABELA DIÁRIA + % GERAL DO MÊS)
-# =========================================================
-st.subheader("Conversão do mês (detalhamento diário)")
-
-if hist_open.empty or hist_leads.empty:
-    st.info("Para ver a conversão, envie planilhas diárias de C6 e Leads (Jan/26 em diante).")
+    st.info("Para ver a conversão, envie a planilha diária do C6 e a planilha diária de Leads (ao menos 1 vez).")
 else:
     base = pd.merge(hist_leads, hist_open, on="Data", how="outer").fillna(0)
     base["Cadastradas"] = base["Cadastradas"].astype(int)
     base["Abertas"] = base["Abertas"].astype(int)
-    base["Mes_ref"] = base["Data"].map(month_first)
 
-    meses = sorted(base["Mes_ref"].unique())
-    meses_lbl = [fmt_month(m) for m in meses]
-
-    mes_sel_lbl = st.selectbox("Selecione o mês", meses_lbl, index=len(meses_lbl) - 1)
-    mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
-
-    mes_df = base[base["Mes_ref"] == mes_sel].copy()
-    mes_df["Percentual_num"] = mes_df.apply(
+    # percent = abertas / cadastradas
+    base["Percentual_num"] = base.apply(
         lambda r: (r["Abertas"] / r["Cadastradas"]) if r["Cadastradas"] > 0 else 0.0,
         axis=1
     )
-    mes_df["% Conversão"] = mes_df["Percentual_num"].map(lambda x: f"{x*100:.1f}%".replace(".", ","))
-    mes_df["Indicador"] = mes_df["Percentual_num"].map(lambda x: "Dentro do alvo" if x >= ALVO_CONVERSAO else "Abaixo do alvo")
+    base["% do dia"] = base["Percentual_num"].map(lambda x: f"{x*100:.1f}%".replace(".", ","))
+    base["Indicador"] = base["Percentual_num"].map(
+        lambda x: "Dentro do alvo" if x >= ALVO_CONVERSAO else "Abaixo do alvo"
+    )
 
-    # mais recente -> mais antigo
-    mes_df = mes_df.sort_values("Data", ascending=False).reset_index(drop=True)
+    base["Mes_ref"] = base["Data"].map(lambda d: dt.date(d.year, d.month, 1))
+    meses = sorted(base["Mes_ref"].unique())
+    meses_lbl = [fmt_month(m) for m in meses]
+
+    mes_sel_lbl = st.selectbox("Selecione o mês", meses_lbl, index=len(meses_lbl)-1)
+    mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
+
+    mes_df = base[base["Mes_ref"] == mes_sel].copy()
 
     total_ab_mes = int(mes_df["Abertas"].sum())
     total_cad_mes = int(mes_df["Cadastradas"].sum())
     perc_mes = (total_ab_mes / total_cad_mes) if total_cad_mes > 0 else 0.0
+    perc_mes_lbl = f"{perc_mes*100:.1f}%".replace(".", ",")
 
-    badge = "am-badge-ok" if perc_mes >= ALVO_CONVERSAO else "am-badge-bad"
-    st.markdown(
-        f"<div class='{badge}'>% geral do mês: {str(round(perc_mes*100,1)).replace('.',',')}%</div>",
-        unsafe_allow_html=True
-    )
+    if perc_mes >= ALVO_CONVERSAO:
+        st.markdown(f"<div class='am-badge-ok'>% geral do mês: {perc_mes_lbl}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown(f"<div class='am-badge-bad'>% geral do mês: {perc_mes_lbl}</div>", unsafe_allow_html=True)
 
     cA, cB, cC = st.columns(3)
     cA.metric("Cadastradas (mês)", br_int(total_cad_mes))
     cB.metric("Abertas (mês)", br_int(total_ab_mes))
-    cC.metric("% geral (mês)", f"{str(round(perc_mes*100,1)).replace('.',',')}%")
+    cC.metric("Mês", mes_sel_lbl)
 
-    display = mes_df[["Data", "Cadastradas", "Abertas", "% Conversão", "Indicador"]].copy()
-    display["Data"] = display["Data"].apply(fmt_date)
-    display["Cadastradas"] = display["Cadastradas"].apply(br_int)
-    display["Abertas"] = display["Abertas"].apply(br_int)
+    # tabela diária (mais recente -> mais antigo) e SEM numeração de linhas
+    show = mes_df[["Data", "Cadastradas", "Abertas", "% do dia", "Indicador", "Percentual_num"]].copy()
+    show["Data"] = show["Data"].apply(fmt_date)
+    show = show.sort_values("Data", ascending=False)
 
-    def highlight_row(row):
-        # usa o Percentual_num da mes_df (mesma ordem da display)
-        v = float(mes_df.loc[row.name, "Percentual_num"])
-        if v >= ALVO_CONVERSAO:
-            return ["background-color: rgba(0,122,255,0.10); font-weight: 800;"] * len(row)
-        return ["background-color: rgba(255,59,48,0.10); font-weight: 800;"] * len(row)
-
-    st.dataframe(display.style.apply(highlight_row, axis=1), use_container_width=True, hide_index=True)
+    st.caption("Tabela diária do mês selecionado (azul ≥ 20% | vermelho < 20%)")
+    st.dataframe(
+        style_conversao_table(show),
+        use_container_width=True,
+        hide_index=True
+    )
 
 st.divider()
 
-# =========================================================
-# RELATÓRIOS (DIÁRIO)
-# =========================================================
+# -------------------------------
+# RELATÓRIOS DIÁRIOS (C6)
+# -------------------------------
 st.subheader("Relatórios (diário)")
 
-if df_c6 is None:
-    st.info("Envie a planilha diária do C6 para liberar os relatórios.")
+if not daily_ready:
+    st.info("Envie a planilha diária do C6 para liberar os relatórios diários.")
 else:
-    tabs = st.tabs(["Aberturas", "Fundações (por dia)", "Pix + Status", "Qualificação + BR + Valores"])
+    tabs = st.tabs(["Aberturas", "Fundações (por dia)", "Pix + Status", "Qualificação (níveis e critérios)"])
 
     # Aberturas
     with tabs[0]:
-        st.markdown("#### Contas abertas por dia (arquivo)")
         por_dia = (
             pd.Series(df_c6[COL_ABERTURA]).dropna().value_counts().sort_index()
             .rename_axis("Dia")
             .reset_index(name="Contas abertas")
         )
         por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
+
+        # AJUSTE PEDIDO: do mais recente para o mais antigo e sem gráfico
         por_dia = por_dia.sort_values("Dia", ascending=False)
 
-        st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
+        dts = pd.to_datetime(df_c6[COL_ABERTURA], errors="coerce")
+        por_mes = (
+            dts.dropna().dt.to_period("M").astype(str)
+            .value_counts().sort_index()
+            .rename_axis("Mês")
+            .reset_index(name="Contas abertas")
+        )
+        por_mes["Mês"] = por_mes["Mês"].apply(lambda x: f"{x[5:7]}/{x[0:4]}" if isinstance(x, str) and "-" in x else x)
+        por_mes = por_mes.sort_values("Mês", ascending=False)
+
+        st.markdown("#### Contas abertas por dia")
         st.dataframe(por_dia, use_container_width=True, hide_index=True)
 
-    # Fundações
+        st.markdown("#### Contas abertas por mês")
+        st.dataframe(por_mes, use_container_width=True, hide_index=True)
+
+    # Fundações (por dia)
     with tabs[1]:
         st.markdown("#### Fundação (mês/ano) dentro do dia de abertura")
         temp = df_c6[[COL_ABERTURA, COL_FUNDACAO]].dropna().copy()
@@ -1017,19 +719,19 @@ else:
                 .reset_index(name="Quantidade")
                 .sort_values(["Dia", "Mês fundação"])
             )
+            pivot["Dia"] = pivot["Dia"].apply(fmt_date)
 
             dias = sorted(temp[COL_ABERTURA].unique())
             dias_lbl = [fmt_date(d) for d in dias]
-            dia_sel_lbl = st.selectbox("Selecione o dia de abertura", dias_lbl, index=len(dias_lbl) - 1)
+
+            dia_sel_lbl = st.selectbox("Selecione o dia de abertura", dias_lbl, index=len(dias_lbl)-1)
             dia_sel = dias[dias_lbl.index(dia_sel_lbl)]
 
-            dia_df = pivot[pivot["Dia"] == dia_sel].copy()
+            dia_df = pivot[pivot["Dia"] == fmt_date(dia_sel)].copy()
             total_dia = int(dia_df["Quantidade"].sum())
 
             st.markdown(f"**No dia {dia_sel_lbl} foram abertas {br_int(total_dia)} empresas.**")
-            dia_df_show = dia_df[["Mês fundação", "Quantidade"]].copy()
-            st.dataframe(dia_df_show, use_container_width=True, hide_index=True)
-            st.bar_chart(dia_df.set_index("Mês fundação")["Quantidade"])
+            st.dataframe(dia_df, use_container_width=True, hide_index=True)
 
     # Pix + Status
     with tabs[2]:
@@ -1038,145 +740,142 @@ else:
         a, b = st.columns(2)
         a.metric("Clientes com Pix", br_int(pix_com))
         b.metric("Clientes sem Pix", br_int(pix_sem))
+
         st.dataframe(pix_por_chave, use_container_width=True, hide_index=True)
 
         st.markdown("#### Status")
         status = (
-            normalize_str(df_c6.get(COL_STATUS, pd.Series([""] * len(df_c6))))
+            df_c6[COL_STATUS]
             .replace("", "SEM STATUS")
+            .fillna("SEM STATUS")
             .value_counts()
             .rename_axis("Status")
             .reset_index(name="Quantidade")
         )
         st.dataframe(status, use_container_width=True, hide_index=True)
-        st.bar_chart(status.set_index("Status")["Quantidade"])
 
-    # Qualificação + BR + Valores
+    # Qualificação
     with tabs[3]:
-        st.markdown("#### Qualificação (nível vencedor, critério vencedor e BR)")
+        st.markdown("#### Qualificação (nível vencedor e critério vencedor)")
 
         dfq = df_c6.copy()
         dfq["_nivel"] = parse_level(dfq)
         dfq["_qualificada"] = dfq["_nivel"].apply(lambda x: "Sim" if x >= 1 else "Não")
-        dfq["_criterio_vencedor"] = normalize_str(dfq.get(COL_CRIT, pd.Series([""] * len(dfq)))).apply(criterio_vencedor)
 
-        # BR
-        brs = normalize_str(dfq.get(COL_BR, pd.Series([""] * len(dfq)))).str.upper().replace("", "SEM BR")
-        br_counts = brs.value_counts().rename_axis("BR").reset_index(name="Quantidade")
+        def criterio_vencedor(txt: str) -> str:
+            if not isinstance(txt, str) or not txt:
+                return ""
+            parts = [p.strip() for p in txt.split("|")]
+            best = ("", 0)
+            for p in parts:
+                m = re.search(r"(.+):\s*(\d+)", p)
+                if m:
+                    nome = m.group(1).strip()
+                    val = int(m.group(2))
+                    if val > best[1]:
+                        best = (nome, val)
+            if best[1] <= 0:
+                return ""
+            return f"{best[0]} ({best[1]})"
 
-        c1, c2 = st.columns([2, 3])
-        with c1:
-            st.markdown("**BR (M0/M1/M2)**")
-            st.dataframe(br_counts, use_container_width=True, hide_index=True)
-        with c2:
-            total_qual = int((dfq["_nivel"] >= 1).sum())
-            n1 = int((dfq["_nivel"] == 1).sum())
-            n2 = int((dfq["_nivel"] == 2).sum())
-            n3 = int((dfq["_nivel"] == 3).sum())
-            n4 = int((dfq["_nivel"] == 4).sum())
+        dfq["_criterio_vencedor"] = dfq[COL_CRIT].astype("string").fillna("").apply(criterio_vencedor)
 
-            k1, k2, k3, k4, k5 = st.columns(5)
-            k1.metric("Qualificadas (arquivo)", br_int(total_qual))
-            k2.metric("Nível 1", br_int(n1))
-            k3.metric("Nível 2", br_int(n2))
-            k4.metric("Nível 3", br_int(n3))
-            k5.metric("Nível 4", br_int(n4))
+        total_qual = int((dfq["_nivel"] >= 1).sum())
+        n1 = int((dfq["_nivel"] == 1).sum())
+        n2 = int((dfq["_nivel"] == 2).sum())
+        n3 = int((dfq["_nivel"] == 3).sum())
+        n4 = int((dfq["_nivel"] == 4).sum())
 
-        # Valores do mês atual (se existir no histórico)
-        saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
-        if saved:
-            mes_atual = sorted(saved.keys(), key=month_key_str)[-1]
-            info = saved.get(mes_atual, {})
-            faixa_nome = info.get("faixa", "-")
-            precos = faixa_tbl_por_nome(faixa_nome)
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Qualificadas", br_int(total_qual))
+        c2.metric("Nível 1", br_int(n1))
+        c3.metric("Nível 2", br_int(n2))
+        c4.metric("Nível 3", br_int(n3))
+        c5.metric("Nível 4", br_int(n4))
 
-            n1 = int(info.get("n1", 0))
-            n2 = int(info.get("n2", 0))
-            n3 = int(info.get("n3", 0))
-            n4 = int(info.get("n4", 0))
+        cols_show = []
+        if COL_CNPJ in dfq.columns:
+            cols_show.append(COL_CNPJ)
+        cols_show += [COL_ABERTURA, "_qualificada", "_nivel", "_criterio_vencedor"]
 
-            rows_val = []
-            for lvl, qtd in [(1, n1), (2, n2), (3, n3), (4, n4)]:
-                unit = float(precos.get(lvl, 0.0))
-                total = unit * float(qtd)
-                rows_val.append([f"Nível {lvl}", br_int(qtd), br_money(unit), br_money(total)])
-
-            st.markdown(f"#### Valores (mês atual: {mes_atual}) — Faixa: {faixa_nome}")
-            df_vals = pd.DataFrame(rows_val, columns=["Nível", "Quantidade", "Valor unitário", "Total (cheio)"])
-            st.dataframe(df_vals, use_container_width=True, hide_index=True)
-
-            st.markdown("#### Resumo do mês (incremental)")
-            r1, r2, r3 = st.columns(3)
-            r1.metric("Receita cheia (mês)", br_money(float(info.get("deveria_receber", 0.0))))
-            r2.metric("Já pago (referência)", br_money(float(info.get("ja_pago_ref", 0.0))))
-            r3.metric("A receber (mês)", br_money(float(info.get("receber_mes", 0.0))))
-        else:
-            st.info("Ainda não há mês atual calculado. Importe arquivos diários (Jan/26 em diante).")
-
-        # Lista de qualificadas (arquivo)
-        st.markdown("#### Lista de qualificadas (arquivo)")
-        if COL_CNPJ not in dfq.columns:
-            cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
-            dfq[COL_CNPJ] = dfq[cand[0]] if cand else ""
-
-        show = dfq[dfq["_qualificada"] == "Sim"].copy()
-        show = show[[COL_CNPJ, COL_ABERTURA, "_nivel", "_criterio_vencedor", COL_BR]].rename(columns={
+        show = dfq[cols_show].copy()
+        show.rename(columns={
             COL_CNPJ: "CNPJ",
             COL_ABERTURA: "Data de abertura",
+            "_qualificada": "Qualificada",
             "_nivel": "Nível",
-            "_criterio_vencedor": "Critério vencedor",
-            COL_BR: "BR",
-        })
+            "_criterio_vencedor": "Critério vencedor"
+        }, inplace=True)
+
         show["Data de abertura"] = show["Data de abertura"].apply(fmt_date)
-        show = show.sort_values("Data de abertura", ascending=False)
-        st.dataframe(show, use_container_width=True, hide_index=True)
+        show_q = show[show["Qualificada"] == "Sim"].copy()
+
+        st.dataframe(show_q, use_container_width=True, hide_index=True)
 
 st.divider()
 
-# =========================================================
-# COMPARATIVO MENSAL (NÃO CRIA MESES)
-# =========================================================
-st.subheader("Comparativo mensal de remuneração")
+# -------------------------------
+# REMUNERAÇÃO MENSAL INCREMENTAL
+# -------------------------------
+st.subheader("Remuneração mensal (incremental)")
+
+if up_monthly and len(up_monthly) > 0:
+    files = [(f.name, f.getvalue()) for f in up_monthly]
+    out = compute_monthly_incremental(files)
+
+    if out.empty:
+        st.warning("Não consegui detectar mês/estrutura nos arquivos mensais enviados. Verifique se contêm DT_CONTA_CRIADA ou DATA_BASE.")
+    else:
+        view = out.copy()
+        view["Qualificadas"] = view["Qualificadas"].apply(lambda x: br_int(int(x)))
+        view["Deveria receber (cheio)"] = view["Deveria receber (cheio)"].apply(lambda x: br_money(float(x)))
+        view["Já pago (referência)"] = view["Já pago (referência)"].apply(lambda x: br_money(float(x)))
+        view["A receber no mês"] = view["A receber no mês"].apply(lambda x: br_money(float(x)))
+
+        st.markdown("#### Resumo por mês (dos arquivos enviados agora)")
+        st.dataframe(view, use_container_width=True, hide_index=True)
 
 saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
-if not saved:
-    st.info("Sem histórico mensal ainda. Importe diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
-else:
+if saved:
     rows = []
     for mes, info in saved.items():
         rows.append([
             mes,
+            info.get("arquivo", ""),
             info.get("faixa", ""),
             int(info.get("qualificadas", 0)),
-            int(info.get("n1", 0)),
-            int(info.get("n2", 0)),
-            int(info.get("n3", 0)),
-            int(info.get("n4", 0)),
             float(info.get("deveria_receber", 0.0)),
             float(info.get("ja_pago_ref", 0.0)),
             float(info.get("receber_mes", 0.0)),
         ])
 
     dfm = pd.DataFrame(rows, columns=[
-        "Mês", "Faixa", "Qualificadas", "N1", "N2", "N3", "N4",
-        "Deveria receber (cheio)", "Já pago (referência)", "A receber no mês"
-    ]).sort_values("Mês", key=lambda col: col.map(month_key_str), ascending=True)
+        "Mês", "Arquivo", "Faixa", "Qualificadas", "Deveria receber (cheio)", "Já pago (referência)", "A receber no mês"
+    ])
 
-    view = dfm.copy()
-    view["Qualificadas"] = view["Qualificadas"].apply(br_int)
-    view["N1"] = view["N1"].apply(br_int)
-    view["N2"] = view["N2"].apply(br_int)
-    view["N3"] = view["N3"].apply(br_int)
-    view["N4"] = view["N4"].apply(br_int)
-    view["Deveria receber (cheio)"] = view["Deveria receber (cheio)"].apply(br_money)
-    view["Já pago (referência)"] = view["Já pago (referência)"].apply(br_money)
-    view["A receber no mês"] = view["A receber no mês"].apply(br_money)
+    def month_key(s):
+        try:
+            mm, aa = s.split("/")
+            return int(aa) * 100 + int(mm)
+        except Exception:
+            return 0
 
-    st.dataframe(view, use_container_width=True, hide_index=True)
+    dfm = dfm.sort_values("Mês", key=lambda col: col.map(month_key))
+
+    st.markdown("#### Histórico mensal consolidado (salvo na memória)")
+    dfm_view = dfm.copy()
+    dfm_view["Qualificadas"] = dfm_view["Qualificadas"].apply(lambda x: br_int(int(x)))
+    dfm_view["Deveria receber (cheio)"] = dfm_view["Deveria receber (cheio)"].apply(lambda x: br_money(float(x)))
+    dfm_view["Já pago (referência)"] = dfm_view["Já pago (referência)"].apply(lambda x: br_money(float(x)))
+    dfm_view["A receber no mês"] = dfm_view["A receber no mês"].apply(lambda x: br_money(float(x)))
+
+    st.dataframe(dfm_view, use_container_width=True, hide_index=True)
 
     last = dfm.iloc[-1]
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Último mês", str(last["Mês"]))
-    c2.metric("Qualificadas", br_int(int(last["Qualificadas"])))
-    c3.metric("Receita cheia", br_money(float(last["Deveria receber (cheio)"])))
-    c4.metric("A receber", br_money(float(last["A receber no mês"])))
+    c2.metric("Qualificadas (mês)", br_int(int(last["Qualificadas"])))
+    c3.metric("Receita cheia (mês)", br_money(float(last["Deveria receber (cheio)"])))
+    c4.metric("A receber (mês)", br_money(float(last["A receber no mês"])))
+else:
+    st.info("Envie os arquivos mensais (Nov/25 e Dez/25) para o sistema montar o histórico incremental.")
