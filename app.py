@@ -16,7 +16,7 @@ COL_CNPJ = "CD_CPF_CNPJ_CLIENTE"
 COL_ABERTURA = "DT_CONTA_CRIADA"
 COL_FUNDACAO = "DT_FUNDACAO_EMPRESA"
 COL_PIX = "CHAVES_PIX_FORTE"
-COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"  # coluna Y no seu arquivo
+COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"  # (coluna Y no seu excel, normalmente)
 COL_STATUS = "STATUS_CC"
 COL_DOMICILIO = "BANCO_DOMICILIO"
 COL_BY = "FL_QUALIFICADO_COMISS"
@@ -136,46 +136,31 @@ def hide_index_df(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-# =========================================================
-# PARSER DE NÚMERO BR (CORRIGE SE VIER "1.234.567,89")
-# =========================================================
-def parse_brl_number(x) -> float:
+def normalize_cnpj_series(s: pd.Series) -> pd.Series:
+    return normalize_str(s).str.replace(r"\D", "", regex=True)
+
+
+def parse_brl_number_series(s: pd.Series) -> pd.Series:
     """
-    Converte números em formato brasileiro para float.
-    Ex:
-      "4.659.132,62" -> 4659132.62
-      "R$ 1.234,50"  -> 1234.50
-      1234.56 -> 1234.56
+    Converte números em formato PT-BR (ex: 4.659.132,62) e também números padrão.
     """
-    if x is None or (isinstance(x, float) and pd.isna(x)) or (isinstance(x, str) and x.strip() == ""):
-        return 0.0
-    if isinstance(x, (int, float)):
-        return float(x)
+    if s is None:
+        return pd.Series(dtype="float")
+    ss = s.astype("string").fillna("").str.strip()
 
-    s = str(x).strip()
+    # Se já vier numérico, pd.to_numeric lida bem, então tentamos primeiro:
+    as_num = pd.to_numeric(ss, errors="coerce")
+    if as_num.notna().any():
+        # mas pode haver mistura; manteremos fallback para os NaN
+        pass
 
-    # remove moeda e espaços
-    s = s.replace("R$", "").replace(" ", "")
+    # fallback BR: remove separador de milhar "." e troca "," por "."
+    ss2 = ss.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+    as_num2 = pd.to_numeric(ss2, errors="coerce")
 
-    # mantém só dígitos, ponto e vírgula e sinal
-    s = re.sub(r"[^0-9\-,\.]", "", s)
-
-    # se tem vírgula e ponto, assume ponto milhar e vírgula decimal
-    if "," in s and "." in s:
-        s = s.replace(".", "").replace(",", ".")
-    else:
-        # se só tem vírgula, assume decimal
-        if "," in s and "." not in s:
-            s = s.replace(",", ".")
-
-    try:
-        return float(s)
-    except Exception:
-        return 0.0
-
-
-def to_float_brl_series(s: pd.Series) -> pd.Series:
-    return s.apply(parse_brl_number).astype(float)
+    # combina: prefere as_num quando não-nan; senão usa as_num2
+    out = as_num.where(as_num.notna(), as_num2)
+    return out.fillna(0.0).astype(float)
 
 
 # =========================================================
@@ -338,7 +323,7 @@ def month_levels_upsert_from_daily_df(df_c6: pd.DataFrame):
         cand = [c for c in df.columns if "CNPJ" in str(c).upper()]
         df[COL_CNPJ] = df[cand[0]] if cand else ""
 
-    df["_cnpj"] = normalize_str(df[COL_CNPJ]).str.replace(r"\D", "", regex=True)
+    df["_cnpj"] = normalize_cnpj_series(df[COL_CNPJ])
 
     # nível por linha
     df["_nivel"] = parse_level(df)
@@ -398,7 +383,7 @@ def month_levels_upsert_from_monthly_file(file_name: str, file_bytes: bytes):
         cand = [c for c in df.columns if "CNPJ" in str(c).upper()]
         df[COL_CNPJ] = df[cand[0]] if cand else ""
 
-    df["_cnpj"] = normalize_str(df[COL_CNPJ]).str.replace(r"\D", "", regex=True)
+    df["_cnpj"] = normalize_cnpj_series(df[COL_CNPJ])
     df["_nivel"] = parse_level(df)
 
     q = df[(df["_cnpj"] != "") & (df["_nivel"] >= 1)].copy()
@@ -438,17 +423,26 @@ def faixa_tbl_por_nome(nome: str) -> Dict[int, float]:
 
 
 # =========================================================
-# RECOMPUTE INCREMENTAL (SEM CRIAR MESES)
+# PROGRESSÃO DE PAGAMENTOS POR MÊS/CNPJ (para detalhar tabela)
 # =========================================================
-def recompute_incremental() -> pd.DataFrame:
+def build_payment_progression():
+    """
+    Retorna:
+      months_sorted: [mm/aaaa...]
+      per_month: {mkey: {cnpj: {nivel, cheio, prev_max, diff, last_paid_month, last_paid_value}}}
+      resumo: mesmo resumo mensal
+    """
     month_levels = safe_json_load(HIST_MONTH_LEVELS, default={})
-    months = sorted(list(month_levels.keys()), key=month_key_str)
+    months_sorted = sorted(list(month_levels.keys()), key=month_key_str)
 
     paid_max: Dict[str, float] = {}
+    last_paid_month: Dict[str, str] = {}
+    last_paid_value: Dict[str, float] = {}
+
+    per_month: Dict[str, Dict[str, dict]] = {}
     resumo: Dict[str, dict] = {}
 
-    rows = []
-    for mkey in months:
+    for mkey in months_sorted:
         cmap: Dict[str, int] = month_levels.get(mkey, {}) or {}
         cmap = {k: int(v) for k, v in cmap.items() if str(k).strip() != ""}
 
@@ -463,6 +457,8 @@ def recompute_incremental() -> pd.DataFrame:
         total_cheio = 0.0
         total_receber = 0.0
 
+        per_month[mkey] = {}
+
         for cnpj, lvl in cmap.items():
             cheio = float(precos.get(int(lvl), 0.0))
             prev = float(paid_max.get(cnpj, 0.0))
@@ -470,9 +466,30 @@ def recompute_incremental() -> pd.DataFrame:
             if diff < 0:
                 diff = 0.0
 
+            # last paid info (antes de atualizar com o mês atual)
+            lpm = last_paid_month.get(cnpj, "")
+            lpv = float(last_paid_value.get(cnpj, 0.0))
+
+            per_month[mkey][cnpj] = {
+                "nivel": int(lvl),
+                "cheio": cheio,
+                "prev_max": prev,         # "Já pago acumulado" até mês anterior
+                "diff": diff,             # "A receber" do mês atual
+                "last_paid_month": lpm,   # último mês onde houve pagamento (diferença positiva)
+                "last_paid_value": lpv,   # quanto recebeu nesse último mês pago
+                "faixa": faixa_nome,
+            }
+
             total_cheio += cheio
             total_receber += diff
+
+            # atualiza teto pago
             paid_max[cnpj] = max(prev, cheio)
+
+            # atualiza último pagamento se houve diff positivo neste mês
+            if diff > 0:
+                last_paid_month[cnpj] = mkey
+                last_paid_value[cnpj] = diff
 
         ja_pago_ref = total_cheio - total_receber
 
@@ -488,23 +505,10 @@ def recompute_incremental() -> pd.DataFrame:
             "receber_mes": total_receber,
         }
 
-        rows.append([
-            mkey, faixa_nome, qtd_qual,
-            lvl_counts[1], lvl_counts[2], lvl_counts[3], lvl_counts[4],
-            total_cheio, ja_pago_ref, total_receber
-        ])
-
     safe_json_save(HIST_PAGO_POR_CNPJ, paid_max)
     safe_json_save(HIST_RESUMO_MENSAL, resumo)
 
-    return pd.DataFrame(
-        rows,
-        columns=[
-            "Mês", "Faixa", "Qualificadas",
-            "Nível 1", "Nível 2", "Nível 3", "Nível 4",
-            "Deveria receber (cheio)", "Já pago (referência)", "A receber no mês"
-        ],
-    )
+    return months_sorted, per_month, resumo
 
 
 # =========================================================
@@ -637,7 +641,7 @@ if up_monthly and len(up_monthly) > 0:
 df_c6 = None
 df_leads = None
 
-saldo_total_arquivo_hoje = 0.0  # <- NOVO: saldo total da planilha importada no dia (soma real)
+saldo_total_arquivo = 0.0  # saldo total do arquivo importado (sempre do arquivo do dia)
 
 if up_c6:
     df_c6 = read_excel_any(up_c6.getvalue())
@@ -647,8 +651,6 @@ if up_c6:
         df_c6[COL_ABERTURA] = pd.NA
     if COL_FUNDACAO not in df_c6.columns:
         df_c6[COL_FUNDACAO] = pd.NA
-    if COL_SALDO not in df_c6.columns:
-        df_c6[COL_SALDO] = 0.0
     if COL_BR not in df_c6.columns:
         df_c6[COL_BR] = ""
     if COL_CRIT not in df_c6.columns:
@@ -656,12 +658,19 @@ if up_c6:
     if COL_BY not in df_c6.columns:
         df_c6[COL_BY] = ""
 
+    # SALDO: se não existir a coluna padrão, tenta pegar a coluna Y (25ª coluna, index 24)
+    if COL_SALDO not in df_c6.columns:
+        if len(df_c6.columns) >= 25:
+            df_c6[COL_SALDO] = df_c6.iloc[:, 24]
+        else:
+            df_c6[COL_SALDO] = 0.0
+
     df_c6[COL_ABERTURA] = to_date_series(df_c6[COL_ABERTURA])
     df_c6[COL_FUNDACAO] = to_date_series(df_c6[COL_FUNDACAO])
 
-    # >>> AJUSTE CRÍTICO: parse BR para não perder milhões
-    df_c6[COL_SALDO] = to_float_brl_series(df_c6[COL_SALDO])
-    saldo_total_arquivo_hoje = float(df_c6[COL_SALDO].sum())
+    # parse saldo com robustez PT-BR
+    df_c6[COL_SALDO] = parse_brl_number_series(df_c6[COL_SALDO])
+    saldo_total_arquivo = float(df_c6[COL_SALDO].sum())
 
     df_c6[COL_BR] = normalize_str(df_c6[COL_BR]).str.upper()
     df_c6[COL_CRIT] = normalize_str(df_c6[COL_CRIT])
@@ -696,8 +705,7 @@ if up_c6:
 
         snap = safe_json_load(HIST_SNAPSHOT_MENSAL, default={})
         snap[mkey] = {
-            # mantém campos, mas agora vamos mostrar no painel o saldo do arquivo do dia
-            "saldo_total_arquivo": saldo_total_arquivo_hoje,
+            "saldo_total": saldo_total_arquivo,   # agora é SOMA REAL do arquivo (corrigida)
             "pix_com": pix_com,
             "pix_sem": pix_sem,
             "domicilio_c6": domicilio_c6,
@@ -738,10 +746,9 @@ if up_leads:
 st.divider()
 
 # =========================================================
-# RECOMPUTE REMUNERAÇÃO (CONSOLIDADA)
+# RECOMPUTE REMUNERAÇÃO (INCREMENTAL CONSOLIDADA)
 # =========================================================
-_ = recompute_incremental()
-saved_resumo = safe_json_load(HIST_RESUMO_MENSAL, default={})
+months_sorted, per_month, saved_resumo = build_payment_progression()
 
 # =========================================================
 # RESUMO EXECUTIVO (MÊS) + % GERAL DO MÊS
@@ -760,10 +767,10 @@ else:
     base["Mes_ref"] = base["Data"].map(month_first)
 
     meses = sorted(base["Mes_ref"].unique())
-    mes_atual = meses[-1]
-    mes_lbl = fmt_month(mes_atual)
+    mes_atual_dt = meses[-1]
+    mes_lbl = fmt_month(mes_atual_dt)
 
-    mes_df = base[base["Mes_ref"] == mes_atual].copy()
+    mes_df = base[base["Mes_ref"] == mes_atual_dt].copy()
     total_ab_mes = int(mes_df["Abertas"].sum())
     total_cad_mes = int(mes_df["Cadastradas"].sum())
     perc_mes = (total_ab_mes / total_cad_mes) if total_cad_mes > 0 else 0.0
@@ -784,23 +791,27 @@ else:
     c4.metric("% geral (mês)", f"{str(round(perc_mes*100,1)).replace('.',',')}%")
 
     c5, c6, c7, c8 = st.columns(4)
-    # >>> AJUSTE: saldo total do arquivo importado hoje (soma real da coluna Y)
-    c5.metric("Saldo total (arquivo importado hoje)", br_money(float(s.get("saldo_total_arquivo", 0.0))))
-    c6.metric("Pix (arquivo)", f'{br_int(int(s.get("pix_com",0)))} com | {br_int(int(s.get("pix_sem",0)))} sem')
-    c7.metric("Domicílio C6 (arquivo)", br_int(int(s.get("domicilio_c6", 0))))
+
+    # SALDO TOTAL: sempre soma do arquivo importado (quando houver). Se não houver upload, usa snapshot.
+    saldo_show = saldo_total_arquivo if (df_c6 is not None) else float(s.get("saldo_total", 0.0))
+    c5.metric("Saldo total (arquivo)", br_money(float(saldo_show)))
+
+    c6.metric("Pix (snapshot)", f'{br_int(int(s.get("pix_com",0)))} com | {br_int(int(s.get("pix_sem",0)))} sem')
+    c7.metric("Domicílio C6 (snapshot)", br_int(int(s.get("domicilio_c6", 0))))
     c8.metric("Qualificadas (arquivo)", br_int(int(s.get("qualificadas_arquivo", 0))))
 
 st.divider()
 
 # =========================================================
-# REMUNERAÇÃO DO MÊS ATUAL (BASE DIÁRIA) + LIQUIDAÇÃO (NF/REPASSE/NF)
+# REMUNERAÇÃO DO MÊS ATUAL (NO TOPO)
 # =========================================================
-st.subheader("Remuneração do mês atual")
+st.subheader("Remuneração do mês atual (incremental)")
 
+mes_atual_calc = None
 if saved_resumo:
-    months_sorted = sorted(saved_resumo.keys(), key=month_key_str)
-    mes_atual = months_sorted[-1]
-    info = saved_resumo.get(mes_atual, {})
+    months_sorted_calc = sorted(saved_resumo.keys(), key=month_key_str)
+    mes_atual_calc = months_sorted_calc[-1]
+    info = saved_resumo.get(mes_atual_calc, {})
 
     faixa = info.get("faixa", "-")
     qual = int(info.get("qualificadas", 0))
@@ -810,10 +821,10 @@ if saved_resumo:
     n4 = int(info.get("n4", 0))
     cheio = float(info.get("deveria_receber", 0.0))
     japago = float(info.get("ja_pago_ref", 0.0))
-    receber = float(info.get("receber_mes", 0.0))  # <- ESTE É O VALOR BASE DO MÊS (do diário)
+    receber = float(info.get("receber_mes", 0.0))
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Mês", mes_atual)
+    m1.metric("Mês", mes_atual_calc)
     m2.metric("Faixa", faixa)
     m3.metric("Qualificadas", br_int(qual))
     m4.metric("A receber (mês)", br_money(receber))
@@ -822,42 +833,47 @@ if saved_resumo:
     m5.metric("Receita cheia (mês)", br_money(cheio))
     m6.metric("Já pago (referência)", br_money(japago))
     m7.metric("Níveis (1/2/3/4)", f"{br_int(n1)} / {br_int(n2)} / {br_int(n3)} / {br_int(n4)}")
-
-    # =========================================================
-    # NOVA TABELA: LIQUIDAÇÃO (BASE: A RECEBER DO MÊS ATUAL)
-    # =========================================================
-    st.subheader("Liquidação do mês (base: A receber do mês atual)")
-
-    valor_base = float(receber)
-
-    nf_h1 = valor_base * 0.187
-    base_pos_nf_h1 = valor_base - nf_h1
-
-    repasse_h1 = base_pos_nf_h1 * 0.10
-    base_assis = base_pos_nf_h1 - repasse_h1
-
-    nf_assis = base_assis * 0.14
-    liquido_assis = base_assis - nf_assis
-
-    deixamos_de_ganhar = nf_h1 + repasse_h1
-
-    df_liquidacao = pd.DataFrame(
-        [
-            ["Base (A receber do mês)", br_money(valor_base)],
-            ["(-) NF H1 (18,70%)", br_money(nf_h1)],
-            ["Base após NF H1", br_money(base_pos_nf_h1)],
-            ["(-) Repasse H1 (10%)", br_money(repasse_h1)],
-            ["Base Assis e Mollerke", br_money(base_assis)],
-            ["(-) NF Assis e Mollerke (14%)", br_money(nf_assis)],
-            ["Líquido Assis e Mollerke", br_money(liquido_assis)],
-            ["Deixamos de ganhar (NF H1 + Repasse H1)", br_money(deixamos_de_ganhar)],
-        ],
-        columns=["Descrição", "Valor"],
-    )
-    st.dataframe(df_liquidacao, use_container_width=True, hide_index=True)
-
 else:
     st.info("Ainda não há histórico de remuneração. Importe os diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
+
+st.divider()
+
+# =========================================================
+# DEMONSTRATIVO DO LÍQUIDO (BASE: A RECEBER DO MÊS ATUAL)
+# =========================================================
+st.subheader("Demonstrativo do líquido (A receber do mês atual)")
+
+if mes_atual_calc and saved_resumo:
+    receber_mes_atual = float(saved_resumo.get(mes_atual_calc, {}).get("receber_mes", 0.0))
+
+    nf_h1 = receber_mes_atual * 0.187
+    apos_nf_h1 = receber_mes_atual - nf_h1
+
+    repasse_h1 = apos_nf_h1 * 0.10
+    apos_repasse = apos_nf_h1 - repasse_h1  # valor que sobra para A&M antes NF A&M
+
+    nf_am = apos_repasse * 0.14
+    liquido_am = apos_repasse - nf_am
+
+    deixamos_ganhar = nf_h1 + repasse_h1
+
+    demo = pd.DataFrame(
+        [
+            ["A receber (mês atual)", br_money(receber_mes_atual)],
+            ["NF H1 (18,70%)", br_money(nf_h1)],
+            ["Saldo após NF H1", br_money(apos_nf_h1)],
+            ["Repasse H1 (10%)", br_money(repasse_h1)],
+            ["Saldo para Assis e Mollerke", br_money(apos_repasse)],
+            ["NF Assis e Mollerke (14%)", br_money(nf_am)],
+            ["Líquido Assis e Mollerke", br_money(liquido_am)],
+            ["Deixamos de ganhar (NF H1 + Repasse H1)", br_money(deixamos_ganhar)],
+        ],
+        columns=["Etapa", "Valor"],
+    )
+
+    st.dataframe(demo, use_container_width=True, hide_index=True)
+else:
+    st.info("Importe dados suficientes para calcular o mês atual e o 'A receber'.")
 
 st.divider()
 
@@ -941,10 +957,12 @@ else:
         )
         por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
 
-        # ordena por DATA real (não string)
-        por_dia["_ord"] = pd.to_datetime(por_dia["Dia"], format="%d/%m/%Y", errors="coerce")
-        por_dia = por_dia.sort_values("_ord", ascending=False).drop(columns=["_ord"])
+        # ordenar do MAIS RECENTE para o MAIS ANTIGO (correto)
+        # como "Dia" virou string, ordenamos pela data real:
+        por_dia["_dt"] = pd.to_datetime(por_dia["Dia"], format="%d/%m/%Y", errors="coerce")
+        por_dia = por_dia.sort_values("_dt", ascending=False).drop(columns=["_dt"])
 
+        # removido gráfico (você pediu)
         st.dataframe(por_dia, use_container_width=True, hide_index=True)
 
     # Fundações
@@ -977,6 +995,7 @@ else:
             st.markdown(f"**No dia {dia_sel_lbl} foram abertas {br_int(total_dia)} empresas.**")
             dia_df_show = dia_df[["Mês fundação", "Quantidade"]].copy()
             st.dataframe(dia_df_show, use_container_width=True, hide_index=True)
+            st.bar_chart(dia_df.set_index("Mês fundação")["Quantidade"])
 
     # Pix + Status
     with tabs[2]:
@@ -996,12 +1015,20 @@ else:
             .reset_index(name="Quantidade")
         )
         st.dataframe(status, use_container_width=True, hide_index=True)
+        st.bar_chart(status.set_index("Status")["Quantidade"])
 
     # Qualificação + BR + Valores
     with tabs[3]:
         st.markdown("#### Qualificação (nível vencedor, critério vencedor e BR)")
 
         dfq = df_c6.copy()
+
+        # CNPJ normalizado
+        if COL_CNPJ not in dfq.columns:
+            cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
+            dfq[COL_CNPJ] = dfq[cand[0]] if cand else ""
+        dfq["_cnpj"] = normalize_cnpj_series(dfq[COL_CNPJ])
+
         dfq["_nivel"] = parse_level(dfq)
         dfq["_qualificada"] = dfq["_nivel"].apply(lambda x: "Sim" if x >= 1 else "Não")
         dfq["_criterio_vencedor"] = normalize_str(dfq.get(COL_CRIT, pd.Series([""] * len(dfq)))).apply(criterio_vencedor)
@@ -1029,7 +1056,7 @@ else:
             k5.metric("Nível 4", br_int(n4))
 
         # Valores do mês atual (se existir no histórico)
-        saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
+        saved = saved_resumo or {}
         if saved:
             mes_atual = sorted(saved.keys(), key=month_key_str)[-1]
             info = saved.get(mes_atual, {})
@@ -1051,7 +1078,7 @@ else:
             df_vals = pd.DataFrame(rows_val, columns=["Nível", "Quantidade", "Valor unitário", "Total (cheio)"])
             st.dataframe(df_vals, use_container_width=True, hide_index=True)
 
-            st.markdown("#### Resumo do mês")
+            st.markdown("#### Resumo do mês (incremental)")
             r1, r2, r3 = st.columns(3)
             r1.metric("Receita cheia (mês)", br_money(float(info.get("deveria_receber", 0.0))))
             r2.metric("Já pago (referência)", br_money(float(info.get("ja_pago_ref", 0.0))))
@@ -1059,31 +1086,97 @@ else:
         else:
             st.info("Ainda não há mês atual calculado. Importe arquivos diários (Jan/26 em diante).")
 
-        # Lista de qualificadas (arquivo)
-        st.markdown("#### Lista de qualificadas (arquivo)")
-        if COL_CNPJ not in dfq.columns:
-            cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
-            dfq[COL_CNPJ] = dfq[cand[0]] if cand else ""
+        # =====================================================
+        # Lista de qualificadas (arquivo) - COMPLETA (com valores)
+        # =====================================================
+        st.markdown("#### Lista de qualificadas (arquivo) — detalhamento financeiro")
 
-        show = dfq[dfq["_qualificada"] == "Sim"].copy()
-        show = show[[COL_CNPJ, COL_ABERTURA, "_nivel", "_criterio_vencedor", COL_BR]].rename(columns={
-            COL_CNPJ: "CNPJ",
-            COL_ABERTURA: "Data de abertura",
-            "_nivel": "Nível",
-            "_criterio_vencedor": "Critério vencedor",
-            COL_BR: "BR",
-        })
-        show["Data de abertura"] = show["Data de abertura"].apply(fmt_date)
+        # mês do relatório do arquivo atual
+        mes_rel = detect_report_month_from_df(dfq)
+        mes_rel_key = fmt_month(mes_rel) if mes_rel else (sorted(saved.keys(), key=month_key_str)[-1] if saved else None)
 
-        show["_ord"] = pd.to_datetime(show["Data de abertura"], format="%d/%m/%Y", errors="coerce")
-        show = show.sort_values("_ord", ascending=False).drop(columns=["_ord"])
+        if not mes_rel_key or mes_rel_key not in per_month:
+            st.info("Sem dados suficientes para detalhar os valores por CNPJ (importe mais diários do mês atual).")
+        else:
+            # mapa do mês atual: cnpj -> dados financeiros
+            fin_map = per_month.get(mes_rel_key, {}) or {}
 
-        st.dataframe(show, use_container_width=True, hide_index=True)
+            # pega apenas qualificadas do arquivo, mas consolida por CNPJ (maior nível no arquivo)
+            qq = dfq[dfq["_qualificada"] == "Sim"].copy()
+            if qq.empty:
+                st.info("Nenhuma qualificada no arquivo.")
+            else:
+                # consolidar por CNPJ: nível máximo e BR mais recente (preferência simples)
+                qq = qq[qq["_cnpj"] != ""].copy()
+
+                by_cnpj = (
+                    qq.groupby("_cnpj")
+                    .agg({
+                        "_nivel": "max",
+                        COL_BR: "first",
+                        COL_ABERTURA: "max",
+                        "_criterio_vencedor": "first",
+                    })
+                    .reset_index()
+                )
+
+                rows = []
+                for _, r in by_cnpj.iterrows():
+                    cnpj = str(r["_cnpj"])
+                    nivel = int(r["_nivel"])
+                    brv = str(r.get(COL_BR, "") or "").upper()
+                    abertura = r.get(COL_ABERTURA, None)
+                    critv = str(r.get("_criterio_vencedor", "") or "")
+
+                    f = fin_map.get(cnpj, {})
+                    cheio = float(f.get("cheio", 0.0))
+                    ja_pago_acum = float(f.get("prev_max", 0.0))
+                    receber_mes = float(f.get("diff", 0.0))
+
+                    ultimo_mes_pago = str(f.get("last_paid_month", "") or "")
+                    ultimo_val_pago = float(f.get("last_paid_value", 0.0))
+
+                    rows.append([
+                        cnpj,
+                        fmt_date(abertura),
+                        brv if brv else "SEM BR",
+                        nivel,
+                        critv,
+                        br_money(cheio),
+                        br_money(ja_pago_acum),
+                        (ultimo_mes_pago if ultimo_mes_pago else "-"),
+                        br_money(ultimo_val_pago),
+                        br_money(receber_mes),
+                    ])
+
+                df_show = pd.DataFrame(
+                    rows,
+                    columns=[
+                        "CNPJ",
+                        "Data de abertura",
+                        "BR (M0/M1/M2)",
+                        "Nível (mês)",
+                        "Critério vencedor",
+                        "Valor cheio (mês atual)",
+                        "Já pago (acumulado até mês anterior)",
+                        "Último mês pago",
+                        "Valor recebido no último mês",
+                        "Valor a receber (mês atual)",
+                    ],
+                )
+
+                # ordena por "Valor a receber" desc e depois por abertura desc
+                # (sem mexer na lógica, só melhora leitura)
+                df_show["_vr"] = df_show["Valor a receber (mês atual)"].str.replace("R$ ", "").str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
+                df_show["_vr"] = pd.to_numeric(df_show["_vr"], errors="coerce").fillna(0.0)
+                df_show = df_show.sort_values(["_vr", "Data de abertura"], ascending=[False, False]).drop(columns=["_vr"])
+
+                st.dataframe(df_show, use_container_width=True, hide_index=True)
 
 st.divider()
 
 # =========================================================
-# COMPARATIVO MENSAL
+# COMPARATIVO MENSAL (NÃO CRIA MESES)
 # =========================================================
 st.subheader("Comparativo mensal de remuneração")
 
