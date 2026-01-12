@@ -89,8 +89,11 @@ def br_money(v: float) -> str:
     return f"R$ {s}"
 
 
-def br_int(n: int) -> str:
-    return f"{int(n):,}".replace(",", ".")
+def br_int(n) -> str:
+    try:
+        return f"{int(round(float(n))):,}".replace(",", ".")
+    except Exception:
+        return "0"
 
 
 def fmt_date(d) -> str:
