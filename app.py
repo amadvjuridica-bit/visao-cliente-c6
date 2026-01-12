@@ -62,6 +62,9 @@ HIST_RESUMO_MENSAL = os.path.join(DATA_DIR, "resumo_mensal.json")              #
 HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")          # mm/aaaa -> estado do último arquivo importado p/ mês
 HIST_DETALHE_MENSAL_CNPJ = os.path.join(DATA_DIR, "detalhe_mensal_cnpj.json")  # mm/aaaa -> {cnpj: {nivel, cheio, prev_max, diff, faixa}}
 
+# NOVO: histórico diário de qualificadas (por dia de abertura)
+HIST_QUAL_DAILY = os.path.join(DATA_DIR, "hist_qualificadas_diario.json")      # dd/mm/aaaa -> qualificadas
+
 # =========================================================
 # HELPERS
 # =========================================================
@@ -145,9 +148,7 @@ def parse_brl_number_series(s: pd.Series) -> pd.Series:
         return pd.to_numeric(s, errors="coerce").fillna(0.0)
 
     txt = s.astype("string").fillna("")
-    # remove R$, espaços
     txt = txt.str.replace("R$", "", regex=False).str.strip()
-    # se vier "1.234,56" -> "1234.56"
     txt = txt.str.replace(".", "", regex=False).str.replace(",", ".", regex=False)
     return pd.to_numeric(txt, errors="coerce").fillna(0.0)
 
@@ -570,7 +571,7 @@ def reset_all_data():
     for p in [
         HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
         HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL,
-        HIST_DETALHE_MENSAL_CNPJ
+        HIST_DETALHE_MENSAL_CNPJ, HIST_QUAL_DAILY
     ]:
         if os.path.exists(p):
             os.remove(p)
@@ -662,6 +663,25 @@ if up_c6:
     df_c6[COL_SALDO] = parse_brl_number_series(df_c6[COL_SALDO])
     saldo_total_arquivo = float(df_c6[COL_SALDO].sum())
 
+    # =====================================================
+    # NOVO: histórico diário de QUALIFICADAS (por dia de abertura)
+    # - conta qualificados com nível >=1
+    # - agrupa por DT_CONTA_CRIADA (dia)
+    # - salva somente datas existentes e >= 01/01/2026
+    # =====================================================
+    df_c6["_nivel"] = parse_level(df_c6)
+    qual_counts = (
+        df_c6[(df_c6[COL_ABERTURA].notna()) & (df_c6["_nivel"] >= 1)]
+        .assign(_d=df_c6[COL_ABERTURA])
+        .query("_d >= @HIST_START")
+        .groupby("_d")
+        .size()
+        .to_dict()
+    )
+    qual_counts = {fmt_date(k): int(v) for k, v in qual_counts.items()}
+    if qual_counts:
+        daily_upsert_many(HIST_QUAL_DAILY, qual_counts)
+
     # histórico diário de aberturas (apenas datas existentes no arquivo e >= Jan/26)
     opened_counts = (
         df_c6[df_c6[COL_ABERTURA].notna()]
@@ -686,7 +706,9 @@ if up_c6:
         mes_rel_key = mkey
 
         df_tmp = df_c6.copy()
-        df_tmp["_nivel"] = parse_level(df_tmp)
+        # df_tmp já tem _nivel (se criou acima), mas garante:
+        if "_nivel" not in df_tmp.columns:
+            df_tmp["_nivel"] = parse_level(df_tmp)
 
         pix_com, pix_sem, _ = pix_summary(df_tmp)
         domicilio_c6 = int(df_tmp.get(COL_DOMICILIO, pd.Series([""] * len(df_tmp))).apply(contains_c6).sum())
@@ -694,7 +716,7 @@ if up_c6:
 
         snap = safe_json_load(HIST_SNAPSHOT_MENSAL, default={})
         snap[mkey] = {
-            "saldo_total_arquivo": saldo_total_arquivo,  # agora é SEMPRE coluna Y somada
+            "saldo_total_arquivo": saldo_total_arquivo,
             "pix_com": pix_com,
             "pix_sem": pix_sem,
             "domicilio_c6": domicilio_c6,
@@ -781,7 +803,6 @@ else:
     c4.metric("% geral (mês)", f"{str(round(perc_mes*100,1)).replace('.',',')}%")
 
     c5, c6, c7, c8 = st.columns(4)
-    # saldo do último arquivo importado do mês (sempre coluna Y)
     c5.metric("Saldo total (arquivo importado - coluna Y)", br_money(float(s.get("saldo_total_arquivo", 0.0))))
     c6.metric("Pix (arquivo)", f'{br_int(int(s.get("pix_com",0)))} com | {br_int(int(s.get("pix_sem",0)))} sem')
     c7.metric("Domicílio C6 (arquivo)", br_int(int(s.get("domicilio_c6", 0))))
@@ -821,12 +842,6 @@ if saved_resumo:
     m7.metric("Níveis (1/2/3/4)", f"{br_int(n1)} / {br_int(n2)} / {br_int(n3)} / {br_int(n4)}")
 
     st.markdown("#### Cálculo do líquido (a partir do A receber do mês atual)")
-    # Regras:
-    # - NF H1: 18,70% sobre A receber (mês)
-    # - Repasse H1: 10% sobre (A receber - NF H1)
-    # - NF Assis&Mollerke: 14% sobre o valor que sobra para A&M (após repasse)
-    # - Líquido: valor após NF A&M
-    # - Deixamos de ganhar: NF H1 + Repasse H1
     a_receber = float(receber)
     nf_h1 = a_receber * 0.187
     apos_nf_h1 = a_receber - nf_h1
@@ -924,7 +939,13 @@ st.subheader("Relatórios (diário)")
 if df_c6 is None:
     st.info("Envie a planilha diária do C6 para liberar os relatórios.")
 else:
-    tabs = st.tabs(["Aberturas", "Fundações (por dia)", "Pix + Status", "Qualificação + BR + Valores"])
+    tabs = st.tabs([
+        "Aberturas",
+        "Qualificadas (por dia)",  # NOVO TAB
+        "Fundações (por dia)",
+        "Pix + Status",
+        "Qualificação + BR + Valores"
+    ])
 
     # Aberturas
     with tabs[0]:
@@ -936,14 +957,42 @@ else:
         )
         por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
 
-        # ordena por data REAL (não por string)
         por_dia["_dt"] = pd.to_datetime(por_dia["Dia"], format="%d/%m/%Y", errors="coerce")
         por_dia = por_dia.sort_values("_dt", ascending=False).drop(columns=["_dt"])
 
         st.dataframe(por_dia, use_container_width=True, hide_index=True)
 
-    # Fundações
+    # NOVO: Qualificadas por dia (SEPARADO)
     with tabs[1]:
+        st.markdown("#### Contas qualificadas por dia (por data de abertura)")
+        # usa o histórico salvo (para consolidar ao longo do tempo), mas também funciona se só tiver o arquivo atual
+        hist_qual = hist_to_df(HIST_QUAL_DAILY, "Qualificadas")
+        if hist_qual.empty:
+            # fallback com arquivo atual
+            tmp = df_c6.copy()
+            if "_nivel" not in tmp.columns:
+                tmp["_nivel"] = parse_level(tmp)
+            qdia = (
+                tmp[(tmp[COL_ABERTURA].notna()) & (tmp["_nivel"] >= 1)]
+                .groupby(COL_ABERTURA)
+                .size()
+                .rename_axis("Data")
+                .reset_index(name="Qualificadas")
+            )
+            qdia["Data"] = qdia["Data"].apply(fmt_date)
+            qdia["_dt"] = pd.to_datetime(qdia["Data"], format="%d/%m/%Y", errors="coerce")
+            qdia = qdia.sort_values("_dt", ascending=False).drop(columns=["_dt"])
+            st.dataframe(qdia, use_container_width=True, hide_index=True)
+        else:
+            # mostra consolidado e ordenado
+            hist_qual = hist_qual.sort_values("Data", ascending=False).reset_index(drop=True)
+            view = hist_qual.copy()
+            view["Data"] = view["Data"].apply(fmt_date)
+            view["Qualificadas"] = view["Qualificadas"].apply(br_int)
+            st.dataframe(view, use_container_width=True, hide_index=True)
+
+    # Fundações
+    with tabs[2]:
         st.markdown("#### Fundação (mês/ano) dentro do dia de abertura")
         temp = df_c6[[COL_ABERTURA, COL_FUNDACAO]].dropna().copy()
         if temp.empty:
@@ -974,7 +1023,7 @@ else:
             st.dataframe(dia_df_show, use_container_width=True, hide_index=True)
 
     # Pix + Status
-    with tabs[2]:
+    with tabs[3]:
         st.markdown("#### Pix")
         pix_com, pix_sem, pix_por_chave = pix_summary(df_c6)
         a, b = st.columns(2)
@@ -993,11 +1042,12 @@ else:
         st.dataframe(status, use_container_width=True, hide_index=True)
 
     # Qualificação + BR + Valores
-    with tabs[3]:
+    with tabs[4]:
         st.markdown("#### Qualificação (nível vencedor, critério vencedor e BR)")
 
         dfq = df_c6.copy()
-        dfq["_nivel"] = parse_level(dfq)
+        if "_nivel" not in dfq.columns:
+            dfq["_nivel"] = parse_level(dfq)
         dfq["_qualificada"] = dfq["_nivel"].apply(lambda x: "Sim" if x >= 1 else "Não")
         dfq["_criterio_vencedor"] = normalize_str(dfq.get(COL_CRIT, pd.Series([""] * len(dfq)))).apply(criterio_vencedor)
 
@@ -1023,7 +1073,6 @@ else:
             k4.metric("Nível 3", br_int(n3))
             k5.metric("Nível 4", br_int(n4))
 
-        # Valores do mês atual (se existir no histórico)
         saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
         detalhe = safe_json_load(HIST_DETALHE_MENSAL_CNPJ, default={})
 
@@ -1053,12 +1102,10 @@ else:
             r1.metric("Receita cheia (mês)", br_money(float(info.get("deveria_receber", 0.0))))
             r2.metric("Já pago (referência)", br_money(float(info.get("ja_pago_ref", 0.0))))
             r3.metric("A receber (mês)", br_money(float(info.get("receber_mes", 0.0))))
+
         else:
             st.info("Ainda não há mês atual calculado. Importe arquivos diários (Jan/26 em diante).")
 
-        # =====================================================
-        # LISTA DE QUALIFICADAS (ARQUIVO) - COMPLEMENTADA
-        # =====================================================
         st.markdown("#### Lista de qualificadas (arquivo) — detalhamento de valores")
 
         if COL_CNPJ not in dfq.columns:
@@ -1068,12 +1115,12 @@ else:
         dfq["_cnpj"] = normalize_str(dfq[COL_CNPJ]).str.replace(r"\D", "", regex=True)
         dfq["_br"] = normalize_str(dfq.get(COL_BR, pd.Series([""] * len(dfq)))).str.upper().replace("", "SEM BR")
 
-        # agrega por CNPJ (para não repetir na tabela)
-        qual_cnpj = (
+        # agrega por CNPJ
+        agg = (
             dfq[(dfq["_qualificada"] == "Sim") & (dfq["_cnpj"] != "")]
             .groupby("_cnpj")
             .agg(
-                Nivel=(" _nivel".strip(), "max") if " _nivel".strip() in dfq.columns else ("_nivel", "max"),
+                Nivel=("_nivel", "max"),
                 BR=("_br", lambda x: x.mode().iloc[0] if len(x.mode()) else x.iloc[0]),
                 Data_Abertura=(COL_ABERTURA, "max"),
                 Criterio=("_criterio_vencedor", lambda x: x.mode().iloc[0] if len(x.mode()) else x.iloc[0]),
@@ -1082,24 +1129,9 @@ else:
             .rename(columns={"_cnpj": "CNPJ"})
         )
 
-        # fallback seguro do pandas caso tenha problemas com o nome do agregador
-        if "Nivel" not in qual_cnpj.columns:
-            qual_cnpj = (
-                dfq[(dfq["_qualificada"] == "Sim") & (dfq["_cnpj"] != "")]
-                .groupby("_cnpj")["_nivel"].max()
-                .reset_index()
-                .rename(columns={"_cnpj": "CNPJ", "_nivel": "Nivel"})
-            )
-            # e tenta completar campos mínimos
-            qual_cnpj["BR"] = "SEM BR"
-            qual_cnpj["Data_Abertura"] = pd.NaT
-            qual_cnpj["Criterio"] = ""
-
-        # identifica mês do arquivo atual (para puxar preço e cálculo)
         mes_arquivo = detect_report_month_from_df(df_c6) if df_c6 is not None else None
         mes_key = fmt_month(mes_arquivo) if mes_arquivo else (mes_atual if saved else None)
 
-        # mês anterior (para coluna "recebido no mês anterior")
         mes_keys_sorted = sorted(saved.keys(), key=month_key_str) if saved else []
         prev_key = None
         if mes_key and mes_keys_sorted and mes_key in mes_keys_sorted:
@@ -1107,14 +1139,6 @@ else:
             if idx > 0:
                 prev_key = mes_keys_sorted[idx - 1]
 
-        # pega a faixa/preço do mês do arquivo (não "sempre último")
-        faixa_mes = "-"
-        precos_mes = {}
-        if saved and mes_key and mes_key in saved:
-            faixa_mes = saved[mes_key].get("faixa", "-")
-            precos_mes = faixa_tbl_por_nome(faixa_mes)
-
-        # completa colunas de valores por CNPJ
         detalhe_mes = detalhe.get(mes_key, {}) if (mes_key and detalhe) else {}
         detalhe_prev = detalhe.get(prev_key, {}) if (prev_key and detalhe) else {}
 
@@ -1124,25 +1148,28 @@ else:
         col_prev_mes = []
         col_receber = []
 
-        for _, r in qual_cnpj.iterrows():
+        # faixa do mês
+        faixa_mes = "-"
+        precos_mes = {}
+        if saved and mes_key and mes_key in saved:
+            faixa_mes = saved[mes_key].get("faixa", "-")
+            precos_mes = faixa_tbl_por_nome(faixa_mes)
+
+        for _, r in agg.iterrows():
             cnpj = str(r["CNPJ"])
             col_mes.append(mes_key or "")
 
-            # valor cheio do mês e cálculo incremental por CNPJ
             dcur = detalhe_mes.get(cnpj, None)
             if dcur:
                 cheio_cnpj = float(dcur.get("valor_cheio_mes", 0.0))
                 ja_total = float(dcur.get("ja_recebido_antes", 0.0))
                 receber_cnpj = float(dcur.get("receber_mes", 0.0))
             else:
-                # fallback (se ainda não existir no detalhe): calcula com o nível e a faixa do mês
                 lvl = int(r.get("Nivel", 0))
                 cheio_cnpj = float(precos_mes.get(lvl, 0.0)) if precos_mes else 0.0
-                # sem detalhe => não sabemos "já recebido antes" (deveria existir), então zera
                 ja_total = 0.0
                 receber_cnpj = cheio_cnpj
 
-            # recebido no mês anterior (somente o que entrou no mês anterior)
             dprev = detalhe_prev.get(cnpj, None)
             recebido_mes_anterior = float(dprev.get("receber_mes", 0.0)) if dprev else 0.0
 
@@ -1151,35 +1178,28 @@ else:
             col_prev_mes.append(recebido_mes_anterior)
             col_receber.append(receber_cnpj)
 
-        qual_cnpj["Mês do arquivo"] = col_mes
-        qual_cnpj["Valor cheio (mês atual)"] = col_cheio
-        qual_cnpj["Já recebido antes (acumulado)"] = col_ja_total
-        qual_cnpj["Recebido no mês anterior"] = col_prev_mes
-        qual_cnpj["A receber (mês atual)"] = col_receber
+        agg["Mês do arquivo"] = col_mes
+        agg["Valor cheio (mês atual)"] = col_cheio
+        agg["Recebido no mês anterior"] = col_prev_mes
+        agg["Já recebido antes (acumulado)"] = col_ja_total
+        agg["A receber (mês atual)"] = col_receber
 
-        # formata data
-        qual_cnpj["Data_Abertura"] = qual_cnpj["Data_Abertura"].apply(fmt_date)
+        agg["Data_Abertura"] = agg["Data_Abertura"].apply(fmt_date)
+        agg["_ord"] = pd.to_datetime(agg["Data_Abertura"], format="%d/%m/%Y", errors="coerce")
+        agg = agg.sort_values("_ord", ascending=False).drop(columns=["_ord"])
 
-        # ordena por data (mais recente primeiro)
-        # (Data_Abertura é string dd/mm/yyyy, então converte só para ordenar)
-        qual_cnpj["_ord"] = pd.to_datetime(qual_cnpj["Data_Abertura"], format="%d/%m/%Y", errors="coerce")
-        qual_cnpj = qual_cnpj.sort_values("_ord", ascending=False).drop(columns=["_ord"])
+        agg["Valor cheio (mês atual)"] = agg["Valor cheio (mês atual)"].apply(br_money)
+        agg["Recebido no mês anterior"] = agg["Recebido no mês anterior"].apply(br_money)
+        agg["Já recebido antes (acumulado)"] = agg["Já recebido antes (acumulado)"].apply(br_money)
+        agg["A receber (mês atual)"] = agg["A receber (mês atual)"].apply(br_money)
 
-        # formata dinheiro
-        qual_cnpj["Valor cheio (mês atual)"] = qual_cnpj["Valor cheio (mês atual)"].apply(br_money)
-        qual_cnpj["Já recebido antes (acumulado)"] = qual_cnpj["Já recebido antes (acumulado)"].apply(br_money)
-        qual_cnpj["Recebido no mês anterior"] = qual_cnpj["Recebido no mês anterior"].apply(br_money)
-        qual_cnpj["A receber (mês atual)"] = qual_cnpj["A receber (mês atual)"].apply(br_money)
-
-        # renomeia para mais profissional
-        qual_cnpj = qual_cnpj.rename(columns={
+        agg = agg.rename(columns={
             "Nivel": "Nível",
             "BR": "BR (M0/M1/M2)",
             "Data_Abertura": "Data de abertura",
             "Criterio": "Critério vencedor"
         })
 
-        # garante colunas finais
         cols_final = [
             "CNPJ",
             "Data de abertura",
@@ -1192,9 +1212,9 @@ else:
             "Já recebido antes (acumulado)",
             "A receber (mês atual)"
         ]
-        cols_final = [c for c in cols_final if c in qual_cnpj.columns]
+        cols_final = [c for c in cols_final if c in agg.columns]
 
-        st.dataframe(qual_cnpj[cols_final], use_container_width=True, hide_index=True)
+        st.dataframe(agg[cols_final], use_container_width=True, hide_index=True)
 
 st.divider()
 
