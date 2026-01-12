@@ -1,3 +1,138 @@
+def apply_theme():
+    st.markdown(
+        """
+        <style>
+            /* =========================================================
+               TEMA AJUSTADO PARA LEGIBILIDADE NO CELULAR
+               - Não mexe em layout/estrutura, só cores/contraste
+               - Funciona melhor em desktop e mobile, light/dark do sistema
+               ========================================================= */
+
+            :root{
+                --am-bg: #ffffff;
+                --am-text: #0b1220;
+                --am-muted: #516079;
+
+                --am-sidebar-bg: #0f1b3a;
+                --am-sidebar-text: #ffffff;
+
+                --am-card-bg: #ffffff;
+                --am-card-border: #d7e2f2;
+
+                /* Cores "suaves" (background) + texto escuro (mobile-friendly) */
+                --am-ok-bg: #e9f2ff;     /* azul bem claro */
+                --am-ok-text: #0b1220;   /* texto escuro */
+                --am-bad-bg: #ffeceb;    /* vermelho bem claro */
+                --am-bad-text: #0b1220;  /* texto escuro */
+            }
+
+            /* Sidebar */
+            section[data-testid="stSidebar"]{
+                background: var(--am-sidebar-bg) !important;
+            }
+            section[data-testid="stSidebar"] *{
+                color: var(--am-sidebar-text) !important;
+            }
+
+            /* Títulos e textos */
+            h1,h2,h3{
+                color: var(--am-text) !important;
+            }
+            p, li, span, div{
+                color: var(--am-text);
+            }
+
+            /* Cards (metric) com contraste mais forte */
+            div[data-testid="stMetric"]{
+                background: var(--am-card-bg) !important;
+                border: 1px solid var(--am-card-border) !important;
+                border-radius: 14px;
+                padding: 12px 14px;
+                box-shadow: 0 2px 10px rgba(15,27,58,0.05);
+            }
+            div[data-testid="stMetric"] *{
+                color: var(--am-text) !important;
+            }
+
+            /* Badges (mantém cor no fundo, texto sempre escuro pra ficar legível no celular) */
+            .am-badge-ok{
+                display:inline-block;
+                padding: 6px 12px;
+                border-radius: 999px;
+                background: var(--am-ok-bg) !important;
+                color: var(--am-ok-text) !important;
+                font-weight: 900;
+                font-size: 12px;
+                border: 1px solid #b8d6ff;
+            }
+            .am-badge-bad{
+                display:inline-block;
+                padding: 6px 12px;
+                border-radius: 999px;
+                background: var(--am-bad-bg) !important;
+                color: var(--am-bad-text) !important;
+                font-weight: 900;
+                font-size: 12px;
+                border: 1px solid #ffc2bf;
+            }
+
+            /* Dataframes: aumenta contraste e evita texto “apagado” no mobile */
+            .stDataFrame, div[data-testid="stDataFrame"]{
+                background: #ffffff !important;
+            }
+            div[data-testid="stDataFrame"] *{
+                color: var(--am-text) !important;
+            }
+
+            /* Se o Streamlit aplicar tema escuro, ainda força legibilidade */
+            @media (prefers-color-scheme: dark){
+                :root{
+                    --am-bg: #0b1220;
+                    --am-text: #f2f5fb;
+                    --am-muted: #c0c9d8;
+                    --am-card-bg: #111a2e;
+                    --am-card-border: #243150;
+                    --am-ok-bg: rgba(0, 122, 255, 0.18);
+                    --am-ok-text: #f2f5fb;
+                    --am-bad-bg: rgba(255, 59, 48, 0.18);
+                    --am-bad-text: #f2f5fb;
+                }
+
+                body, .main{
+                    background: var(--am-bg) !important;
+                }
+
+                h1,h2,h3, p, li, span, div{
+                    color: var(--am-text) !important;
+                }
+
+                div[data-testid="stMetric"]{
+                    background: var(--am-card-bg) !important;
+                    border: 1px solid var(--am-card-border) !important;
+                }
+                div[data-testid="stMetric"] *{
+                    color: var(--am-text) !important;
+                }
+
+                .stDataFrame, div[data-testid="stDataFrame"]{
+                    background: var(--am-card-bg) !important;
+                    border: 1px solid var(--am-card-border) !important;
+                }
+                div[data-testid="stDataFrame"] *{
+                    color: var(--am-text) !important;
+                }
+
+                .am-badge-ok{
+                    border: 1px solid rgba(0,122,255,0.35) !important;
+                }
+                .am-badge-bad{
+                    border: 1px solid rgba(255,59,48,0.35) !important;
+                }
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 import os
 import io
 import json
