@@ -17,6 +17,7 @@ COL_ABERTURA = "DT_CONTA_CRIADA"
 COL_FUNDACAO = "DT_FUNDACAO_EMPRESA"
 COL_PIX = "CHAVES_PIX_FORTE"
 COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"
+COL_SALDO_GERAL_FALLBACK = "VL_CASH_IN_MTD"  # <<< (coluna Y no seu arquivo anexado)
 COL_STATUS = "STATUS_CC"
 COL_DOMICILIO = "BANCO_DOMICILIO"
 COL_BY = "FL_QUALIFICADO_COMISS"
@@ -49,13 +50,6 @@ FAIXAS = [
 ]
 
 # =========================================================
-# DESCONTOS / REPASSES (NOVO)
-# =========================================================
-ALIQUOTA_NF_H1 = 0.187   # 18,70%
-ALIQUOTA_REPASSE_H1 = 0.10  # 10%
-ALIQUOTA_NF_AM = 0.14    # 14%
-
-# =========================================================
 # MEMÓRIA / STORAGE
 # =========================================================
 DATA_DIR = "data_store"
@@ -66,8 +60,9 @@ HIST_LEADS_DAILY = os.path.join(DATA_DIR, "hist_cadastros_diario.json")       # 
 HIST_MONTH_LEVELS = os.path.join(DATA_DIR, "hist_mes_cnpj_nivel.json")        # mm/aaaa -> {cnpj: nivel_max_no_mes}
 HIST_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "pago_max_por_cnpj.json")         # cnpj -> max pago acumulado
 HIST_RESUMO_MENSAL = os.path.join(DATA_DIR, "resumo_mensal.json")             # mm/aaaa -> resumo calculado
-HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")         # mm/aaaa -> estado (pix/domicilio/qualificadas por arquivo)
-HIST_SALDO_POR_CNPJ = os.path.join(DATA_DIR, "saldo_por_cnpj.json")           # cnpj -> saldo (geral, independente do mês)
+HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")         # mm/aaaa -> estado (pix/domicilio/qualificadas)
+HIST_SALDO_GERAL = os.path.join(DATA_DIR, "saldo_geral.json")                 # {"saldo_geral": float, "coluna_usada": str, "arquivo": str, "atualizado_em": str}
+
 
 # =========================================================
 # HELPERS
@@ -89,11 +84,8 @@ def br_money(v: float) -> str:
     return f"R$ {s}"
 
 
-def br_int(n) -> str:
-    try:
-        return f"{int(round(float(n))):,}".replace(",", ".")
-    except Exception:
-        return "0"
+def br_int(n: int) -> str:
+    return f"{int(n):,}".replace(",", ".")
 
 
 def fmt_date(d) -> str:
@@ -146,50 +138,22 @@ def hide_index_df(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
 
 
-def clean_cnpj_series(s: pd.Series) -> pd.Series:
-    return normalize_str(s).str.replace(r"\D", "", regex=True)
-
-
-# =========================================================
-# SALDO GERAL (INDEPENDENTE DO MÊS) - NOVO
-# =========================================================
-def saldo_geral_upsert_from_df(df_c6: pd.DataFrame):
+def saldo_total_geral_from_df(df: pd.DataFrame) -> Tuple[float, str]:
     """
-    Mantém um dicionário cnpj -> saldo (último valor visto no import).
-    O "Saldo total (geral)" é a soma de todos os saldos por CNPJ acumulados.
+    Você conferiu pela coluna Y do Excel. No seu arquivo anexado, coluna Y = VL_CASH_IN_MTD.
+    Regra:
+      - Se existir VL_CASH_IN_MTD: usa ela
+      - Senão: usa VL_SALDO_MEDIO_MENSALIZADO
     """
-    if df_c6 is None or df_c6.empty:
-        return
+    if COL_SALDO_GERAL_FALLBACK in df.columns:
+        v = pd.to_numeric(df[COL_SALDO_GERAL_FALLBACK], errors="coerce").fillna(0.0).sum()
+        return float(v), COL_SALDO_GERAL_FALLBACK
 
-    df = df_c6.copy()
+    if COL_SALDO in df.columns:
+        v = pd.to_numeric(df[COL_SALDO], errors="coerce").fillna(0.0).sum()
+        return float(v), COL_SALDO
 
-    if COL_CNPJ not in df.columns:
-        cand = [c for c in df.columns if "CNPJ" in str(c).upper()]
-        df[COL_CNPJ] = df[cand[0]] if cand else ""
-
-    if COL_SALDO not in df.columns:
-        df[COL_SALDO] = 0.0
-
-    df["_cnpj"] = clean_cnpj_series(df[COL_CNPJ])
-    df["_saldo"] = pd.to_numeric(df[COL_SALDO], errors="coerce").fillna(0.0)
-
-    # por cnpj, pega o maior saldo do arquivo (evita duplicidade na mesma planilha)
-    by_cnpj = df[df["_cnpj"] != ""].groupby("_cnpj")["_saldo"].max()
-
-    store = safe_json_load(HIST_SALDO_POR_CNPJ, default={})
-    # atualiza (overwrite) com o valor do import
-    for cnpj, saldo in by_cnpj.items():
-        store[str(cnpj)] = float(saldo)
-
-    safe_json_save(HIST_SALDO_POR_CNPJ, store)
-
-
-def saldo_geral_total() -> float:
-    store = safe_json_load(HIST_SALDO_POR_CNPJ, default={})
-    try:
-        return float(sum(float(v) for v in store.values()))
-    except Exception:
-        return 0.0
+    return 0.0, ""
 
 
 # =========================================================
@@ -352,7 +316,7 @@ def month_levels_upsert_from_daily_df(df_c6: pd.DataFrame):
         cand = [c for c in df.columns if "CNPJ" in str(c).upper()]
         df[COL_CNPJ] = df[cand[0]] if cand else ""
 
-    df["_cnpj"] = clean_cnpj_series(df[COL_CNPJ])
+    df["_cnpj"] = normalize_str(df[COL_CNPJ]).str.replace(r"\D", "", regex=True)
 
     # nível por linha
     df["_nivel"] = parse_level(df)
@@ -392,9 +356,6 @@ def detect_month_from_filename(name: str) -> Optional[dt.date]:
 def month_levels_upsert_from_monthly_file(file_name: str, file_bytes: bytes):
     df = read_excel_any(file_bytes)
 
-    # NOVO: atualiza saldo geral também a partir do mensal (Nov/Dez)
-    saldo_geral_upsert_from_df(df)
-
     m = None
     if COL_ABERTURA in df.columns:
         d = to_date_series(df[COL_ABERTURA]).dropna()
@@ -415,7 +376,7 @@ def month_levels_upsert_from_monthly_file(file_name: str, file_bytes: bytes):
         cand = [c for c in df.columns if "CNPJ" in str(c).upper()]
         df[COL_CNPJ] = df[cand[0]] if cand else ""
 
-    df["_cnpj"] = clean_cnpj_series(df[COL_CNPJ])
+    df["_cnpj"] = normalize_str(df[COL_CNPJ]).str.replace(r"\D", "", regex=True)
     df["_nivel"] = parse_level(df)
 
     q = df[(df["_cnpj"] != "") & (df["_nivel"] >= 1)].copy()
@@ -600,8 +561,7 @@ def show_logo_and_title():
 def reset_all_data():
     for p in [
         HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
-        HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL,
-        HIST_SALDO_POR_CNPJ
+        HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL, HIST_SALDO_GERAL
     ]:
         if os.path.exists(p):
             os.remove(p)
@@ -665,6 +625,8 @@ if up_c6:
         df_c6[COL_FUNDACAO] = pd.NA
     if COL_SALDO not in df_c6.columns:
         df_c6[COL_SALDO] = 0.0
+    if COL_SALDO_GERAL_FALLBACK not in df_c6.columns:
+        df_c6[COL_SALDO_GERAL_FALLBACK] = 0.0
     if COL_BR not in df_c6.columns:
         df_c6[COL_BR] = ""
     if COL_CRIT not in df_c6.columns:
@@ -674,12 +636,12 @@ if up_c6:
 
     df_c6[COL_ABERTURA] = to_date_series(df_c6[COL_ABERTURA])
     df_c6[COL_FUNDACAO] = to_date_series(df_c6[COL_FUNDACAO])
+
     df_c6[COL_SALDO] = pd.to_numeric(df_c6[COL_SALDO], errors="coerce").fillna(0.0)
+    df_c6[COL_SALDO_GERAL_FALLBACK] = pd.to_numeric(df_c6[COL_SALDO_GERAL_FALLBACK], errors="coerce").fillna(0.0)
+
     df_c6[COL_BR] = normalize_str(df_c6[COL_BR]).str.upper()
     df_c6[COL_CRIT] = normalize_str(df_c6[COL_CRIT])
-
-    # NOVO: saldo geral (independente do mês)
-    saldo_geral_upsert_from_df(df_c6)
 
     # histórico diário de aberturas (apenas datas existentes no arquivo e >= Jan/26)
     opened_counts = (
@@ -697,7 +659,16 @@ if up_c6:
     # grava níveis por mês do relatório (mês do arquivo)
     month_levels_upsert_from_daily_df(df_c6)
 
-    # snapshot mensal (estado do arquivo para cards do mês) - sem saldo aqui
+    # saldo total (geral) - independente do mês
+    saldo_geral, coluna_usada = saldo_total_geral_from_df(df_c6)
+    safe_json_save(HIST_SALDO_GERAL, {
+        "saldo_geral": float(saldo_geral),
+        "coluna_usada": str(coluna_usada),
+        "arquivo": up_c6.name if up_c6 else "",
+        "atualizado_em": dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+    })
+
+    # snapshot mensal (estado do arquivo para cards do mês)
     mes_rel = detect_report_month_from_df(df_c6)
     if mes_rel and mes_rel >= dt.date(2026, 1, 1):
         mkey = fmt_month(mes_rel)
@@ -790,17 +761,17 @@ else:
     snap = safe_json_load(HIST_SNAPSHOT_MENSAL, default={})
     s = snap.get(mes_lbl, {})
 
+    saldo_store = safe_json_load(HIST_SALDO_GERAL, default={"saldo_geral": 0.0, "coluna_usada": ""})
+    saldo_geral = float(saldo_store.get("saldo_geral", 0.0))
+
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Mês", mes_lbl)
     c2.metric("Cadastradas (mês)", br_int(total_cad_mes))
     c3.metric("Abertas (mês)", br_int(total_ab_mes))
     c4.metric("% geral (mês)", f"{str(round(perc_mes*100,1)).replace('.',',')}%")
 
-    # NOVO: Saldo total geral (independente do mês)
-    saldo_total_geral = saldo_geral_total()
-
     c5, c6, c7, c8 = st.columns(4)
-    c5.metric("Saldo total (geral)", br_money(float(saldo_total_geral)))
+    c5.metric("Saldo total (geral)", br_money(saldo_geral))
     c6.metric("Pix (snapshot)", f'{br_int(int(s.get("pix_com",0)))} com | {br_int(int(s.get("pix_sem",0)))} sem')
     c7.metric("Domicílio C6 (snapshot)", br_int(int(s.get("domicilio_c6", 0))))
     c8.metric("Qualificadas (arquivo)", br_int(int(s.get("qualificadas_arquivo", 0))))
@@ -842,43 +813,33 @@ if saved_resumo:
     m7.metric("Níveis (1/2/3/4)", f"{br_int(n1)} / {br_int(n2)} / {br_int(n3)} / {br_int(n4)}")
 
     # =========================================================
-    # NOVO: TABELA DE CÁLCULO (NF H1 + Repasse + NF AM + Líquido)
+    # TABELA: CÁLCULO DO LÍQUIDO (A PARTIR DO "A RECEBER (MÊS)")
+    # NF H1 18,70% -> REPASSE H1 10% (sobre saldo após NF) -> NF A&M 14% (sobre o que sobra p/ A&M)
+    # deixamos de ganhar = NF H1 + repasse H1
     # =========================================================
-    st.markdown("#### Cálculo do líquido (a partir de A receber do mês)")
+    st.markdown("### Cálculo do líquido (a partir de **A receber (mês)**)")
 
-    bruto = float(receber_mes_atual)
-
-    nf_h1 = bruto * ALIQUOTA_NF_H1
-    apos_nf_h1 = bruto - nf_h1
-
-    repasse_h1 = apos_nf_h1 * ALIQUOTA_REPASSE_H1
+    base_val = float(receber)
+    nf_h1 = base_val * 0.187
+    apos_nf_h1 = base_val - nf_h1
+    repasse_h1 = apos_nf_h1 * 0.10
     apos_repasse = apos_nf_h1 - repasse_h1
-
-    nf_am = apos_repasse * ALIQUOTA_NF_AM
+    nf_am = apos_repasse * 0.14
     liquido_am = apos_repasse - nf_am
+    deixamos = nf_h1 + repasse_h1
 
-    deixamos_de_ganhar = nf_h1 + repasse_h1
-
-    df_calc = pd.DataFrame([
-        ["A receber (mês) - bruto", bruto],
-        ["NF H1 (18,70%)", nf_h1],
-        ["Saldo após NF H1", apos_nf_h1],
-        ["Repasse H1 (10% sobre saldo após NF H1)", repasse_h1],
-        ["Saldo após repasse H1 (Assis e Mollerke antes NF)", apos_repasse],
-        ["NF Assis e Mollerke (14%)", nf_am],
-        ["Líquido Assis e Mollerke", liquido_am],
-        ["Deixamos de ganhar (NF H1 + Repasse H1)", deixamos_de_ganhar],
+    calc_df = pd.DataFrame([
+        ["A receber (mês)", br_money(base_val)],
+        ["NF H1 (18,70%)", br_money(nf_h1)],
+        ["Saldo após NF H1", br_money(apos_nf_h1)],
+        ["Repasse H1 (10%)", br_money(repasse_h1)],
+        ["Saldo após repasse H1", br_money(apos_repasse)],
+        ["NF Assis & Mollerke (14%)", br_money(nf_am)],
+        ["Líquido Assis & Mollerke", br_money(liquido_am)],
+        ["Deixamos de ganhar (NF H1 + Repasse H1)", br_money(deixamos)],
     ], columns=["Etapa", "Valor"])
 
-    df_calc_show = df_calc.copy()
-    df_calc_show["Valor"] = df_calc_show["Valor"].apply(br_money)
-    st.dataframe(df_calc_show, use_container_width=True, hide_index=True)
-
-    a1, a2, a3, a4 = st.columns(4)
-    a1.metric("NF H1 (18,70%)", br_money(nf_h1))
-    a2.metric("Repasse H1 (10%)", br_money(repasse_h1))
-    a3.metric("NF A&M (14%)", br_money(nf_am))
-    a4.metric("Líquido A&M", br_money(liquido_am))
+    st.dataframe(calc_df, use_container_width=True, hide_index=True)
 
 else:
     st.info("Ainda não há histórico de remuneração. Importe os diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
@@ -958,24 +919,20 @@ else:
     # Aberturas
     with tabs[0]:
         st.markdown("#### Contas abertas por dia (arquivo)")
-
-        # FIX: ordenar por data real (dt.date), não por string
-        s_dates = pd.to_datetime(df_c6[COL_ABERTURA], errors="coerce").dt.date
         por_dia = (
-            pd.Series(s_dates)
-            .dropna()
-            .value_counts()
-            .rename_axis("Dia_dt")
+            pd.Series(df_c6[COL_ABERTURA]).dropna().value_counts()
+            .rename_axis("Dia")
             .reset_index(name="Contas abertas")
         )
-        por_dia["Dia_dt"] = pd.to_datetime(por_dia["Dia_dt"]).dt.date
-        por_dia = por_dia.sort_values("Dia_dt", ascending=False).reset_index(drop=True)
-        por_dia["Dia"] = por_dia["Dia_dt"].apply(fmt_date)
-        por_dia_show = por_dia[["Dia", "Contas abertas"]].copy()
-        por_dia_show["Contas abertas"] = por_dia_show["Contas abertas"].astype(int).apply(br_int)
 
-        st.bar_chart(por_dia.set_index("Dia_dt")["Contas abertas"])
-        st.dataframe(por_dia_show, use_container_width=True, hide_index=True)
+        # <<< ordenação correta por data (mais recente -> mais antigo)
+        por_dia["Dia_dt"] = pd.to_datetime(por_dia["Dia"], errors="coerce")
+        por_dia = por_dia.sort_values("Dia_dt", ascending=False)
+        por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
+        por_dia = por_dia.drop(columns=["Dia_dt"])
+
+        st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
+        st.dataframe(por_dia, use_container_width=True, hide_index=True)
 
     # Fundações
     with tabs[1]:
@@ -1006,7 +963,6 @@ else:
 
             st.markdown(f"**No dia {dia_sel_lbl} foram abertas {br_int(total_dia)} empresas.**")
             dia_df_show = dia_df[["Mês fundação", "Quantidade"]].copy()
-            dia_df_show["Quantidade"] = dia_df_show["Quantidade"].astype(int).apply(br_int)
             st.dataframe(dia_df_show, use_container_width=True, hide_index=True)
             st.bar_chart(dia_df.set_index("Mês fundação")["Quantidade"])
 
@@ -1027,9 +983,8 @@ else:
             .rename_axis("Status")
             .reset_index(name="Quantidade")
         )
-        status["Quantidade"] = status["Quantidade"].astype(int).apply(br_int)
         st.dataframe(status, use_container_width=True, hide_index=True)
-        st.bar_chart(status.set_index("Status")["Quantidade"].apply(lambda x: int(str(x).replace(".", ""))))
+        st.bar_chart(status.set_index("Status")["Quantidade"])
 
     # Qualificação + BR + Valores
     with tabs[3]:
@@ -1043,7 +998,6 @@ else:
         # BR
         brs = normalize_str(dfq.get(COL_BR, pd.Series([""] * len(dfq)))).str.upper().replace("", "SEM BR")
         br_counts = brs.value_counts().rename_axis("BR").reset_index(name="Quantidade")
-        br_counts["Quantidade"] = br_counts["Quantidade"].astype(int).apply(br_int)
 
         c1, c2 = st.columns([2, 3])
         with c1:
