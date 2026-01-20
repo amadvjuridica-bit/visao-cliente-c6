@@ -1197,82 +1197,117 @@ else:
         st.bar_chart(status.set_index("Status")["Quantidade"])
 
     with tabs[3]:
-        st.markdown("#### Qualificação (nível vencedor, critério vencedor e BR)")
+        st.markdown("#### Lista de qualificadas (arquivo) — valores por CNPJ (cheio / já pago / a receber)")
 
-        dfq = df_c6.copy()
-        dfq["_nivel"] = parse_level(dfq)
-        dfq["_qualificada"] = dfq["_nivel"].apply(lambda x: "Sim" if x >= 1 else "Não")
-        dfq["_criterio_vencedor"] = normalize_str(dfq.get(COL_CRIT, pd.Series([""] * len(dfq)))).apply(criterio_vencedor)
+def _compute_paid_max_before_month(target_mkey: str) -> Dict[str, float]:
+    """
+    Calcula quanto cada CNPJ já recebeu (valor cheio máximo) APENAS ATÉ o mês anterior ao target_mkey.
+    Usa a mesma lógica do recompute_incremental, mas para antes do mês alvo.
+    """
+    month_levels = safe_json_load(HIST_MONTH_LEVELS, default={})
+    months_sorted = sorted(list(month_levels.keys()), key=month_key_str)
 
-        brs = normalize_str(dfq.get(COL_BR, pd.Series([""] * len(dfq)))).str.upper().replace("", "SEM BR")
-        br_counts = brs.value_counts().rename_axis("BR").reset_index(name="Quantidade")
+    paid_max_prev: Dict[str, float] = {}
+    for mkey in months_sorted:
+        if month_key_str(mkey) >= month_key_str(target_mkey):
+            break
 
-        c1, c2 = st.columns([2, 3])
-        with c1:
-            st.markdown("**BR (M0/M1/M2)**")
-            st.dataframe(br_counts, use_container_width=True, hide_index=True)
-        with c2:
-            total_qual = int((dfq["_nivel"] >= 1).sum())
-            n1 = int((dfq["_nivel"] == 1).sum())
-            n2 = int((dfq["_nivel"] == 2).sum())
-            n3 = int((dfq["_nivel"] == 3).sum())
-            n4 = int((dfq["_nivel"] == 4).sum())
+        cmap: Dict[str, int] = month_levels.get(mkey, {}) or {}
+        cmap = {k: int(v) for k, v in cmap.items() if str(k).strip() != ""}
 
-            k1, k2, k3, k4, k5 = st.columns(5)
-            k1.metric("Qualificadas (arquivo)", br_int(total_qual))
-            k2.metric("Nível 1", br_int(n1))
-            k3.metric("Nível 2", br_int(n2))
-            k4.metric("Nível 3", br_int(n3))
-            k5.metric("Nível 4", br_int(n4))
+        qtd_qual = len(cmap)
 
-        saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
-        if saved:
-            mes_atual = sorted(saved.keys(), key=month_key_str)[-1]
-            info = saved.get(mes_atual, {})
-            faixa_nome = info.get("faixa", "-")
-            precos = faixa_tbl_por_nome(faixa_nome)
-
-            n1 = int(info.get("n1", 0))
-            n2 = int(info.get("n2", 0))
-            n3 = int(info.get("n3", 0))
-            n4 = int(info.get("n4", 0))
-
-            rows_val = []
-            for lvl, qtd in [(1, n1), (2, n2), (3, n3), (4, n4)]:
-                unit = float(precos.get(lvl, 0.0))
-                total = unit * float(qtd)
-                rows_val.append([f"Nível {lvl}", br_int(qtd), br_money(unit), br_money(total)])
-
-            st.markdown(f"#### Valores (mês atual: {mes_atual}) — Faixa: {faixa_nome}")
-            df_vals = pd.DataFrame(rows_val, columns=["Nível", "Quantidade", "Valor unitário", "Total (cheio)"])
-            st.dataframe(df_vals, use_container_width=True, hide_index=True)
-
-            st.markdown("#### Resumo do mês (incremental)")
-            r1, r2, r3 = st.columns(3)
-            r1.metric("Receita cheia (mês)", br_money(float(info.get("deveria_receber", 0.0))))
-            r2.metric("Já pago (referência)", br_money(float(info.get("ja_pago_ref", 0.0))))
-            r3.metric("A receber (mês)", br_money(float(info.get("receber_mes", 0.0))))
+        # mesma regra do app (inclui exceção dez/25)
+        if mkey == "12/2025":
+            faixa_nome, precos = FAIXAS[-1][1], FAIXAS[-1][2]
         else:
-            st.info("Ainda não há mês atual calculado. Importe arquivos diários (Jan/26 em diante).")
+            faixa_nome, precos = faixa_por_qtd(qtd_qual)
 
-        st.markdown("#### Lista de qualificadas (arquivo)")
-        if COL_CNPJ not in dfq.columns:
-            cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
-            dfq[COL_CNPJ] = dfq[cand[0]] if cand else ""
+        for cnpj, lvl in cmap.items():
+            cheio = float(precos.get(int(lvl), 0.0))
+            prev = float(paid_max_prev.get(cnpj, 0.0))
+            paid_max_prev[cnpj] = max(prev, cheio)
 
-        show = dfq[dfq["_qualificada"] == "Sim"].copy()
-        show = show[[COL_CNPJ, COL_ABERTURA, "_nivel", "_criterio_vencedor", COL_BR]].rename(columns={
-            COL_CNPJ: "CNPJ",
-            COL_ABERTURA: "Data de abertura",
-            "_nivel": "Nível",
-            "_criterio_vencedor": "Critério vencedor",
-            COL_BR: "BR",
-        })
-        show["Data de abertura"] = show["Data de abertura"].apply(fmt_date)
-        show = show.sort_values("Data de abertura", ascending=False)
-        st.dataframe(show, use_container_width=True, hide_index=True)
+    return paid_max_prev
 
-st.divider()
+
+# 1) Garantir CNPJ
+if COL_CNPJ not in dfq.columns:
+    cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
+    dfq[COL_CNPJ] = dfq[cand[0]] if cand else ""
+
+# 2) Preparar mês atual da remuneração (o mesmo que você já usa no bloco de valores)
+saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
+month_levels_store = safe_json_load(HIST_MONTH_LEVELS, default={})
+
+if not saved:
+    st.info("Ainda não há mês calculado para puxar faixa/preço. Importe arquivos diários (Jan/26 em diante).")
+else:
+    mes_atual = sorted(saved.keys(), key=month_key_str)[-1]  # ex: "01/2026"
+    info_mes = saved.get(mes_atual, {})
+    faixa_nome = info_mes.get("faixa", "-")
+    precos_mes = faixa_tbl_por_nome(faixa_nome)
+
+    # 3) Já pago acumulado até mês anterior
+    paid_prev = _compute_paid_max_before_month(mes_atual)
+
+    # 4) Nível máximo anterior (até mês anterior)
+    months_sorted = sorted(list(month_levels_store.keys()), key=month_key_str)
+    prev_months = [m for m in months_sorted if month_key_str(m) < month_key_str(mes_atual)]
+
+    def nivel_max_anterior(cnpj_num: str) -> int:
+        mx = 0
+        for m in prev_months:
+            cmap = month_levels_store.get(m, {}) or {}
+            v = int(cmap.get(cnpj_num, 0) or 0)
+            if v > mx:
+                mx = v
+        return mx
+
+    # 5) Montar lista atual do arquivo
+    df_list = dfq[dfq["_qualificada"] == "Sim"].copy()
+
+    # normaliza CNPJ numérico (só dígitos) para bater com o histórico
+    df_list["_cnpj_num"] = normalize_str(df_list[COL_CNPJ]).str.replace(r"\D", "", regex=True)
+
+    # nível atual (do arquivo)
+    df_list["_nivel_atual"] = df_list["_nivel"].astype(int)
+
+    # nível máximo anterior
+    df_list["_nivel_max_anterior"] = df_list["_cnpj_num"].apply(nivel_max_anterior).astype(int)
+
+    # valor cheio do mês atual (pela faixa do mês atual)
+    df_list["_valor_cheio_mes"] = df_list["_nivel_atual"].apply(lambda lvl: float(precos_mes.get(int(lvl), 0.0)))
+
+    # já pago acumulado (até mês anterior)
+    df_list["_ja_pago"] = df_list["_cnpj_num"].apply(lambda c: float(paid_prev.get(str(c), 0.0)))
+
+    # a receber agora
+    df_list["_a_receber_cnpj"] = (df_list["_valor_cheio_mes"] - df_list["_ja_pago"]).apply(lambda x: float(x) if x > 0 else 0.0)
+
+    # tabela final
+    show = df_list[[COL_CNPJ, COL_ABERTURA, "_nivel_atual", "_nivel_max_anterior", "_valor_cheio_mes", "_ja_pago", "_a_receber_cnpj", "_criterio_vencedor", COL_BR]].rename(columns={
+        COL_CNPJ: "CNPJ",
+        COL_ABERTURA: "Data de abertura",
+        "_nivel_atual": "Nível (mês atual)",
+        "_nivel_max_anterior": "Nível máx. anterior",
+        "_valor_cheio_mes": "Valor cheio (mês)",
+        "_ja_pago": "Já pago (acumulado)",
+        "_a_receber_cnpj": "A receber (diferença)",
+        "_criterio_vencedor": "Critério vencedor",
+        COL_BR: "BR",
+    })
+
+    show["Data de abertura"] = show["Data de abertura"].apply(fmt_date)
+    show["Valor cheio (mês)"] = show["Valor cheio (mês)"].apply(br_money)
+    show["Já pago (acumulado)"] = show["Já pago (acumulado)"].apply(br_money)
+    show["A receber (diferença)"] = show["A receber (diferença)"].apply(br_money)
+
+    # mantém sua ordenação (mais recente primeiro)
+    show = show.sort_values("Data de abertura", ascending=False)
+
+    st.markdown(f"**Mês de referência:** {mes_atual} — **Faixa:** {faixa_nome}")
+    st.dataframe(show, use_container_width=True, hide_index=True)
 
 # =========================================================
 # COMPARATIVO MENSAL (NÃO CRIA MESES)
