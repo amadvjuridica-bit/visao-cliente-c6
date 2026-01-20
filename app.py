@@ -972,50 +972,26 @@ else:
     tabs = st.tabs(["Aberturas", "Fundações (por dia)", "Pix + Status", "Qualificação + BR + Valores"])
 
     with tabs[0]:
-        st.markdown("#### Contas abertas por dia (arquivo)")
-        por_dia = (
-            pd.Series(df_c6[COL_ABERTURA]).dropna().value_counts().sort_index()
-            .rename_axis("Dia")
-            .reset_index(name="Contas abertas")
-        )
-        por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
+    st.markdown("#### Contas abertas por dia (arquivo)")
 
-        # ✅ Aqui já estava: do mais recente para o mais antigo
-        por_dia = por_dia.sort_values("Dia", ascending=False)
+    # conta por data (dt.date) e ordena do mais recente para o mais antigo
+    por_dia = (
+        pd.Series(df_c6[COL_ABERTURA])
+        .dropna()
+        .value_counts()
+        .rename_axis("Dia")
+        .reset_index(name="Contas abertas")
+    )
 
-        st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
-        st.dataframe(por_dia, use_container_width=True, hide_index=True)
+    # garante que "Dia" é date e ordena DESC por data real
+    por_dia["Dia"] = pd.to_datetime(por_dia["Dia"], errors="coerce").dt.date
+    por_dia = por_dia.dropna(subset=["Dia"]).sort_values("Dia", ascending=False).reset_index(drop=True)
 
-    with tabs[1]:
-        st.markdown("#### Fundação (mês/ano) dentro do dia de abertura")
-        temp = df_c6[[COL_ABERTURA, COL_FUNDACAO]].dropna().copy()
-        if temp.empty:
-            st.info("Sem dados de fundação no arquivo.")
-        else:
-            temp["Dia"] = temp[COL_ABERTURA]
-            temp["Mês fundação"] = temp[COL_FUNDACAO].apply(
-                lambda d: f"{d.month:02d}/{d.year}" if isinstance(d, dt.date) else ""
-            )
+    # só agora formata para exibir
+    por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
 
-            pivot = (
-                temp.groupby(["Dia", "Mês fundação"])
-                .size()
-                .reset_index(name="Quantidade")
-                .sort_values(["Dia", "Mês fundação"])
-            )
-
-            dias = sorted(temp[COL_ABERTURA].unique())
-            dias_lbl = [fmt_date(d) for d in dias]
-            dia_sel_lbl = st.selectbox("Selecione o dia de abertura", dias_lbl, index=len(dias_lbl) - 1)
-            dia_sel = dias[dias_lbl.index(dia_sel_lbl)]
-
-            dia_df = pivot[pivot["Dia"] == dia_sel].copy()
-            total_dia = int(dia_df["Quantidade"].sum())
-
-            st.markdown(f"**No dia {dia_sel_lbl} foram abertas {br_int(total_dia)} empresas.**")
-            dia_df_show = dia_df[["Mês fundação", "Quantidade"]].copy()
-            st.dataframe(dia_df_show, use_container_width=True, hide_index=True)
-            st.bar_chart(dia_df.set_index("Mês fundação")["Quantidade"])
+    st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
+    st.dataframe(por_dia, use_container_width=True, hide_index=True)
 
     with tabs[2]:
         st.markdown("#### Pix")
