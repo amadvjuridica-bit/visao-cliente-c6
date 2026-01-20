@@ -9,6 +9,57 @@ import pandas as pd
 import streamlit as st
 
 # =========================================================
+# ✅ FIRESTORE (NUVEM) - ADICIONADO
+# =========================================================
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+@st.cache_resource
+def _get_fs_db():
+    """
+    Inicializa Firestore usando st.secrets["firebase"] (Streamlit Cloud).
+    Cacheado para não reinicializar a cada rerun.
+    """
+    if "firebase" not in st.secrets:
+        return None
+
+    if not firebase_admin._apps:
+        cred = credentials.Certificate(dict(st.secrets["firebase"]))
+        firebase_admin.initialize_app(cred)
+
+    return firestore.client()
+
+def _fs_doc_id_from_path(path: str) -> str:
+    # usa o nome do arquivo como chave (ex.: hist_aberturas_diario.json)
+    return os.path.basename(path)
+
+def _fs_load_payload(doc_id: str, default):
+    db = _get_fs_db()
+    if db is None:
+        return default
+    snap = db.collection("app_store").document(doc_id).get()
+    if not snap.exists:
+        return default
+    data = snap.to_dict() or {}
+    return data.get("payload", default)
+
+def _fs_save_payload(doc_id: str, obj):
+    db = _get_fs_db()
+    if db is None:
+        return
+    db.collection("app_store").document(doc_id).set(
+        {"payload": obj, "updated_at": firestore.SERVER_TIMESTAMP},
+        merge=True
+    )
+
+def _fs_delete_doc(doc_id: str):
+    db = _get_fs_db()
+    if db is None:
+        return
+    db.collection("app_store").document(doc_id).delete()
+
+
+# =========================================================
 # CONFIGURAÇÕES (COLUNAS)
 # =========================================================
 # C6 (Visão Cliente)
@@ -66,6 +117,13 @@ HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")         # 
 # HELPERS
 # =========================================================
 def safe_json_load(path: str, default):
+    """
+    ✅ ALTERADO: se existir st.secrets["firebase"], lê do Firestore.
+    Caso contrário, mantém comportamento local.
+    """
+    if "firebase" in st.secrets:
+        return _fs_load_payload(_fs_doc_id_from_path(path), default)
+
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -73,6 +131,14 @@ def safe_json_load(path: str, default):
 
 
 def safe_json_save(path: str, obj):
+    """
+    ✅ ALTERADO: se existir st.secrets["firebase"], salva no Firestore.
+    Caso contrário, mantém comportamento local.
+    """
+    if "firebase" in st.secrets:
+        _fs_save_payload(_fs_doc_id_from_path(path), obj)
+        return
+
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
@@ -412,9 +478,7 @@ def recompute_incremental() -> pd.DataFrame:
 
         qtd_qual = len(cmap)
 
-        # =========================================================
         # ✅ EXCEÇÃO DEZ/25: FORÇAR FAIXA 350+ (1.5) NESTE MÊS
-        # =========================================================
         if mkey == "12/2025":
             faixa_nome, precos = FAIXAS[-1][1], FAIXAS[-1][2]  # "350+ (1.5)"
         else:
@@ -520,13 +584,8 @@ def apply_theme():
 
 
 def show_logo_and_title():
-    # ✅ AJUSTE 1 (mínimo): __file__ pode não existir no Streamlit Cloud
-    # Mantém o comportamento local e funciona no cloud.
-    try:
-        here = os.path.dirname(__file__)
-    except NameError:
-        here = os.getcwd()
-
+    # ✅ FIX obrigatório (Streamlit Cloud não garante __file__)
+    here = os.getcwd()
     logo_path = os.path.join(here, "LOGO CORRETA.png")
 
     c1, c2 = st.columns([1, 6], vertical_alignment="center")
@@ -534,7 +593,7 @@ def show_logo_and_title():
         if os.path.exists(logo_path):
             st.image(logo_path, width=160)
         else:
-            st.warning("Logo não encontrada. Coloque 'LOGO CORRETA.png' na mesma pasta do app.py.")
+            st.warning("Logo não encontrada. Coloque 'LOGO CORRETA.png' na raiz do app.")
     with c2:
         st.markdown(
             """
@@ -556,6 +615,11 @@ def reset_all_data():
         HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
         HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL
     ]:
+        # ✅ apaga também do Firestore (se estiver usando)
+        if "firebase" in st.secrets:
+            _fs_delete_doc(_fs_doc_id_from_path(p))
+
+        # apaga local
         if os.path.exists(p):
             os.remove(p)
 
@@ -909,24 +973,17 @@ else:
 
     with tabs[0]:
         st.markdown("#### Contas abertas por dia (arquivo)")
-
-        # ✅ AJUSTE 2 (mínimo): ordenar por DATA real (mais recente -> mais antigo)
-        por_dia_raw = (
-            pd.Series(df_c6[COL_ABERTURA]).dropna().value_counts()
+        por_dia = (
+            pd.Series(df_c6[COL_ABERTURA]).dropna().value_counts().sort_index()
             .rename_axis("Dia")
             .reset_index(name="Contas abertas")
         )
-
-        # Ordena pela coluna de data (dt.date) antes de formatar
-        por_dia_raw = por_dia_raw.sort_values("Dia", ascending=False).reset_index(drop=True)
-
-        # Bar chart usando a data como índice (mantém ordem correta)
-        st.bar_chart(por_dia_raw.set_index("Dia")["Contas abertas"])
-
-        # Tabela: formata para dd/mm/aaaa sem perder a ordenação
-        por_dia = por_dia_raw.copy()
         por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
 
+        # ✅ Aqui já estava: do mais recente para o mais antigo
+        por_dia = por_dia.sort_values("Dia", ascending=False)
+
+        st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
         st.dataframe(por_dia, use_container_width=True, hide_index=True)
 
     with tabs[1]:
