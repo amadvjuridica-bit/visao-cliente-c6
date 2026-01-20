@@ -411,7 +411,14 @@ def recompute_incremental() -> pd.DataFrame:
         cmap = {k: int(v) for k, v in cmap.items() if str(k).strip() != ""}
 
         qtd_qual = len(cmap)
-        faixa_nome, precos = faixa_por_qtd(qtd_qual)
+
+        # =========================================================
+        # ✅ EXCEÇÃO DEZ/25: FORÇAR FAIXA 350+ (1.5) NESTE MÊS
+        # =========================================================
+        if mkey == "12/2025":
+            faixa_nome, precos = FAIXAS[-1][1], FAIXAS[-1][2]  # "350+ (1.5)"
+        else:
+            faixa_nome, precos = faixa_por_qtd(qtd_qual)
 
         lvl_counts = {1: 0, 2: 0, 3: 0, 4: 0}
         for _, lvl in cmap.items():
@@ -780,7 +787,7 @@ else:
 st.divider()
 
 # =========================================================
-# ✅ NOVO BLOCO: RECEITA LÍQUIDA (H1 + ASSIS E MOLLERKE) COM SELEÇÃO DE MÊS
+# ✅ BLOCO: RECEITA LÍQUIDA (H1 + ASSIS E MOLLERKE) COM SELEÇÃO DE MÊS
 # =========================================================
 st.subheader("Receita líquida (H1 + Assis e Mollerke)")
 
@@ -802,14 +809,12 @@ else:
     liquido_am = apos_repasse - nf_am
     deixamos_de_ganhar = nf_h1 + repasse_h1
 
-    # métricas rápidas
     l1, l2, l3, l4 = st.columns(4)
     l1.metric("Mês", mes_sel)
     l2.metric("Base (A receber no mês)", br_money(base_receber))
     l3.metric("Deixamos de ganhar (NF H1 + Repasse)", br_money(deixamos_de_ganhar))
     l4.metric("Líquido Assis e Mollerke", br_money(liquido_am))
 
-    # tabela passo a passo
     df_liq = pd.DataFrame(
         [
             ["Base (A receber no mês)", base_receber],
@@ -854,7 +859,6 @@ else:
     mes_df["% Conversão"] = mes_df["Percentual_num"].map(lambda x: f"{x*100:.1f}%".replace(".", ","))
     mes_df["Indicador"] = mes_df["Percentual_num"].map(lambda x: "Dentro do alvo" if x >= ALVO_CONVERSAO else "Abaixo do alvo")
 
-    # mais recente -> mais antigo
     mes_df = mes_df.sort_values("Data", ascending=False).reset_index(drop=True)
 
     total_ab_mes = int(mes_df["Abertas"].sum())
@@ -878,7 +882,6 @@ else:
     display["Abertas"] = display["Abertas"].apply(br_int)
 
     def highlight_row(row):
-        # usa o Percentual_num da mes_df (mesma ordem da display)
         v = float(mes_df.loc[row.name, "Percentual_num"])
         if v >= ALVO_CONVERSAO:
             return ["background-color: rgba(0,122,255,0.10); font-weight: 800;"] * len(row)
@@ -898,7 +901,6 @@ if df_c6 is None:
 else:
     tabs = st.tabs(["Aberturas", "Fundações (por dia)", "Pix + Status", "Qualificação + BR + Valores"])
 
-    # Aberturas
     with tabs[0]:
         st.markdown("#### Contas abertas por dia (arquivo)")
         por_dia = (
@@ -912,7 +914,6 @@ else:
         st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
         st.dataframe(por_dia, use_container_width=True, hide_index=True)
 
-    # Fundações
     with tabs[1]:
         st.markdown("#### Fundação (mês/ano) dentro do dia de abertura")
         temp = df_c6[[COL_ABERTURA, COL_FUNDACAO]].dropna().copy()
@@ -944,7 +945,6 @@ else:
             st.dataframe(dia_df_show, use_container_width=True, hide_index=True)
             st.bar_chart(dia_df.set_index("Mês fundação")["Quantidade"])
 
-    # Pix + Status
     with tabs[2]:
         st.markdown("#### Pix")
         pix_com, pix_sem, pix_por_chave = pix_summary(df_c6)
@@ -964,7 +964,6 @@ else:
         st.dataframe(status, use_container_width=True, hide_index=True)
         st.bar_chart(status.set_index("Status")["Quantidade"])
 
-    # Qualificação + BR + Valores
     with tabs[3]:
         st.markdown("#### Qualificação (nível vencedor, critério vencedor e BR)")
 
@@ -973,7 +972,6 @@ else:
         dfq["_qualificada"] = dfq["_nivel"].apply(lambda x: "Sim" if x >= 1 else "Não")
         dfq["_criterio_vencedor"] = normalize_str(dfq.get(COL_CRIT, pd.Series([""] * len(dfq)))).apply(criterio_vencedor)
 
-        # BR
         brs = normalize_str(dfq.get(COL_BR, pd.Series([""] * len(dfq)))).str.upper().replace("", "SEM BR")
         br_counts = brs.value_counts().rename_axis("BR").reset_index(name="Quantidade")
 
@@ -995,7 +993,6 @@ else:
             k4.metric("Nível 3", br_int(n3))
             k5.metric("Nível 4", br_int(n4))
 
-        # Valores do mês atual (se existir no histórico)
         saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
         if saved:
             mes_atual = sorted(saved.keys(), key=month_key_str)[-1]
@@ -1026,7 +1023,6 @@ else:
         else:
             st.info("Ainda não há mês atual calculado. Importe arquivos diários (Jan/26 em diante).")
 
-        # Lista de qualificadas (arquivo)
         st.markdown("#### Lista de qualificadas (arquivo)")
         if COL_CNPJ not in dfq.columns:
             cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
