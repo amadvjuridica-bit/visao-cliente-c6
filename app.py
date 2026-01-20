@@ -76,6 +76,9 @@ COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"
 # Leads (cadastros) – coluna M (13ª col) como fallback
 COL_LEADS_DATA = "DATA_CADASTRO"
 
+# Data base (mês/dia do relatório)
+COL_DATA_BASE = "DATA_BASE"
+
 # Possíveis colunas para detectar o "mês do relatório" (mês do arquivo)
 POSSIVEIS_COL_DATA_BASE = [
     "DATA_BASE", "DT_BASE", "DATA_REFERENCIA", "DT_REFERENCIA",
@@ -111,13 +114,16 @@ HIST_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "pago_max_por_cnpj.json")         # 
 HIST_RESUMO_MENSAL = os.path.join(DATA_DIR, "resumo_mensal.json")             # mm/aaaa -> resumo calculado
 HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")         # mm/aaaa -> estado (saldo/pix/domicilio/qualificadas)
 
+# ✅ NOVO: histórico comparativo diário (por DATA_BASE)
+HIST_COMPARE_DAILY = os.path.join(DATA_DIR, "hist_comparativo_diario.json")   # dd/mm/aaaa -> métricas do dia
+
 
 # =========================================================
 # HELPERS
 # =========================================================
 def safe_json_load(path: str, default):
     """
-    ✅ Alterado: se existir st.secrets["firebase"], lê do Firestore.
+    ✅ Se existir st.secrets["firebase"], lê do Firestore.
     Caso contrário, mantém comportamento local.
     """
     if "firebase" in st.secrets:
@@ -131,7 +137,7 @@ def safe_json_load(path: str, default):
 
 def safe_json_save(path: str, obj):
     """
-    ✅ Alterado: se existir st.secrets["firebase"], salva no Firestore.
+    ✅ Se existir st.secrets["firebase"], salva no Firestore.
     Caso contrário, mantém comportamento local.
     """
     if "firebase" in st.secrets:
@@ -199,6 +205,34 @@ def contains_c6(x) -> bool:
 
 def hide_index_df(df: pd.DataFrame) -> pd.DataFrame:
     return df.reset_index(drop=True)
+
+
+# =========================================================
+# ✅ NOVO: DETECTAR DATA_BASE (DIA) DO ARQUIVO
+# =========================================================
+def detect_report_day_from_df(df: pd.DataFrame) -> Optional[dt.date]:
+    """
+    Prioridade:
+      1) DATA_BASE (ou equivalentes)
+      2) fallback: maior data em DT_CONTA_CRIADA (se existir)
+    Retorna dt.date (dia).
+    """
+    for c in POSSIVEIS_COL_DATA_BASE:
+        if c in df.columns:
+            d = to_date_series(df[c]).dropna()
+            if len(d) > 0:
+                # se tiver um dia predominante, usa a moda
+                m = d.mode()
+                if len(m) > 0:
+                    return m.iloc[0]
+                return max(d)
+
+    if COL_ABERTURA in df.columns:
+        d = to_date_series(df[COL_ABERTURA]).dropna()
+        if len(d) > 0:
+            return max(d)
+
+    return None
 
 
 # =========================================================
@@ -329,6 +363,69 @@ def hist_to_df(path: str, colname: str) -> pd.DataFrame:
         rows.append((dd, int(v)))
     rows.sort(key=lambda x: x[0])
     return pd.DataFrame(rows, columns=["Data", colname])
+
+
+# =========================================================
+# ✅ NOVO: HISTÓRICO COMPARATIVO (UPsert + TABELA COM Δ)
+# =========================================================
+def compare_daily_upsert(day_key: str, payload: dict):
+    base = safe_json_load(HIST_COMPARE_DAILY, default={})
+    base[day_key] = payload
+    safe_json_save(HIST_COMPARE_DAILY, base)
+
+def compare_daily_df() -> pd.DataFrame:
+    base = safe_json_load(HIST_COMPARE_DAILY, default={})
+    rows = []
+    for k, v in base.items():
+        try:
+            d = dt.datetime.strptime(k, "%d/%m/%Y").date()
+        except Exception:
+            continue
+        if d < HIST_START:
+            continue
+        v = v or {}
+        rows.append({
+            "_date": d,
+            "Data base": k,
+            "Contas (C6) total": int(v.get("c6_total", 0)),
+            "Leads total": int(v.get("leads_total", 0)),
+            "Qualificadas total": int(v.get("qual_total", 0)),
+            "Chaves Pix total": int(v.get("pix_total", 0)),
+            "Base (A receber no mês)": float(v.get("base_receber_mes", 0.0)),
+            "_mes_ref": v.get("mes_ref", "")
+        })
+
+    if not rows:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows).sort_values("_date", ascending=True).reset_index(drop=True)
+
+    # diferenças vs dia anterior
+    for col in ["Contas (C6) total", "Leads total", "Qualificadas total", "Chaves Pix total", "Base (A receber no mês)"]:
+        df[f"Δ {col}"] = df[col].diff().fillna(0)
+
+    # exibição final (mais recente primeiro)
+    df = df.sort_values("_date", ascending=False).reset_index(drop=True)
+
+    # formatação amigável
+    df["Base (A receber no mês)"] = df["Base (A receber no mês)"].apply(br_money)
+    df["Δ Base (A receber no mês)"] = df["Δ Base (A receber no mês)"].apply(br_money)
+
+    for c in ["Contas (C6) total", "Leads total", "Qualificadas total", "Chaves Pix total",
+              "Δ Contas (C6) total", "Δ Leads total", "Δ Qualificadas total", "Δ Chaves Pix total"]:
+        df[c] = df[c].apply(br_int)
+
+    # mantém colunas limpas
+    df = df[[
+        "Data base", "_mes_ref",
+        "Contas (C6) total", "Δ Contas (C6) total",
+        "Leads total", "Δ Leads total",
+        "Qualificadas total", "Δ Qualificadas total",
+        "Chaves Pix total", "Δ Chaves Pix total",
+        "Base (A receber no mês)", "Δ Base (A receber no mês)"
+    ]].rename(columns={"_mes_ref": "Mês ref (remuneração)"})
+
+    return df
 
 
 # =========================================================
@@ -612,7 +709,8 @@ def show_logo_and_title():
 def reset_all_data():
     for p in [
         HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
-        HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL
+        HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL,
+        HIST_COMPARE_DAILY,  # ✅ novo
     ]:
         # ✅ apaga também do Firestore
         if "firebase" in st.secrets:
@@ -670,6 +768,14 @@ if up_monthly and len(up_monthly) > 0:
 # =========================================================
 df_c6 = None
 df_leads = None
+
+# métricas para o comparativo (somente se tiver importações)
+_cmp_day: Optional[dt.date] = None
+_cmp_mes_ref: str = ""
+_cmp_c6_total = None
+_cmp_leads_total = None
+_cmp_qual_total = None
+_cmp_pix_total = None
 
 if up_c6:
     df_c6 = read_excel_any(up_c6.getvalue())
@@ -734,6 +840,21 @@ if up_c6:
         }
         safe_json_save(HIST_SNAPSHOT_MENSAL, snap)
 
+    # ✅ métricas do comparativo (C6)
+    _cmp_day = detect_report_day_from_df(df_c6)
+    _cmp_mes_ref = fmt_month(mes_rel) if mes_rel else ""
+    _cmp_c6_total = int(len(df_c6))
+
+    dfq_tmp = df_c6.copy()
+    dfq_tmp["_nivel"] = parse_level(dfq_tmp)
+    _cmp_qual_total = int((dfq_tmp["_nivel"] >= 1).sum())
+
+    # Pix total (CHAVES_PIX_FORTE preenchida)
+    s_pix = normalize_str(df_c6.get(COL_PIX, pd.Series([""] * len(df_c6)))).str.upper()
+    s_pix = s_pix.str.replace("'", "", regex=False)
+    has_pix = ~s_pix.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
+    _cmp_pix_total = int(has_pix.sum())
+
 if up_leads:
     df_leads = read_excel_any(up_leads.getvalue())
 
@@ -763,6 +884,11 @@ if up_leads:
     if leads_counts:
         daily_upsert_many(HIST_LEADS_DAILY, leads_counts)
 
+    # ✅ métricas do comparativo (Leads)
+    _cmp_leads_total = int(len(df_leads))
+    if _cmp_day is None:
+        _cmp_day = detect_report_day_from_df(df_leads)
+
 st.divider()
 
 # =========================================================
@@ -770,6 +896,39 @@ st.divider()
 # =========================================================
 _ = recompute_incremental()
 saved_resumo = safe_json_load(HIST_RESUMO_MENSAL, default={})
+
+# =========================================================
+# ✅ NOVO: SALVAR SNAPSHOT COMPARATIVO DO DIA (por DATA_BASE)
+# =========================================================
+if _cmp_day and _cmp_day >= HIST_START:
+    day_key = fmt_date(_cmp_day)
+
+    base_receber_mes = 0.0
+    if _cmp_mes_ref and saved_resumo:
+        base_receber_mes = float(saved_resumo.get(_cmp_mes_ref, {}).get("receber_mes", 0.0))
+
+    compare_daily_upsert(day_key, {
+        "mes_ref": _cmp_mes_ref,
+        "c6_total": int(_cmp_c6_total or 0),
+        "leads_total": int(_cmp_leads_total or 0),
+        "qual_total": int(_cmp_qual_total or 0),
+        "pix_total": int(_cmp_pix_total or 0),
+        "base_receber_mes": float(base_receber_mes),
+    })
+
+# =========================================================
+# ✅ NOVO: TABELA COMPARATIVA (diferenças dia a dia)
+# Melhor lugar: logo após recompute (já temos receita calculada)
+# =========================================================
+st.subheader("Comparativo diário (diferenças vs dia anterior)")
+
+df_cmp = compare_daily_df()
+if df_cmp.empty:
+    st.info("Importe C6 e/ou Leads com DATA_BASE para começar o comparativo diário.")
+else:
+    st.dataframe(df_cmp, use_container_width=True, hide_index=True)
+
+st.divider()
 
 # =========================================================
 # RESUMO EXECUTIVO (MÊS) + % GERAL DO MÊS
@@ -973,7 +1132,7 @@ else:
     with tabs[0]:
         st.markdown("#### Contas abertas por dia (arquivo)")
 
-        # ✅ Conta por data e ordena pela DATA REAL (mais recente -> mais antigo)
+        # Conta por data e ordena pela DATA REAL (mais recente -> mais antigo)
         por_dia = (
             pd.Series(df_c6[COL_ABERTURA])
             .dropna()
