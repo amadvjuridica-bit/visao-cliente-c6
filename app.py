@@ -520,7 +520,7 @@ def apply_theme():
 
 
 def show_logo_and_title():
-    here = os.path.dirname(__file__)
+    here = os.path.dirname(_file_)
     logo_path = os.path.join(here, "LOGO CORRETA.png")
 
     c1, c2 = st.columns([1, 6], vertical_alignment="center")
@@ -904,15 +904,21 @@ else:
     with tabs[0]:
         st.markdown("#### Contas abertas por dia (arquivo)")
         por_dia = (
-            pd.Series(df_c6[COL_ABERTURA]).dropna().value_counts().sort_index()
+            pd.Series(df_c6[COL_ABERTURA]).dropna()
+            .value_counts()
             .rename_axis("Dia")
             .reset_index(name="Contas abertas")
         )
-        por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
-        por_dia = por_dia.sort_values("Dia", ascending=False)
+
+        # ✅ AJUSTE: ordenar por data real (mais recente -> mais antigo)
+        por_dia["Dia"] = pd.to_datetime(por_dia["Dia"], errors="coerce").dt.date
+        por_dia = por_dia.dropna(subset=["Dia"]).sort_values("Dia", ascending=False).reset_index(drop=True)
 
         st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
-        st.dataframe(por_dia, use_container_width=True, hide_index=True)
+
+        por_dia_show = por_dia.copy()
+        por_dia_show["Dia"] = por_dia_show["Dia"].apply(fmt_date)
+        st.dataframe(por_dia_show, use_container_width=True, hide_index=True)
 
     with tabs[1]:
         st.markdown("#### Fundação (mês/ano) dentro do dia de abertura")
@@ -940,7 +946,7 @@ else:
             dia_df = pivot[pivot["Dia"] == dia_sel].copy()
             total_dia = int(dia_df["Quantidade"].sum())
 
-            st.markdown(f"**No dia {dia_sel_lbl} foram abertas {br_int(total_dia)} empresas.**")
+            st.markdown(f"*No dia {dia_sel_lbl} foram abertas {br_int(total_dia)} empresas.*")
             dia_df_show = dia_df[["Mês fundação", "Quantidade"]].copy()
             st.dataframe(dia_df_show, use_container_width=True, hide_index=True)
             st.bar_chart(dia_df.set_index("Mês fundação")["Quantidade"])
@@ -977,7 +983,7 @@ else:
 
         c1, c2 = st.columns([2, 3])
         with c1:
-            st.markdown("**BR (M0/M1/M2)**")
+            st.markdown("*BR (M0/M1/M2)*")
             st.dataframe(br_counts, use_container_width=True, hide_index=True)
         with c2:
             total_qual = int((dfq["_nivel"] >= 1).sum())
