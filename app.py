@@ -30,7 +30,6 @@ def _get_fs_db():
     return firestore.client()
 
 def _fs_doc_id_from_path(path: str) -> str:
-    # usa o nome do arquivo como chave (ex.: hist_aberturas_diario.json)
     return os.path.basename(path)
 
 def _fs_load_payload(doc_id: str, default):
@@ -118,7 +117,7 @@ HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")         # 
 # =========================================================
 def safe_json_load(path: str, default):
     """
-    ✅ ALTERADO: se existir st.secrets["firebase"], lê do Firestore.
+    ✅ Alterado: se existir st.secrets["firebase"], lê do Firestore.
     Caso contrário, mantém comportamento local.
     """
     if "firebase" in st.secrets:
@@ -132,7 +131,7 @@ def safe_json_load(path: str, default):
 
 def safe_json_save(path: str, obj):
     """
-    ✅ ALTERADO: se existir st.secrets["firebase"], salva no Firestore.
+    ✅ Alterado: se existir st.secrets["firebase"], salva no Firestore.
     Caso contrário, mantém comportamento local.
     """
     if "firebase" in st.secrets:
@@ -584,7 +583,7 @@ def apply_theme():
 
 
 def show_logo_and_title():
-    # ✅ FIX obrigatório (Streamlit Cloud não garante __file__)
+    # ✅ FIX Streamlit Cloud: __file__ pode não existir
     here = os.getcwd()
     logo_path = os.path.join(here, "LOGO CORRETA.png")
 
@@ -593,7 +592,7 @@ def show_logo_and_title():
         if os.path.exists(logo_path):
             st.image(logo_path, width=160)
         else:
-            st.warning("Logo não encontrada. Coloque 'LOGO CORRETA.png' na raiz do app.")
+            st.warning("Logo não encontrada. Coloque 'LOGO CORRETA.png' na raiz do projeto.")
     with c2:
         st.markdown(
             """
@@ -615,7 +614,7 @@ def reset_all_data():
         HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
         HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL
     ]:
-        # ✅ apaga também do Firestore (se estiver usando)
+        # ✅ apaga também do Firestore
         if "firebase" in st.secrets:
             _fs_delete_doc(_fs_doc_id_from_path(p))
 
@@ -972,26 +971,52 @@ else:
     tabs = st.tabs(["Aberturas", "Fundações (por dia)", "Pix + Status", "Qualificação + BR + Valores"])
 
     with tabs[0]:
-    st.markdown("#### Contas abertas por dia (arquivo)")
+        st.markdown("#### Contas abertas por dia (arquivo)")
 
-    # conta por data (dt.date) e ordena do mais recente para o mais antigo
-    por_dia = (
-        pd.Series(df_c6[COL_ABERTURA])
-        .dropna()
-        .value_counts()
-        .rename_axis("Dia")
-        .reset_index(name="Contas abertas")
-    )
+        # ✅ Conta por data e ordena pela DATA REAL (mais recente -> mais antigo)
+        por_dia = (
+            pd.Series(df_c6[COL_ABERTURA])
+            .dropna()
+            .value_counts()
+            .rename_axis("Dia")
+            .reset_index(name="Contas abertas")
+        )
+        por_dia = por_dia.sort_values("Dia", ascending=False).reset_index(drop=True)
+        por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
 
-    # garante que "Dia" é date e ordena DESC por data real
-    por_dia["Dia"] = pd.to_datetime(por_dia["Dia"], errors="coerce").dt.date
-    por_dia = por_dia.dropna(subset=["Dia"]).sort_values("Dia", ascending=False).reset_index(drop=True)
+        st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
+        st.dataframe(por_dia, use_container_width=True, hide_index=True)
 
-    # só agora formata para exibir
-    por_dia["Dia"] = por_dia["Dia"].apply(fmt_date)
+    with tabs[1]:
+        st.markdown("#### Fundação (mês/ano) dentro do dia de abertura")
+        temp = df_c6[[COL_ABERTURA, COL_FUNDACAO]].dropna().copy()
+        if temp.empty:
+            st.info("Sem dados de fundação no arquivo.")
+        else:
+            temp["Dia"] = temp[COL_ABERTURA]
+            temp["Mês fundação"] = temp[COL_FUNDACAO].apply(
+                lambda d: f"{d.month:02d}/{d.year}" if isinstance(d, dt.date) else ""
+            )
 
-    st.bar_chart(por_dia.set_index("Dia")["Contas abertas"])
-    st.dataframe(por_dia, use_container_width=True, hide_index=True)
+            pivot = (
+                temp.groupby(["Dia", "Mês fundação"])
+                .size()
+                .reset_index(name="Quantidade")
+                .sort_values(["Dia", "Mês fundação"])
+            )
+
+            dias = sorted(temp[COL_ABERTURA].unique())
+            dias_lbl = [fmt_date(d) for d in dias]
+            dia_sel_lbl = st.selectbox("Selecione o dia de abertura", dias_lbl, index=len(dias_lbl) - 1)
+            dia_sel = dias[dias_lbl.index(dia_sel_lbl)]
+
+            dia_df = pivot[pivot["Dia"] == dia_sel].copy()
+            total_dia = int(dia_df["Quantidade"].sum())
+
+            st.markdown(f"**No dia {dia_sel_lbl} foram abertas {br_int(total_dia)} empresas.**")
+            dia_df_show = dia_df[["Mês fundação", "Quantidade"]].copy()
+            st.dataframe(dia_df_show, use_container_width=True, hide_index=True)
+            st.bar_chart(dia_df.set_index("Mês fundação")["Quantidade"])
 
     with tabs[2]:
         st.markdown("#### Pix")
