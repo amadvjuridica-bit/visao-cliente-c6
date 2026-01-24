@@ -67,6 +67,7 @@ COL_ABERTURA = "DT_CONTA_CRIADA"
 COL_FUNDACAO = "DT_FUNDACAO_EMPRESA"
 COL_PIX = "CHAVES_PIX_FORTE"
 COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"
+COL_CASHIN_MTD = "VL_CASH_IN_MTD"  # ✅ NOVO: usado como "Saldo total (snapshot)"
 COL_STATUS = "STATUS_CC"
 COL_DOMICILIO = "BANCO_DOMICILIO"
 COL_BY = "FL_QUALIFICADO_COMISS"
@@ -390,6 +391,7 @@ def compare_daily_df() -> pd.DataFrame:
             "Leads total": int(v.get("leads_total", 0)),
             "Qualificadas total": int(v.get("qual_total", 0)),
             "Chaves Pix total": int(v.get("pix_total", 0)),
+            "Saldo total (VL_CASH_IN_MTD)": float(v.get("cashin_total", 0.0)),  # ✅ NOVO
             "Base (A receber no mês)": float(v.get("base_receber_mes", 0.0)),
             "_mes_ref": v.get("mes_ref", "")
         })
@@ -399,16 +401,34 @@ def compare_daily_df() -> pd.DataFrame:
 
     df = pd.DataFrame(rows).sort_values("_date", ascending=True).reset_index(drop=True)
 
-    for col in ["Contas (C6) total", "Leads total", "Qualificadas total", "Chaves Pix total", "Base (A receber no mês)"]:
+    for col in [
+        "Contas (C6) total",
+        "Leads total",
+        "Qualificadas total",
+        "Chaves Pix total",
+        "Saldo total (VL_CASH_IN_MTD)",  # ✅ NOVO
+        "Base (A receber no mês)",
+    ]:
         df[f"Δ {col}"] = df[col].diff().fillna(0)
 
     df = df.sort_values("_date", ascending=False).reset_index(drop=True)
 
+    df["Saldo total (VL_CASH_IN_MTD)"] = df["Saldo total (VL_CASH_IN_MTD)"].apply(br_money)
+    df["Δ Saldo total (VL_CASH_IN_MTD)"] = df["Δ Saldo total (VL_CASH_IN_MTD)"].apply(br_money)
+
     df["Base (A receber no mês)"] = df["Base (A receber no mês)"].apply(br_money)
     df["Δ Base (A receber no mês)"] = df["Δ Base (A receber no mês)"].apply(br_money)
 
-    for c in ["Contas (C6) total", "Leads total", "Qualificadas total", "Chaves Pix total",
-              "Δ Contas (C6) total", "Δ Leads total", "Δ Qualificadas total", "Δ Chaves Pix total"]:
+    for c in [
+        "Contas (C6) total",
+        "Leads total",
+        "Qualificadas total",
+        "Chaves Pix total",
+        "Δ Contas (C6) total",
+        "Δ Leads total",
+        "Δ Qualificadas total",
+        "Δ Chaves Pix total",
+    ]:
         df[c] = df[c].apply(br_int)
 
     df = df[[
@@ -417,6 +437,7 @@ def compare_daily_df() -> pd.DataFrame:
         "Leads total", "Δ Leads total",
         "Qualificadas total", "Δ Qualificadas total",
         "Chaves Pix total", "Δ Chaves Pix total",
+        "Saldo total (VL_CASH_IN_MTD)", "Δ Saldo total (VL_CASH_IN_MTD)",  # ✅ NOVO
         "Base (A receber no mês)", "Δ Base (A receber no mês)"
     ]].rename(columns={"_mes_ref": "Mês ref (remuneração)"})
 
@@ -761,6 +782,7 @@ _cmp_c6_total = None
 _cmp_leads_total = None
 _cmp_qual_total = None
 _cmp_pix_total = None
+_cmp_cashin_total = None  # ✅ NOVO
 
 if up_c6:
     df_c6 = read_excel_any(up_c6.getvalue())
@@ -771,6 +793,8 @@ if up_c6:
         df_c6[COL_FUNDACAO] = pd.NA
     if COL_SALDO not in df_c6.columns:
         df_c6[COL_SALDO] = 0.0
+    if COL_CASHIN_MTD not in df_c6.columns:  # ✅ NOVO
+        df_c6[COL_CASHIN_MTD] = 0.0
     if COL_BR not in df_c6.columns:
         df_c6[COL_BR] = ""
     if COL_CRIT not in df_c6.columns:
@@ -781,6 +805,7 @@ if up_c6:
     df_c6[COL_ABERTURA] = to_date_series(df_c6[COL_ABERTURA])
     df_c6[COL_FUNDACAO] = to_date_series(df_c6[COL_FUNDACAO])
     df_c6[COL_SALDO] = pd.to_numeric(df_c6[COL_SALDO], errors="coerce").fillna(0.0)
+    df_c6[COL_CASHIN_MTD] = pd.to_numeric(df_c6[COL_CASHIN_MTD], errors="coerce").fillna(0.0)  # ✅ NOVO
     df_c6[COL_BR] = normalize_str(df_c6[COL_BR]).str.upper()
     df_c6[COL_CRIT] = normalize_str(df_c6[COL_CRIT])
 
@@ -808,7 +833,9 @@ if up_c6:
         pix_com, pix_sem, _ = pix_summary(df_tmp)
         domicilio_c6 = int(df_tmp.get(COL_DOMICILIO, pd.Series([""] * len(df_tmp))).apply(contains_c6).sum())
         qualificadas = int((df_tmp["_nivel"] >= 1).sum())
-        saldo_total = float(df_tmp[COL_SALDO].sum())
+
+        # ✅ ALTERAÇÃO 1: snapshot "Saldo total" = soma VL_CASH_IN_MTD
+        saldo_total = float(df_tmp[COL_CASHIN_MTD].sum())
 
         snap = safe_json_load(HIST_SNAPSHOT_MENSAL, default={})
         snap[mkey] = {
@@ -833,6 +860,9 @@ if up_c6:
     s_pix = s_pix.str.replace("'", "", regex=False)
     has_pix = ~s_pix.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
     _cmp_pix_total = int(has_pix.sum())
+
+    # ✅ NOVO: saldo diário (VL_CASH_IN_MTD)
+    _cmp_cashin_total = float(df_c6[COL_CASHIN_MTD].sum())
 
 if up_leads:
     df_leads = read_excel_any(up_leads.getvalue())
@@ -889,6 +919,7 @@ if _cmp_day and _cmp_day >= HIST_START:
         "leads_total": int(_cmp_leads_total or 0),
         "qual_total": int(_cmp_qual_total or 0),
         "pix_total": int(_cmp_pix_total or 0),
+        "cashin_total": float(_cmp_cashin_total or 0.0),  # ✅ ALTERAÇÃO 2: salva saldo diário
         "base_receber_mes": float(base_receber_mes),
     })
 
@@ -946,6 +977,7 @@ else:
     c4.metric("% geral (mês)", f"{str(round(perc_mes*100,1)).replace('.',',')}%")
 
     c5, c6, c7, c8 = st.columns(4)
+    # ✅ ALTERAÇÃO 1 (reflete aqui): usa o snapshot já baseado em VL_CASH_IN_MTD
     c5.metric("Saldo total (snapshot)", br_money(float(s.get("saldo_total", 0.0))))
     c6.metric("Pix (snapshot)", f'{br_int(int(s.get("pix_com",0)))} com | {br_int(int(s.get("pix_sem",0)))} sem')
     c7.metric("Domicílio C6 (snapshot)", br_int(int(s.get("domicilio_c6", 0))))
@@ -1230,15 +1262,11 @@ else:
             st.info("Ainda não há mês atual calculado. Importe arquivos diários (Jan/26 em diante).")
 
         # =========================================================
-        # ✅ AJUSTE PEDIDO: Lista de qualificadas por CNPJ com cheio/ja pago/a receber
+        # ✅ AJUSTE PEDIDO (mantido igual)
         # =========================================================
         st.markdown("#### Lista de qualificadas (arquivo) — valores por CNPJ (cheio / já pago / a receber)")
 
         def _compute_paid_max_before_month(target_mkey: str) -> Dict[str, float]:
-            """
-            Calcula quanto cada CNPJ já recebeu (valor cheio máximo) APENAS ATÉ o mês anterior ao target_mkey.
-            Usa a mesma lógica do recompute_incremental, mas para antes do mês alvo.
-            """
             month_levels = safe_json_load(HIST_MONTH_LEVELS, default={})
             months_sorted = sorted(list(month_levels.keys()), key=month_key_str)
 
