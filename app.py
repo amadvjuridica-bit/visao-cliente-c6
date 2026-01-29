@@ -390,6 +390,9 @@ def compare_daily_df() -> pd.DataFrame:
             "Contas (C6) total": int(v.get("c6_total", 0)),
             "Leads total": int(v.get("leads_total", 0)),
             "Qualificadas total": int(v.get("qual_total", 0)),
+            "Qualificadas M0": int(v.get("qual_m0", 0)),  # ✅ NOVO
+            "Qualificadas M1": int(v.get("qual_m1", 0)),  # ✅ NOVO
+            "Qualificadas M2": int(v.get("qual_m2", 0)),  # ✅ NOVO
             "Chaves Pix total": int(v.get("pix_total", 0)),
             "Saldo total (VL_CASH_IN_MTD)": float(v.get("cashin_total", 0.0)),  # ✅ NOVO
             "Base (A receber no mês)": float(v.get("base_receber_mes", 0.0)),
@@ -405,6 +408,9 @@ def compare_daily_df() -> pd.DataFrame:
         "Contas (C6) total",
         "Leads total",
         "Qualificadas total",
+        "Qualificadas M0",  # ✅ NOVO
+        "Qualificadas M1",  # ✅ NOVO
+        "Qualificadas M2",  # ✅ NOVO
         "Chaves Pix total",
         "Saldo total (VL_CASH_IN_MTD)",  # ✅ NOVO
         "Base (A receber no mês)",
@@ -423,10 +429,16 @@ def compare_daily_df() -> pd.DataFrame:
         "Contas (C6) total",
         "Leads total",
         "Qualificadas total",
+        "Qualificadas M0",  # ✅ NOVO
+        "Qualificadas M1",  # ✅ NOVO
+        "Qualificadas M2",  # ✅ NOVO
         "Chaves Pix total",
         "Δ Contas (C6) total",
         "Δ Leads total",
         "Δ Qualificadas total",
+        "Δ Qualificadas M0",  # ✅ NOVO
+        "Δ Qualificadas M1",  # ✅ NOVO
+        "Δ Qualificadas M2",  # ✅ NOVO
         "Δ Chaves Pix total",
     ]:
         df[c] = df[c].apply(br_int)
@@ -436,6 +448,9 @@ def compare_daily_df() -> pd.DataFrame:
         "Contas (C6) total", "Δ Contas (C6) total",
         "Leads total", "Δ Leads total",
         "Qualificadas total", "Δ Qualificadas total",
+        "Qualificadas M0", "Δ Qualificadas M0",  # ✅ NOVO
+        "Qualificadas M1", "Δ Qualificadas M1",  # ✅ NOVO
+        "Qualificadas M2", "Δ Qualificadas M2",  # ✅ NOVO
         "Chaves Pix total", "Δ Chaves Pix total",
         "Saldo total (VL_CASH_IN_MTD)", "Δ Saldo total (VL_CASH_IN_MTD)",  # ✅ NOVO
         "Base (A receber no mês)", "Δ Base (A receber no mês)"
@@ -781,6 +796,9 @@ _cmp_mes_ref: str = ""
 _cmp_c6_total = None
 _cmp_leads_total = None
 _cmp_qual_total = None
+_cmp_qual_m0 = None  # ✅ NOVO
+_cmp_qual_m1 = None  # ✅ NOVO
+_cmp_qual_m2 = None  # ✅ NOVO
 _cmp_pix_total = None
 _cmp_cashin_total = None  # ✅ NOVO
 
@@ -856,6 +874,13 @@ if up_c6:
     dfq_tmp["_nivel"] = parse_level(dfq_tmp)
     _cmp_qual_total = int((dfq_tmp["_nivel"] >= 1).sum())
 
+    # ✅ NOVO: qualificadas por BR (M0/M1/M2) e suas diferenças dia a dia no comparativo
+    br_tmp = normalize_str(dfq_tmp.get(COL_BR, pd.Series([""] * len(dfq_tmp)))).str.upper()
+    qmask = dfq_tmp["_nivel"] >= 1
+    _cmp_qual_m0 = int((qmask & (br_tmp == "M0")).sum())
+    _cmp_qual_m1 = int((qmask & (br_tmp == "M1")).sum())
+    _cmp_qual_m2 = int((qmask & (br_tmp == "M2")).sum())
+
     s_pix = normalize_str(df_c6.get(COL_PIX, pd.Series([""] * len(df_c6)))).str.upper()
     s_pix = s_pix.str.replace("'", "", regex=False)
     has_pix = ~s_pix.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
@@ -918,6 +943,9 @@ if _cmp_day and _cmp_day >= HIST_START:
         "c6_total": int(_cmp_c6_total or 0),
         "leads_total": int(_cmp_leads_total or 0),
         "qual_total": int(_cmp_qual_total or 0),
+        "qual_m0": int(_cmp_qual_m0 or 0),  # ✅ NOVO
+        "qual_m1": int(_cmp_qual_m1 or 0),  # ✅ NOVO
+        "qual_m2": int(_cmp_qual_m2 or 0),  # ✅ NOVO
         "pix_total": int(_cmp_pix_total or 0),
         "cashin_total": float(_cmp_cashin_total or 0.0),  # ✅ ALTERAÇÃO 2: salva saldo diário
         "base_receber_mes": float(base_receber_mes),
