@@ -373,6 +373,7 @@ def compare_daily_upsert(day_key: str, payload: dict):
     base[day_key] = payload
     safe_json_save(HIST_COMPARE_DAILY, base)
 
+
 def compare_daily_df() -> pd.DataFrame:
     base = safe_json_load(HIST_COMPARE_DAILY, default={})
     rows = []
@@ -390,11 +391,14 @@ def compare_daily_df() -> pd.DataFrame:
             "Contas (C6) total": int(v.get("c6_total", 0)),
             "Leads total": int(v.get("leads_total", 0)),
             "Qualificadas total": int(v.get("qual_total", 0)),
-            "Qualificadas M0": int(v.get("qual_m0", 0)),  # ✅ NOVO
-            "Qualificadas M1": int(v.get("qual_m1", 0)),  # ✅ NOVO
-            "Qualificadas M2": int(v.get("qual_m2", 0)),  # ✅ NOVO
+
+            # ✅ ACRÉSCIMO: qualificadas por BR (M0/M1/M2)
+            "Qualificadas M0": int(v.get("qual_m0", 0)),
+            "Qualificadas M1": int(v.get("qual_m1", 0)),
+            "Qualificadas M2": int(v.get("qual_m2", 0)),
+
             "Chaves Pix total": int(v.get("pix_total", 0)),
-            "Saldo total (VL_CASH_IN_MTD)": float(v.get("cashin_total", 0.0)),  # ✅ NOVO
+            "Saldo total (VL_CASH_IN_MTD)": float(v.get("cashin_total", 0.0)),
             "Base (A receber no mês)": float(v.get("base_receber_mes", 0.0)),
             "_mes_ref": v.get("mes_ref", "")
         })
@@ -404,15 +408,16 @@ def compare_daily_df() -> pd.DataFrame:
 
     df = pd.DataFrame(rows).sort_values("_date", ascending=True).reset_index(drop=True)
 
+    # ✅ mantém TODOS os deltas que já existiam + acrescenta os 3 novos
     for col in [
         "Contas (C6) total",
         "Leads total",
         "Qualificadas total",
-        "Qualificadas M0",  # ✅ NOVO
-        "Qualificadas M1",  # ✅ NOVO
-        "Qualificadas M2",  # ✅ NOVO
+        "Qualificadas M0",
+        "Qualificadas M1",
+        "Qualificadas M2",
         "Chaves Pix total",
-        "Saldo total (VL_CASH_IN_MTD)",  # ✅ NOVO
+        "Saldo total (VL_CASH_IN_MTD)",
         "Base (A receber no mês)",
     ]:
         df[f"Δ {col}"] = df[col].diff().fillna(0)
@@ -429,30 +434,34 @@ def compare_daily_df() -> pd.DataFrame:
         "Contas (C6) total",
         "Leads total",
         "Qualificadas total",
-        "Qualificadas M0",  # ✅ NOVO
-        "Qualificadas M1",  # ✅ NOVO
-        "Qualificadas M2",  # ✅ NOVO
+        "Qualificadas M0",
+        "Qualificadas M1",
+        "Qualificadas M2",
         "Chaves Pix total",
         "Δ Contas (C6) total",
         "Δ Leads total",
         "Δ Qualificadas total",
-        "Δ Qualificadas M0",  # ✅ NOVO
-        "Δ Qualificadas M1",  # ✅ NOVO
-        "Δ Qualificadas M2",  # ✅ NOVO
+        "Δ Qualificadas M0",
+        "Δ Qualificadas M1",
+        "Δ Qualificadas M2",
         "Δ Chaves Pix total",
     ]:
         df[c] = df[c].apply(br_int)
 
+    # ✅ mantém o layout antigo e só encaixa os novos campos
     df = df[[
         "Data base", "_mes_ref",
         "Contas (C6) total", "Δ Contas (C6) total",
         "Leads total", "Δ Leads total",
         "Qualificadas total", "Δ Qualificadas total",
-        "Qualificadas M0", "Δ Qualificadas M0",  # ✅ NOVO
-        "Qualificadas M1", "Δ Qualificadas M1",  # ✅ NOVO
-        "Qualificadas M2", "Δ Qualificadas M2",  # ✅ NOVO
+
+        # ✅ ACRÉSCIMO: M0/M1/M2 + Δ
+        "Qualificadas M0", "Δ Qualificadas M0",
+        "Qualificadas M1", "Δ Qualificadas M1",
+        "Qualificadas M2", "Δ Qualificadas M2",
+
         "Chaves Pix total", "Δ Chaves Pix total",
-        "Saldo total (VL_CASH_IN_MTD)", "Δ Saldo total (VL_CASH_IN_MTD)",  # ✅ NOVO
+        "Saldo total (VL_CASH_IN_MTD)", "Δ Saldo total (VL_CASH_IN_MTD)",
         "Base (A receber no mês)", "Δ Base (A receber no mês)"
     ]].rename(columns={"_mes_ref": "Mês ref (remuneração)"})
 
@@ -796,9 +805,12 @@ _cmp_mes_ref: str = ""
 _cmp_c6_total = None
 _cmp_leads_total = None
 _cmp_qual_total = None
-_cmp_qual_m0 = None  # ✅ NOVO
-_cmp_qual_m1 = None  # ✅ NOVO
-_cmp_qual_m2 = None  # ✅ NOVO
+
+# ✅ ACRÉSCIMO (somente para salvar no comparativo diário):
+_cmp_qual_m0 = None
+_cmp_qual_m1 = None
+_cmp_qual_m2 = None
+
 _cmp_pix_total = None
 _cmp_cashin_total = None  # ✅ NOVO
 
@@ -874,7 +886,7 @@ if up_c6:
     dfq_tmp["_nivel"] = parse_level(dfq_tmp)
     _cmp_qual_total = int((dfq_tmp["_nivel"] >= 1).sum())
 
-    # ✅ NOVO: qualificadas por BR (M0/M1/M2) e suas diferenças dia a dia no comparativo
+    # ✅ ACRÉSCIMO: qualificadas por BR (M0/M1/M2) para o comparativo diário
     br_tmp = normalize_str(dfq_tmp.get(COL_BR, pd.Series([""] * len(dfq_tmp)))).str.upper()
     qmask = dfq_tmp["_nivel"] >= 1
     _cmp_qual_m0 = int((qmask & (br_tmp == "M0")).sum())
@@ -943,9 +955,12 @@ if _cmp_day and _cmp_day >= HIST_START:
         "c6_total": int(_cmp_c6_total or 0),
         "leads_total": int(_cmp_leads_total or 0),
         "qual_total": int(_cmp_qual_total or 0),
-        "qual_m0": int(_cmp_qual_m0 or 0),  # ✅ NOVO
-        "qual_m1": int(_cmp_qual_m1 or 0),  # ✅ NOVO
-        "qual_m2": int(_cmp_qual_m2 or 0),  # ✅ NOVO
+
+        # ✅ ACRÉSCIMO: salva M0/M1/M2 no histórico diário (para calcular Δ)
+        "qual_m0": int(_cmp_qual_m0 or 0),
+        "qual_m1": int(_cmp_qual_m1 or 0),
+        "qual_m2": int(_cmp_qual_m2 or 0),
+
         "pix_total": int(_cmp_pix_total or 0),
         "cashin_total": float(_cmp_cashin_total or 0.0),  # ✅ ALTERAÇÃO 2: salva saldo diário
         "base_receber_mes": float(base_receber_mes),
