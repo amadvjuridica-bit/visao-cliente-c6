@@ -1447,3 +1447,135 @@ else:
     c2.metric("Qualificadas", br_int(int(last["Qualificadas"])))
     c3.metric("Receita cheia", br_money(float(last["Deveria receber (cheio)"])))
     c4.metric("A receber", br_money(float(last["A receber no mês"])))
+# =========================================================
+# 📢 ABA EXTRA — CAMPANHAS META (C6)
+# (BLOCO ISOLADO | NÃO INTERFERE NO APP EXISTENTE)
+# =========================================================
+
+st.divider()
+st.subheader("📢 Campanhas Meta – C6")
+
+with st.expander("Importar arquivos da Meta (CSV ou XLSX)", expanded=True):
+    meta_files = st.file_uploader(
+        "Envie um ou mais arquivos (desde novembro, se quiser)",
+        type=["csv", "xlsx"],
+        accept_multiple_files=True,
+        key="meta_c6_upload"
+    )
+
+def _read_meta_file(f):
+    if f.name.lower().endswith(".csv"):
+        return pd.read_csv(f)
+    return pd.read_excel(f)
+
+if meta_files:
+    dfs_meta = []
+    for f in meta_files:
+        try:
+            dfs_meta.append(_read_meta_file(f))
+        except Exception as e:
+            st.error(f"Erro ao ler {f.name}: {e}")
+
+    if dfs_meta:
+        df_meta = pd.concat(dfs_meta, ignore_index=True)
+
+        # Colunas obrigatórias (somente estas serão usadas)
+        required_cols = [
+            "message_id",
+            "message_date_time",
+            "broadcast_description",
+            "message_status",
+            "contact_id"
+        ]
+
+        missing_cols = [c for c in required_cols if c not in df_meta.columns]
+        if missing_cols:
+            st.error(f"Colunas obrigatórias ausentes: {missing_cols}")
+        else:
+            # Mantém SOMENTE as colunas relevantes
+            df_meta = df_meta[required_cols].copy()
+
+            # Filtro: somente campanhas que contenham "c6" no nome
+            df_meta["broadcast_description"] = df_meta["broadcast_description"].astype(str)
+            df_meta = df_meta[
+                df_meta["broadcast_description"].str.lower().str.contains("c6", na=False)
+            ]
+
+            # Datas
+            df_meta["message_date_time"] = pd.to_datetime(
+                df_meta["message_date_time"], errors="coerce"
+            )
+            df_meta = df_meta.dropna(subset=["message_date_time"])
+
+            if df_meta.empty:
+                st.warning("Nenhum registro com 'c6' encontrado nas campanhas.")
+            else:
+                df_meta["Data"] = df_meta["message_date_time"].dt.date
+                df_meta["Mes"] = df_meta["message_date_time"].dt.to_period("M").astype(str)
+
+                total_regs = len(df_meta)
+                st.success(f"{total_regs:,}".replace(",", ".") + " registros válidos carregados.")
+
+                # Seleção de mês
+                meses = sorted(df_meta["Mes"].unique())
+                mes_sel = st.selectbox("Selecione o mês", meses, index=len(meses) - 1)
+
+                df_mes = df_meta[df_meta["Mes"] == mes_sel].copy()
+
+                # -------------------------------------------------
+                # SINTÉTICO MENSAL
+                # -------------------------------------------------
+                st.markdown("### Sintético mensal por status")
+
+                sint = (
+                    df_mes.groupby("message_status")
+                    .size()
+                    .reset_index(name="Quantidade")
+                    .sort_values("Quantidade", ascending=False)
+                )
+                sint["Quantidade"] = sint["Quantidade"].apply(
+                    lambda x: f"{x:,}".replace(",", ".")
+                )
+
+                st.dataframe(sint, use_container_width=True, hide_index=True)
+
+                # -------------------------------------------------
+                # DETALHAMENTO DIÁRIO
+                # -------------------------------------------------
+                st.markdown("### Detalhamento diário por status")
+
+                diario = (
+                    df_mes.groupby(["Data", "message_status"])
+                    .size()
+                    .reset_index(name="Quantidade")
+                )
+
+                diario_pivot = (
+                    diario.pivot(index="Data", columns="message_status", values="Quantidade")
+                    .fillna(0)
+                    .astype(int)
+                    .sort_index(ascending=False)
+                )
+
+                diario_pivot = diario_pivot.applymap(
+                    lambda x: f"{x:,}".replace(",", ".")
+                )
+
+                st.dataframe(diario_pivot, use_container_width=True)
+
+                # -------------------------------------------------
+                # ANALÍTICO
+                # -------------------------------------------------
+                st.markdown("### Analítico (registros)")
+
+                analitico = df_mes[
+                    [
+                        "message_id",
+                        "message_date_time",
+                        "broadcast_description",
+                        "message_status",
+                        "contact_id"
+                    ]
+                ].sort_values("message_date_time", ascending=False)
+
+                st.dataframe(analitico, use_container_width=True, hide_index=True)
