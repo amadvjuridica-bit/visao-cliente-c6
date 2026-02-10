@@ -1451,7 +1451,7 @@ else:
 # 📢 ABA EXTRA — CAMPANHAS META (C6)
 # (BLOCO ISOLADO | NÃO INTERFERE NO APP EXISTENTE)
 # ✅ Persistência: mantém RESUMO (global/mensal/diário) no Firestore/local
-# ❌ NÃO salva analítico do dia no Firestore (estoura limite de 1MB)
+# ✅ Serialização Firestore-safe (sem date/numpy)
 # ✅ Total enviados = sent + delivered + read
 # ✅ Seletor mês + tabelas mensal/diária + seletor dia + download CSV do dia (da sessão)
 # =========================================================
@@ -1539,14 +1539,14 @@ def _parse_datetime_br_priority(series: pd.Series) -> pd.Series:
 
     if has_slash_ratio >= 0.20:
         dt_br = pd.to_datetime(s, errors="coerce", dayfirst=True)
-        if dt_br.notna().sum() >= max(1, int(0.80 * len(s))):
+        if int(dt_br.notna().sum()) >= max(1, int(0.80 * len(s))):
             return dt_br
         dt_us = pd.to_datetime(s, errors="coerce", dayfirst=False)
-        return dt_br if dt_br.notna().sum() >= dt_us.notna().sum() else dt_us
+        return dt_br if int(dt_br.notna().sum()) >= int(dt_us.notna().sum()) else dt_us
 
     dt1 = pd.to_datetime(s, errors="coerce", dayfirst=True)
     dt2 = pd.to_datetime(s, errors="coerce", dayfirst=False)
-    return dt1 if dt1.notna().sum() >= dt2.notna().sum() else dt2
+    return dt1 if int(dt1.notna().sum()) >= int(dt2.notna().sum()) else dt2
 
 def _fmt_int_pt(n: int) -> str:
     return f"{int(n):,}".replace(",", ".")
@@ -1557,6 +1557,46 @@ def _month_label(period_str: str) -> str:
         return f"{m}/{y}"
     except Exception:
         return period_str
+
+def _records_firestore_safe(recs: list) -> list:
+    """
+    Converte tipos não aceitos pelo Firestore:
+      - date/datetime/Timestamp -> string ISO
+      - numpy int/float -> int/float Python
+    """
+    safe = []
+    for r in recs:
+        rr = {}
+        for k, v in (r or {}).items():
+            # datas
+            if isinstance(v, (dt.date, dt.datetime, pd.Timestamp)):
+                rr[k] = pd.to_datetime(v).strftime("%Y-%m-%d")
+                continue
+
+            # numpy/pandas números
+            if isinstance(v, (pd.Int64Dtype,)):
+                rr[k] = int(v)
+                continue
+
+            # números comuns / numpy (pega pelo atributo)
+            try:
+                if hasattr(v, "item") and callable(v.item):
+                    vv = v.item()
+                    if isinstance(vv, (int, float, str, bool)) or vv is None:
+                        rr[k] = vv
+                        continue
+            except Exception:
+                pass
+
+            # tipos básicos
+            if isinstance(v, (int, float, str, bool)) or v is None:
+                rr[k] = v
+            else:
+                # fallback: string
+                rr[k] = str(v)
+
+        safe.append(rr)
+    return safe
 
 def _persist_summary(df_5cols: pd.DataFrame, files_sig: list):
     df = df_5cols.copy()
@@ -1576,7 +1616,6 @@ def _persist_summary(df_5cols: pd.DataFrame, files_sig: list):
         .size()
         .reset_index(name="qty")
     )
-
     daily = (
         df.groupby(["Mes", "Data", "message_status"])
         .size()
@@ -1585,36 +1624,34 @@ def _persist_summary(df_5cols: pd.DataFrame, files_sig: list):
 
     summary = {
         "updated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "files": files_sig,
+        "files": _records_firestore_safe(files_sig),
         "global": {
-            "total": global_total,
-            "enviados": global_enviados,
-            "dias_unicos": dias_unicos,
-            "campanhas": campanhas,
-            "status_unicos": status_unicos,
+            "total": int(global_total),
+            "enviados": int(global_enviados),
+            "dias_unicos": int(dias_unicos),
+            "campanhas": int(campanhas),
+            "status_unicos": int(status_unicos),
         },
-        "monthly": monthly.to_dict(orient="records"),
-        "daily": daily.to_dict(orient="records"),
+        "monthly": _records_firestore_safe(monthly.to_dict(orient="records")),
+        "daily": _records_firestore_safe(daily.to_dict(orient="records")),
     }
     safe_json_save(META_SUMMARY_PATH, summary)
 
 def _load_persisted_summary() -> dict:
     return safe_json_load(META_SUMMARY_PATH, default={}) or {}
 
-# -----------------------------
-# Session: guarda o dataframe atual (para download do dia na mesma sessão)
-# -----------------------------
+# Session (df só para download na mesma sessão)
 if "meta_c6_df_session" not in st.session_state:
     st.session_state["meta_c6_df_session"] = None
 if "meta_c6_summary" not in st.session_state:
     st.session_state["meta_c6_summary"] = None
 
-# Se não tem upload, carrega resumo persistido
+# sem upload -> carrega resumo persistido
 if not meta_files and st.session_state["meta_c6_summary"] is None:
     persisted = _load_persisted_summary()
     st.session_state["meta_c6_summary"] = persisted if persisted else None
 
-# Se tem upload, processa, salva resumo e mantém df na sessão
+# com upload -> processa e persiste resumo
 if meta_files:
     files_sig = [{"name": f.name, "size": int(getattr(f, "size", 0) or 0)} for f in meta_files]
 
@@ -1637,7 +1674,6 @@ if meta_files:
             st.write(sorted([str(c) for c in df_raw.columns]))
         else:
             df = df[required_cols].copy()
-
             df["broadcast_description"] = df["broadcast_description"].astype(str)
             df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
 
@@ -1649,11 +1685,9 @@ if meta_files:
             else:
                 _persist_summary(df, files_sig)
                 st.session_state["meta_c6_summary"] = _load_persisted_summary()
-                st.session_state["meta_c6_df_session"] = df  # só para download do dia na sessão
+                st.session_state["meta_c6_df_session"] = df  # download do dia na sessão
 
-# -----------------------------
 # UI
-# -----------------------------
 summary = st.session_state.get("meta_c6_summary")
 
 if not summary:
@@ -1686,6 +1720,7 @@ else:
         df_daily["Mes"] = df_daily["Mes"].astype(str)
         df_daily["message_status"] = df_daily["message_status"].astype(str).str.lower()
         df_daily["qty"] = pd.to_numeric(df_daily["qty"], errors="coerce").fillna(0).astype(int)
+        # Data vem como string ISO
         df_daily["Data"] = pd.to_datetime(df_daily["Data"], errors="coerce").dt.date
 
         meses = sorted(df_monthly["Mes"].unique())
@@ -1697,7 +1732,6 @@ else:
 
         st.markdown("### Sintético mensal por status (mês selecionado)")
         mdf = df_monthly[df_monthly["Mes"] == mes_sel].copy().sort_values("qty", ascending=False)
-
         enviados_mes = int(mdf[mdf["message_status"].isin(["sent", "delivered", "read"])]["qty"].sum())
 
         a1, a2 = st.columns(2)
@@ -1730,32 +1764,31 @@ else:
             view_d = view_d.reset_index().rename(columns={"index": "Data"})
             st.dataframe(view_d, use_container_width=True, hide_index=True)
 
-            st.markdown("### Baixar analítico do dia (somente 5 colunas)")
-            df_session = st.session_state.get("meta_c6_df_session")
+        st.markdown("### Baixar analítico do dia (somente 5 colunas)")
+        df_session = st.session_state.get("meta_c6_df_session")
+        if df_session is None:
+            st.info("Para baixar o analítico (CSV por dia), reimporte os arquivos nesta sessão. O resumo continua salvo.")
+        else:
+            df_session = df_session.copy()
+            df_session["Data"] = df_session["message_date_time"].dt.date
+            df_session["Mes"] = df_session["message_date_time"].dt.to_period("M").astype(str)
 
-            if df_session is None:
-                st.info("Para baixar o analítico (CSV por dia), reimporte os arquivos nesta sessão. O resumo continua salvo.")
-            else:
-                df_session = df_session.copy()
-                df_session["Data"] = df_session["message_date_time"].dt.date
-                df_session["Mes"] = df_session["message_date_time"].dt.to_period("M").astype(str)
+            df_mes = df_session[df_session["Mes"] == mes_sel].copy()
+            dias = sorted(df_mes["Data"].unique(), reverse=True)
+            dias_lbl = [d.strftime("%d/%m/%Y") for d in dias]
 
-                df_mes = df_session[df_session["Mes"] == mes_sel].copy()
-                dias = sorted(df_mes["Data"].unique(), reverse=True)
-                dias_lbl = [d.strftime("%d/%m/%Y") for d in dias]
+            dia_sel_lbl = st.selectbox("Selecione o dia", dias_lbl, index=0, key="meta_c6_dia_sel")
+            dia_sel = dias[dias_lbl.index(dia_sel_lbl)]
 
-                dia_sel_lbl = st.selectbox("Selecione o dia", dias_lbl, index=0, key="meta_c6_dia_sel")
-                dia_sel = dias[dias_lbl.index(dia_sel_lbl)]
+            df_dia = df_mes[df_mes["Data"] == dia_sel][
+                ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
+            ].sort_values("message_date_time", ascending=False)
 
-                df_dia = df_mes[df_mes["Data"] == dia_sel][
-                    ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
-                ].sort_values("message_date_time", ascending=False)
-
-                csv_bytes = df_dia.to_csv(index=False).encode("utf-8-sig")
-                st.download_button(
-                    "⬇️ Baixar CSV do dia selecionado",
-                    data=csv_bytes,
-                    file_name=f"meta_c6_{dia_sel.strftime('%Y%m%d')}.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
+            csv_bytes = df_dia.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "⬇️ Baixar CSV do dia selecionado",
+                data=csv_bytes,
+                file_name=f"meta_c6_{dia_sel.strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
