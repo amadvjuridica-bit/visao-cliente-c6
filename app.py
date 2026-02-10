@@ -1452,10 +1452,9 @@ else:
 # (BLOCO ISOLADO | NÃO INTERFERE NO APP EXISTENTE)
 # ✅ Detecta separador CSV (; , \t)
 # ✅ Guarda dados importados em st.session_state (não perde ao rerun)
-# ✅ Corrige datas (dd/mm/yyyy vs mm/dd/yyyy) pelo padrão do arquivo
+# ✅ Data correta: se tiver "/" assume dd/mm/aaaa (Brasil)
 # ✅ Sintético mensal + diário (com seletor de mês)
 # ✅ Seletor de dia + download CSV (só 5 colunas)
-# ✅ Analítico não aparece gigante (só baixa)
 # =========================================================
 
 st.divider()
@@ -1539,45 +1538,35 @@ def _auto_rename_to_required(df: pd.DataFrame) -> pd.DataFrame:
 
     return df.rename(columns=rename).copy()
 
-def _parse_datetime_best(series: pd.Series) -> pd.Series:
+def _parse_datetime_br_priority(series: pd.Series) -> pd.Series:
     """
-    Resolve o problema dd/mm vs mm/dd.
-    Estratégia:
-      - tenta dayfirst=True e dayfirst=False
-      - escolhe o que gera mais datas válidas
-      - desempate: escolhe o que produz maior consistência (menor dispersão absurda)
+    Regra fixa para evitar o erro do seu caso:
+      - Se tiver "/" (ex: 06/02/2026), assume dd/mm/aaaa (dayfirst=True).
+      - Se não tiver "/", tenta parse normal.
+      - Fallback: se dayfirst=True der muitos NaT, tenta dayfirst=False.
     """
     s = series.astype("string").fillna("").str.strip()
 
-    dt_dayfirst = pd.to_datetime(s, errors="coerce", dayfirst=True)
-    dt_monthfirst = pd.to_datetime(s, errors="coerce", dayfirst=False)
+    # Se maioria contém "/", força BR (dd/mm)
+    has_slash_ratio = (s.str.contains("/", regex=False, na=False).sum() / max(len(s), 1))
 
-    n1 = int(dt_dayfirst.notna().sum())
-    n2 = int(dt_monthfirst.notna().sum())
+    if has_slash_ratio >= 0.20:
+        dt_br = pd.to_datetime(s, errors="coerce", dayfirst=True)
+        # fallback só se quebrou demais
+        if dt_br.notna().sum() >= max(1, int(0.80 * len(s))):
+            return dt_br
+        dt_us = pd.to_datetime(s, errors="coerce", dayfirst=False)
+        return dt_br if dt_br.notna().sum() >= dt_us.notna().sum() else dt_us
 
-    if n1 > n2:
-        return dt_dayfirst
-    if n2 > n1:
-        return dt_monthfirst
-
-    # empate: pega a interpretação cujo mês mais frequente bate mais (modo mais forte)
-    try:
-        m1 = dt_dayfirst.dropna().dt.to_period("M").mode()
-        m2 = dt_monthfirst.dropna().dt.to_period("M").mode()
-        if len(m1) and len(m2):
-            # se um deles concentrar mais em um único mês, tende a ser o correto
-            c1 = int((dt_dayfirst.dropna().dt.to_period("M") == m1.iloc[0]).sum())
-            c2 = int((dt_monthfirst.dropna().dt.to_period("M") == m2.iloc[0]).sum())
-            return dt_dayfirst if c1 >= c2 else dt_monthfirst
-    except Exception:
-        pass
-
-    return dt_dayfirst  # fallback seguro
+    # Sem "/", tenta padrão
+    dt1 = pd.to_datetime(s, errors="coerce", dayfirst=True)
+    dt2 = pd.to_datetime(s, errors="coerce", dayfirst=False)
+    return dt1 if dt1.notna().sum() >= dt2.notna().sum() else dt2
 
 def _fmt_int_pt(n: int) -> str:
     return f"{int(n):,}".replace(",", ".")
 
-# Persistência
+# Persistência (não perder dados)
 if "meta_c6_df" not in st.session_state:
     st.session_state["meta_c6_df"] = None
 if "meta_c6_sig" not in st.session_state:
@@ -1615,8 +1604,8 @@ if meta_files and sig != st.session_state["meta_c6_sig"]:
             df_meta["broadcast_description"] = df_meta["broadcast_description"].astype(str)
             df_meta = df_meta[df_meta["broadcast_description"].str.lower().str.contains("c6", na=False)]
 
-            # parse datetime corrigindo dd/mm vs mm/dd
-            df_meta["message_date_time"] = _parse_datetime_best(df_meta["message_date_time"])
+            # ✅ parse datetime correto (BR)
+            df_meta["message_date_time"] = _parse_datetime_br_priority(df_meta["message_date_time"])
             df_meta = df_meta.dropna(subset=["message_date_time"])
 
             st.session_state["meta_c6_df"] = df_meta
@@ -1645,17 +1634,12 @@ else:
         c3.metric("Campanhas (contendo C6)", _fmt_int_pt(total_camp))
         c4.metric("Status únicos", _fmt_int_pt(total_status))
 
-        # Seleção de mês (agora correto)
+        st.markdown("### Filtros")
         meses = sorted(df_meta["Mes"].unique())
         default_idx = len(meses) - 1 if len(meses) > 0 else 0
-
-        st.markdown("### Filtros")
         mes_sel = st.selectbox("Selecione o mês", meses, index=default_idx, key="meta_c6_mes_sel")
         df_mes = df_meta[df_meta["Mes"] == mes_sel].copy()
 
-        # -------------------------
-        # Sintético mensal por status
-        # -------------------------
         st.markdown("### Sintético mensal por status")
         sint = (
             df_mes.groupby("message_status")
@@ -1666,11 +1650,7 @@ else:
         sint["Quantidade"] = sint["Quantidade"].apply(lambda x: f"{x:,}".replace(",", "."))
         st.dataframe(sint, use_container_width=True, hide_index=True)
 
-        # -------------------------
-        # Totais por dia (linhas = dia)
-        # -------------------------
         st.markdown("### Totais por dia (dentro do mês selecionado)")
-
         diario = (
             df_mes.groupby(["Data", "message_status"])
             .size()
@@ -1684,24 +1664,17 @@ else:
             .sort_index(ascending=False)
         )
 
-        # Total do dia
         diario_pivot["total_dia"] = diario_pivot.sum(axis=1).astype(int)
 
-        # Formatação pt-BR
         diario_view = diario_pivot.copy()
         for col in diario_view.columns:
             diario_view[col] = diario_view[col].apply(lambda x: f"{int(x):,}".replace(",", "."))
 
         st.dataframe(diario_view, use_container_width=True)
 
-        # -------------------------
-        # Seletor de dia + download analítico do dia
-        # -------------------------
         st.markdown("### Baixar analítico do dia (somente 5 colunas)")
-
-        dias = sorted(df_mes["Data"].unique())
-        dias = sorted(dias, reverse=True)
-        dias_lbl = [d.strftime("%d/%m/%Y") if isinstance(d, dt.date) else str(d) for d in dias]
+        dias = sorted(df_mes["Data"].unique(), reverse=True)
+        dias_lbl = [d.strftime("%d/%m/%Y") for d in dias]
 
         dia_sel_lbl = st.selectbox("Selecione o dia", dias_lbl, index=0, key="meta_c6_dia_sel")
         dia_sel = dias[dias_lbl.index(dia_sel_lbl)]
@@ -1710,13 +1683,11 @@ else:
             ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
         ].sort_values("message_date_time", ascending=False)
 
-        # Mini resumo do dia
         a, b, c = st.columns(3)
         a.metric("Registros no dia", _fmt_int_pt(len(df_dia)))
         b.metric("Campanhas no dia", _fmt_int_pt(df_dia["broadcast_description"].nunique()))
         c.metric("Status no dia", _fmt_int_pt(df_dia["message_status"].nunique()))
 
-        # Download CSV
         csv_bytes = df_dia.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
             "⬇️ Baixar CSV do dia selecionado",
