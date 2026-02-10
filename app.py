@@ -1465,7 +1465,12 @@ with st.expander("Importar arquivos da Meta (CSV ou XLSX)", expanded=True):
 
 def _read_meta_file(f):
     if f.name.lower().endswith(".csv"):
-        return pd.read_csv(f)
+        return pd.read_csv(
+            f,
+            engine="python",      # parser tolerante
+            sep=",",
+            on_bad_lines="skip"   # ignora linhas quebradas
+        )
     return pd.read_excel(f)
 
 if meta_files:
@@ -1501,7 +1506,7 @@ if meta_files:
                 df_meta["broadcast_description"].str.lower().str.contains("c6", na=False)
             ]
 
-            # Datas
+            # Conversão de datas
             df_meta["message_date_time"] = pd.to_datetime(
                 df_meta["message_date_time"], errors="coerce"
             )
