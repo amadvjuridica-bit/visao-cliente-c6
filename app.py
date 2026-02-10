@@ -1450,6 +1450,8 @@ else:
 # =========================================================
 # 📢 ABA EXTRA — CAMPANHAS META (C6)
 # (BLOCO ISOLADO | NÃO INTERFERE NO APP EXISTENTE)
+# ✅ Detecta separador CSV (; , \t)
+# ✅ Guarda dados importados em st.session_state (não perde ao rerun)
 # =========================================================
 
 st.divider()
@@ -1464,64 +1466,81 @@ with st.expander("Importar arquivos da Meta (CSV ou XLSX)", expanded=True):
     )
 
 def _norm_col(c: str) -> str:
-    # normaliza para facilitar mapeamento
     c = str(c).strip().lower()
-    c = c.replace("\ufeff", "")  # remove BOM
-    c = c.replace(" ", "_")
-    c = c.replace("-", "_")
+    c = c.replace("\ufeff", "")  # BOM
+    c = c.replace(" ", "_").replace("-", "_")
     c = re.sub(r"_+", "_", c)
     return c
 
+def _detect_delimiter(sample_text: str) -> str:
+    """
+    Detecta separador mais provável entre ; , \t |
+    """
+    candidates = [";", ",", "\t", "|"]
+    counts = {sep: sample_text.count(sep) for sep in candidates}
+    best = max(counts, key=counts.get)
+    return best if counts[best] > 0 else ","  # fallback
+
 def _read_meta_file(f):
-    if f.name.lower().endswith(".csv"):
+    name = f.name.lower()
+
+    if name.endswith(".csv"):
+        # Lê um pedaço para detectar separador
+        try:
+            raw = f.getvalue()
+        except Exception:
+            raw = f.read()
+
+        # tenta decodificar só um pedaço (não explode memória)
+        head = raw[:200_000]
+        try:
+            sample = head.decode("utf-8-sig", errors="replace")
+        except Exception:
+            sample = head.decode(errors="replace")
+
+        sep = _detect_delimiter(sample)
+
+        # lê de verdade com separador detectado
         return pd.read_csv(
-            f,
+            io.BytesIO(raw),
             engine="python",
-            sep=",",
-            on_bad_lines="skip"
+            sep=sep,
+            on_bad_lines="skip",
+            encoding="utf-8-sig",
         )
+
+    # XLSX
     return pd.read_excel(f)
 
 def _auto_rename_to_required(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Tenta mapear colunas do arquivo para:
-      message_id, message_date_time, broadcast_description, message_status, contact_id
-    aceitando variações comuns de export.
+    Mapeia automaticamente variações comuns para:
+    message_id, message_date_time, broadcast_description, message_status, contact_id
     """
-    # cria mapa de normalizado -> original
     norm_map = {_norm_col(c): c for c in df.columns}
 
-    # candidatos (normalizados)
     candidates = {
-        "message_id": [
-            "message_id", "messageid", "message_id_", "message_id__",
-            "message id", "id_message", "id_mensagem"
-        ],
+        "message_id": ["message_id", "messageid", "message id", "id_message", "id_mensagem"],
         "message_date_time": [
             "message_date_time", "message_datetime", "message_date", "message_time",
-            "message_date_time_utc", "message_date_time_(utc)", "message_date_timeutc",
-            "date_time", "datetime", "timestamp", "created_time", "created_at"
+            "message_date_time_utc", "message_date_time_(utc)", "datetime", "timestamp",
+            "created_time", "created_at"
         ],
         "broadcast_description": [
             "broadcast_description", "broadcast_desc", "broadcast", "broadcast_name",
-            "broadcast_title", "campaign", "campaign_name", "description"
+            "campaign", "campaign_name", "description"
         ],
-        "message_status": [
-            "message_status", "status", "delivery_status", "message_delivery_status"
-        ],
-        "contact_id": [
-            "contact_id", "contactid", "contact", "contact_identifier", "recipient_id",
-            "wa_id", "whatsapp_id"
-        ],
+        "message_status": ["message_status", "status", "delivery_status", "message_delivery_status"],
+        "contact_id": ["contact_id", "contactid", "wa_id", "whatsapp_id", "recipient_id"],
     }
 
-    # normaliza os candidatos também (mesma regra)
     candidates = {k: [_norm_col(x) for x in v] for k, v in candidates.items()}
 
     rename = {}
     for target, cand_list in candidates.items():
         found = None
-        # 1) match exato por normalização
+
+        # match direto por normalização do alvo
         if _norm_col(target) in norm_map:
             found = norm_map[_norm_col(target)]
         else:
@@ -1529,25 +1548,38 @@ def _auto_rename_to_required(df: pd.DataFrame) -> pd.DataFrame:
                 if cand in norm_map:
                     found = norm_map[cand]
                     break
+
         if found:
             rename[found] = target
 
-    df2 = df.rename(columns=rename).copy()
-    return df2
+    return df.rename(columns=rename).copy()
 
+# -----------------------------
+# Persistência: não perder dados
+# -----------------------------
+if "meta_c6_df" not in st.session_state:
+    st.session_state["meta_c6_df"] = None
+if "meta_c6_sig" not in st.session_state:
+    st.session_state["meta_c6_sig"] = None
+
+# Assinatura simples dos uploads (nome+size) para evitar reprocessar
+sig = None
 if meta_files:
+    sig = tuple((f.name, getattr(f, "size", None)) for f in meta_files)
+
+# Processa apenas se upload mudou
+if meta_files and sig != st.session_state["meta_c6_sig"]:
     dfs_meta = []
     for f in meta_files:
         try:
-            dfx = _read_meta_file(f)
-            dfs_meta.append(dfx)
+            dfs_meta.append(_read_meta_file(f))
         except Exception as e:
             st.error(f"Erro ao ler {f.name}: {e}")
 
     if dfs_meta:
         df_meta_raw = pd.concat(dfs_meta, ignore_index=True)
 
-        # tenta renomear automaticamente para as colunas obrigatórias
+        # tenta renomear automaticamente
         df_meta = _auto_rename_to_required(df_meta_raw)
 
         required_cols = [
@@ -1563,91 +1595,82 @@ if meta_files:
             st.error(f"Colunas obrigatórias ausentes (após tentativa automática): {missing_cols}")
             st.markdown("**Colunas encontradas no arquivo (para conferência):**")
             st.write(sorted([str(c) for c in df_meta_raw.columns]))
+            st.session_state["meta_c6_df"] = None
+            st.session_state["meta_c6_sig"] = sig
         else:
-            # Mantém SOMENTE as colunas relevantes
             df_meta = df_meta[required_cols].copy()
 
-            # Filtro: somente campanhas que contenham "c6" no nome
+            # filtro C6: qualquer campanha contendo "c6"
             df_meta["broadcast_description"] = df_meta["broadcast_description"].astype(str)
-            df_meta = df_meta[
-                df_meta["broadcast_description"].str.lower().str.contains("c6", na=False)
-            ]
+            df_meta = df_meta[df_meta["broadcast_description"].str.lower().str.contains("c6", na=False)]
 
-            # Datas
-            df_meta["message_date_time"] = pd.to_datetime(
-                df_meta["message_date_time"], errors="coerce"
-            )
+            # datas
+            df_meta["message_date_time"] = pd.to_datetime(df_meta["message_date_time"], errors="coerce")
             df_meta = df_meta.dropna(subset=["message_date_time"])
 
-            if df_meta.empty:
-                st.warning("Nenhum registro com 'c6' encontrado nas campanhas.")
-            else:
-                df_meta["Data"] = df_meta["message_date_time"].dt.date
-                df_meta["Mes"] = df_meta["message_date_time"].dt.to_period("M").astype(str)
+            st.session_state["meta_c6_df"] = df_meta
+            st.session_state["meta_c6_sig"] = sig
 
-                total_regs = len(df_meta)
-                st.success(f"{total_regs:,}".replace(",", ".") + " registros válidos carregados.")
+# Usa o que estiver persistido (mesmo sem upload novo)
+df_meta = st.session_state.get("meta_c6_df")
 
-                # Seleção de mês
-                meses = sorted(df_meta["Mes"].unique())
-                mes_sel = st.selectbox("Selecione o mês", meses, index=len(meses) - 1)
+if df_meta is None:
+    st.info("Importe um ou mais arquivos para gerar os relatórios. (Após importar, os dados ficam nesta tela até você trocar os arquivos.)")
+else:
+    if df_meta.empty:
+        st.warning("Nenhum registro com 'c6' encontrado nas campanhas após o filtro.")
+    else:
+        df_meta = df_meta.copy()
+        df_meta["Data"] = df_meta["message_date_time"].dt.date
+        df_meta["Mes"] = df_meta["message_date_time"].dt.to_period("M").astype(str)
 
-                df_mes = df_meta[df_meta["Mes"] == mes_sel].copy()
+        total_regs = len(df_meta)
+        st.success(f"{total_regs:,}".replace(",", ".") + " registros válidos carregados (campanhas com 'c6').")
 
-                # -------------------------------------------------
-                # SINTÉTICO MENSAL
-                # -------------------------------------------------
-                st.markdown("### Sintético mensal por status")
+        meses = sorted(df_meta["Mes"].unique())
+        default_idx = len(meses) - 1 if len(meses) > 0 else 0
 
-                sint = (
-                    df_mes.groupby("message_status")
-                    .size()
-                    .reset_index(name="Quantidade")
-                    .sort_values("Quantidade", ascending=False)
-                )
-                sint["Quantidade"] = sint["Quantidade"].apply(
-                    lambda x: f"{x:,}".replace(",", ".")
-                )
+        mes_sel = st.selectbox("Selecione o mês", meses, index=default_idx, key="meta_c6_mes_sel")
 
-                st.dataframe(sint, use_container_width=True, hide_index=True)
+        df_mes = df_meta[df_meta["Mes"] == mes_sel].copy()
 
-                # -------------------------------------------------
-                # DETALHAMENTO DIÁRIO
-                # -------------------------------------------------
-                st.markdown("### Detalhamento diário por status")
+        # -------------------------
+        # Sintético mensal por status
+        # -------------------------
+        st.markdown("### Sintético mensal por status")
+        sint = (
+            df_mes.groupby("message_status")
+            .size()
+            .reset_index(name="Quantidade")
+            .sort_values("Quantidade", ascending=False)
+        )
+        sint["Quantidade"] = sint["Quantidade"].apply(lambda x: f"{x:,}".replace(",", "."))
+        st.dataframe(sint, use_container_width=True, hide_index=True)
 
-                diario = (
-                    df_mes.groupby(["Data", "message_status"])
-                    .size()
-                    .reset_index(name="Quantidade")
-                )
+        # -------------------------
+        # Diário por status
+        # -------------------------
+        st.markdown("### Detalhamento diário por status")
+        diario = (
+            df_mes.groupby(["Data", "message_status"])
+            .size()
+            .reset_index(name="Quantidade")
+        )
+        diario_pivot = (
+            diario.pivot(index="Data", columns="message_status", values="Quantidade")
+            .fillna(0)
+            .astype(int)
+            .sort_index(ascending=False)
+        )
+        diario_pivot = diario_pivot.applymap(lambda x: f"{x:,}".replace(",", "."))
+        st.dataframe(diario_pivot, use_container_width=True)
 
-                diario_pivot = (
-                    diario.pivot(index="Data", columns="message_status", values="Quantidade")
-                    .fillna(0)
-                    .astype(int)
-                    .sort_index(ascending=False)
-                )
+        # -------------------------
+        # Analítico (somente 5 colunas)
+        # -------------------------
+        st.markdown("### Analítico (registros)")
+        analitico = df_mes[
+            ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
+        ].sort_values("message_date_time", ascending=False)
 
-                diario_pivot = diario_pivot.applymap(
-                    lambda x: f"{x:,}".replace(",", ".")
-                )
-
-                st.dataframe(diario_pivot, use_container_width=True)
-
-                # -------------------------------------------------
-                # ANALÍTICO
-                # -------------------------------------------------
-                st.markdown("### Analítico (registros)")
-
-                analitico = df_mes[
-                    [
-                        "message_id",
-                        "message_date_time",
-                        "broadcast_description",
-                        "message_status",
-                        "contact_id"
-                    ]
-                ].sort_values("message_date_time", ascending=False)
-
-                st.dataframe(analitico, use_container_width=True, hide_index=True)
+        st.dataframe(analitico, use_container_width=True, hide_index=True)
