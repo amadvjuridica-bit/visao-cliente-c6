@@ -1463,28 +1463,93 @@ with st.expander("Importar arquivos da Meta (CSV ou XLSX)", expanded=True):
         key="meta_c6_upload"
     )
 
+def _norm_col(c: str) -> str:
+    # normaliza para facilitar mapeamento
+    c = str(c).strip().lower()
+    c = c.replace("\ufeff", "")  # remove BOM
+    c = c.replace(" ", "_")
+    c = c.replace("-", "_")
+    c = re.sub(r"_+", "_", c)
+    return c
+
 def _read_meta_file(f):
     if f.name.lower().endswith(".csv"):
         return pd.read_csv(
             f,
-            engine="python",      # parser tolerante
+            engine="python",
             sep=",",
-            on_bad_lines="skip"   # ignora linhas quebradas
+            on_bad_lines="skip"
         )
     return pd.read_excel(f)
+
+def _auto_rename_to_required(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Tenta mapear colunas do arquivo para:
+      message_id, message_date_time, broadcast_description, message_status, contact_id
+    aceitando variações comuns de export.
+    """
+    # cria mapa de normalizado -> original
+    norm_map = {_norm_col(c): c for c in df.columns}
+
+    # candidatos (normalizados)
+    candidates = {
+        "message_id": [
+            "message_id", "messageid", "message_id_", "message_id__",
+            "message id", "id_message", "id_mensagem"
+        ],
+        "message_date_time": [
+            "message_date_time", "message_datetime", "message_date", "message_time",
+            "message_date_time_utc", "message_date_time_(utc)", "message_date_timeutc",
+            "date_time", "datetime", "timestamp", "created_time", "created_at"
+        ],
+        "broadcast_description": [
+            "broadcast_description", "broadcast_desc", "broadcast", "broadcast_name",
+            "broadcast_title", "campaign", "campaign_name", "description"
+        ],
+        "message_status": [
+            "message_status", "status", "delivery_status", "message_delivery_status"
+        ],
+        "contact_id": [
+            "contact_id", "contactid", "contact", "contact_identifier", "recipient_id",
+            "wa_id", "whatsapp_id"
+        ],
+    }
+
+    # normaliza os candidatos também (mesma regra)
+    candidates = {k: [_norm_col(x) for x in v] for k, v in candidates.items()}
+
+    rename = {}
+    for target, cand_list in candidates.items():
+        found = None
+        # 1) match exato por normalização
+        if _norm_col(target) in norm_map:
+            found = norm_map[_norm_col(target)]
+        else:
+            for cand in cand_list:
+                if cand in norm_map:
+                    found = norm_map[cand]
+                    break
+        if found:
+            rename[found] = target
+
+    df2 = df.rename(columns=rename).copy()
+    return df2
 
 if meta_files:
     dfs_meta = []
     for f in meta_files:
         try:
-            dfs_meta.append(_read_meta_file(f))
+            dfx = _read_meta_file(f)
+            dfs_meta.append(dfx)
         except Exception as e:
             st.error(f"Erro ao ler {f.name}: {e}")
 
     if dfs_meta:
-        df_meta = pd.concat(dfs_meta, ignore_index=True)
+        df_meta_raw = pd.concat(dfs_meta, ignore_index=True)
 
-        # Colunas obrigatórias (somente estas serão usadas)
+        # tenta renomear automaticamente para as colunas obrigatórias
+        df_meta = _auto_rename_to_required(df_meta_raw)
+
         required_cols = [
             "message_id",
             "message_date_time",
@@ -1495,7 +1560,9 @@ if meta_files:
 
         missing_cols = [c for c in required_cols if c not in df_meta.columns]
         if missing_cols:
-            st.error(f"Colunas obrigatórias ausentes: {missing_cols}")
+            st.error(f"Colunas obrigatórias ausentes (após tentativa automática): {missing_cols}")
+            st.markdown("**Colunas encontradas no arquivo (para conferência):**")
+            st.write(sorted([str(c) for c in df_meta_raw.columns]))
         else:
             # Mantém SOMENTE as colunas relevantes
             df_meta = df_meta[required_cols].copy()
@@ -1506,7 +1573,7 @@ if meta_files:
                 df_meta["broadcast_description"].str.lower().str.contains("c6", na=False)
             ]
 
-            # Conversão de datas
+            # Datas
             df_meta["message_date_time"] = pd.to_datetime(
                 df_meta["message_date_time"], errors="coerce"
             )
