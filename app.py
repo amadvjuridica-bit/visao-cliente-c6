@@ -1640,7 +1640,6 @@ with tab_meta:
         campanhas = int(len(campaign_set))
 
         # atualiza lista de arquivos (sem duplicar por hash)
-        # mantém um histórico simples, guardando hash+nome+tamanho
         for meta in new_files_meta:
             h = meta.get("hash")
             if h and h not in seen_hashes:
@@ -1681,7 +1680,6 @@ with tab_meta:
         )
 
     if meta_files:
-        # carrega summary atual (pra saber hashes já importados)
         existing = _load_persisted_summary()
         seen_hashes = set((existing or {}).get("file_hashes", []) or [])
 
@@ -1723,7 +1721,6 @@ with tab_meta:
                 df = df[required_cols].copy()
                 df["broadcast_description"] = df["broadcast_description"].astype(str)
 
-                # filtro C6
                 df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
 
                 df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
@@ -1825,6 +1822,9 @@ with tab_leads_status:
 
     LEADS_STATUS_DAILY_PATH = os.path.join(DATA_DIR, "leads_status_daily_q.json")
 
+    # ✅ NOVO: histórico separado só para "indicações dentro do prazo"
+    LEADS_STATUS_INDICACOES_PRAZO_KEY = "_indicacoes_prazo_por_dia"
+
     def _leads_status_load():
         return safe_json_load(LEADS_STATUS_DAILY_PATH, default={}) or {}
 
@@ -1865,8 +1865,22 @@ with tab_leads_status:
             return m.iloc[0]
         return max(d)
 
+    def _extract_cadastro_datetime_from_col_m(df: pd.DataFrame) -> pd.Series:
+        """
+        ✅ Data/hora cadastro vem da coluna M (13ª coluna, index 12).
+        Retorna série datetime (pd.Timestamp), pode ter NaT.
+        """
+        if df.shape[1] < 13:
+            return pd.Series([pd.NaT] * len(df))
+        s = df.iloc[:, 12]
+        return pd.to_datetime(s, errors="coerce", dayfirst=True)
+
     store = _leads_status_load()
     seen_hashes = set((store.get("_file_hashes", []) or []))
+
+    # garante dicionário do novo histórico
+    if LEADS_STATUS_INDICACOES_PRAZO_KEY not in store or not isinstance(store.get(LEADS_STATUS_INDICACOES_PRAZO_KEY), dict):
+        store[LEADS_STATUS_INDICACOES_PRAZO_KEY] = store.get(LEADS_STATUS_INDICACOES_PRAZO_KEY, {}) or {}
 
     r1, r2 = st.columns([1, 3])
     with r1:
@@ -1906,6 +1920,14 @@ with tab_leads_status:
                     st.error(f"{upl.name}: não consegui ler a DATA BASE na coluna B.")
                     continue
 
+                # ✅ NOVO: calcula indicações dentro do prazo usando col M (cadastro)
+                cad_dt = _extract_cadastro_datetime_from_col_m(df_status)  # datetime
+                cad_date = cad_dt.dt.date  # date
+                # diferença em dias: data_base - cadastro
+                diff_days = pd.Series([(data_base - d).days if isinstance(d, dt.date) else None for d in cad_date])
+                within = diff_days.apply(lambda x: (x is not None) and (x >= 0) and (x <= 14))
+                indic_prazo = int(within.sum())
+
                 s = df_status.iloc[:, 16].astype("string").fillna("").str.strip()
                 s = s[s != ""]
                 if s.empty:
@@ -1919,6 +1941,8 @@ with tab_leads_status:
                     overwritten_days.append(day_key)
 
                 store[day_key] = {str(k): int(v) for k, v in counts.items()}
+                store[LEADS_STATUS_INDICACOES_PRAZO_KEY][day_key] = int(indic_prazo)
+
                 seen_hashes.add(h)
                 imported += 1
 
@@ -1937,8 +1961,13 @@ with tab_leads_status:
 
     # recarrega
     store = _leads_status_load()
+    indic_por_dia = store.get(LEADS_STATUS_INDICACOES_PRAZO_KEY, {}) if isinstance(store.get(LEADS_STATUS_INDICACOES_PRAZO_KEY), dict) else {}
+
+    # remove chaves técnicas do processamento "de status"
     if "_file_hashes" in store:
         store = {k: v for k, v in store.items() if k != "_file_hashes"}
+    if LEADS_STATUS_INDICACOES_PRAZO_KEY in store:
+        store = {k: v for k, v in store.items() if k != LEADS_STATUS_INDICACOES_PRAZO_KEY}
 
     if not store:
         st.info("Ainda não há histórico. Importe o(s) arquivo(s) para começar.")
@@ -2007,24 +2036,41 @@ with tab_leads_status:
                     .sort_index(ascending=True)
                 )
 
+                # TOTAL
                 pivot["TOTAL"] = pivot.sum(axis=1).astype(int)
+
+                # ✅ NOVO: INDICAÇÕES DENTRO DO PRAZO (<=14 dias)
+                # monta série por data (index _date)
+                indic_series = pd.Series(index=pivot.index, dtype="int64")
+                for d in pivot.index:
+                    dk = d.strftime("%d/%m/%Y")
+                    indic_series.loc[d] = int(indic_por_dia.get(dk, 0))
+                pivot["INDICAÇÕES (≤14d)"] = indic_series.fillna(0).astype(int)
+
                 delta = pivot.diff().fillna(0).astype(int)
 
-                base_cols = [c for c in pivot.columns if c != "TOTAL"]
+                base_cols = [c for c in pivot.columns if c not in ["TOTAL", "INDICAÇÕES (≤14d)"]]
                 order_status = [s for s in top_status if s in base_cols]
                 if "OUTROS" in base_cols:
                     order_status += ["OUTROS"]
 
                 view = pd.DataFrame(index=pivot.index)
                 view["Data"] = [d.strftime("%d/%m/%Y") for d in pivot.index]
+
                 view["Total"] = pivot["TOTAL"]
                 view["Δ Total"] = delta["TOTAL"]
 
+                # ✅ NOVO: coluna e Δ para indicações
+                view["Indicações (≤14d)"] = pivot["INDICAÇÕES (≤14d)"]
+                view["Δ Indicações (≤14d)"] = delta["INDICAÇÕES (≤14d)"]
+
+                # status
                 for sname in order_status:
                     short = str(sname).strip().replace("_", " ")
                     if len(short) > 14:
                         short = short[:14] + "…"
                     view[short] = pivot.get(sname, 0)
+
                 for sname in order_status:
                     short = str(sname).strip().replace("_", " ")
                     if len(short) > 14:
