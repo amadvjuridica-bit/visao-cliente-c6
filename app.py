@@ -715,10 +715,6 @@ def apply_theme():
                 background:rgba(255,59,48,0.12); color:#FF3B30;
                 font-weight:900; font-size:12px;
             }
-
-            /* tabela mais compacta */
-            .am-compact-table thead tr th { font-size: 12px !important; }
-            .am-compact-table tbody tr td { font-size: 12px !important; }
         </style>
         """,
         unsafe_allow_html=True,
@@ -1045,7 +1041,6 @@ with tab_painel:
         m5.metric("Receita cheia (mês)", br_money(cheio))
         m6.metric("Já pago (referência)", br_money(japago))
         m7.metric("Níveis (1/2/3/4)", f"{br_int(n1)} / {br_int(n2)} / {br_int(n3)} / {br_int(n4)}")
-
     else:
         st.info("Ainda não há histórico de remuneração. Importe os diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
 
@@ -1282,144 +1277,6 @@ with tab_painel:
             else:
                 st.info("Ainda não há mês atual calculado. Importe arquivos diários (Jan/26 em diante).")
 
-            st.markdown("#### Lista de qualificadas (arquivo) — valores por CNPJ (cheio / já pago / a receber)")
-
-            def _compute_paid_max_before_month(target_mkey: str) -> Dict[str, float]:
-                month_levels = safe_json_load(HIST_MONTH_LEVELS, default={})
-                months_sorted = sorted(list(month_levels.keys()), key=month_key_str)
-
-                paid_max_prev: Dict[str, float] = {}
-                for mkey in months_sorted:
-                    if month_key_str(mkey) >= month_key_str(target_mkey):
-                        break
-
-                    cmap: Dict[str, int] = month_levels.get(mkey, {}) or {}
-                    cmap = {k: int(v) for k, v in cmap.items() if str(k).strip() != ""}
-
-                    qtd_qual = len(cmap)
-
-                    if mkey == "12/2025":
-                        _, precos_local = FAIXAS[-1][1], FAIXAS[-1][2]
-                    else:
-                        _, precos_local = faixa_por_qtd(qtd_qual)
-
-                    for cnpj, lvl in cmap.items():
-                        cheio = float(precos_local.get(int(lvl), 0.0))
-                        prev = float(paid_max_prev.get(cnpj, 0.0))
-                        paid_max_prev[cnpj] = max(prev, cheio)
-
-                return paid_max_prev
-
-            if COL_CNPJ not in dfq.columns:
-                cand = [c for c in dfq.columns if "CNPJ" in str(c).upper()]
-                dfq[COL_CNPJ] = dfq[cand[0]] if cand else ""
-
-            saved_local = safe_json_load(HIST_RESUMO_MENSAL, default={})
-            month_levels_store = safe_json_load(HIST_MONTH_LEVELS, default={})
-
-            if not saved_local:
-                st.info("Ainda não há mês calculado para puxar faixa/preço. Importe arquivos diários (Jan/26 em diante).")
-            else:
-                mes_atual_calc = sorted(saved_local.keys(), key=month_key_str)[-1]
-                info_mes = saved_local.get(mes_atual_calc, {})
-                faixa_nome_calc = info_mes.get("faixa", "-")
-                precos_mes = faixa_tbl_por_nome(faixa_nome_calc)
-
-                paid_prev = _compute_paid_max_before_month(mes_atual_calc)
-
-                months_sorted_all = sorted(list(month_levels_store.keys()), key=month_key_str)
-                prev_months = [m for m in months_sorted_all if month_key_str(m) < month_key_str(mes_atual_calc)]
-
-                def nivel_max_anterior(cnpj_num: str) -> int:
-                    mx = 0
-                    for m in prev_months:
-                        cmap = month_levels_store.get(m, {}) or {}
-                        v = int(cmap.get(cnpj_num, 0) or 0)
-                        if v > mx:
-                            mx = v
-                    return mx
-
-                df_list = dfq[dfq["_qualificada"] == "Sim"].copy()
-                df_list["_cnpj_num"] = normalize_str(df_list[COL_CNPJ]).str.replace(r"\D", "", regex=True)
-
-                df_list["_nivel_atual"] = df_list["_nivel"].astype(int)
-                df_list["_nivel_max_anterior"] = df_list["_cnpj_num"].apply(nivel_max_anterior).astype(int)
-
-                df_list["_valor_cheio_mes"] = df_list["_nivel_atual"].apply(lambda lvl: float(precos_mes.get(int(lvl), 0.0)))
-                df_list["_ja_pago"] = df_list["_cnpj_num"].apply(lambda c: float(paid_prev.get(str(c), 0.0)))
-                df_list["_a_receber_cnpj"] = (df_list["_valor_cheio_mes"] - df_list["_ja_pago"]).apply(lambda x: float(x) if x > 0 else 0.0)
-
-                show = df_list[[COL_CNPJ, COL_ABERTURA, "_nivel_atual", "_nivel_max_anterior",
-                                "_valor_cheio_mes", "_ja_pago", "_a_receber_cnpj",
-                                "_criterio_vencedor", COL_BR]].rename(columns={
-                    COL_CNPJ: "CNPJ",
-                    COL_ABERTURA: "Data de abertura",
-                    "_nivel_atual": "Nível (mês atual)",
-                    "_nivel_max_anterior": "Nível máx. anterior",
-                    "_valor_cheio_mes": "Valor cheio (mês)",
-                    "_ja_pago": "Já pago (acumulado)",
-                    "_a_receber_cnpj": "A receber (diferença)",
-                    "_criterio_vencedor": "Critério vencedor",
-                    COL_BR: "BR",
-                })
-
-                show["Data de abertura"] = show["Data de abertura"].apply(fmt_date)
-                show["Valor cheio (mês)"] = show["Valor cheio (mês)"].apply(br_money)
-                show["Já pago (acumulado)"] = show["Já pago (acumulado)"].apply(br_money)
-                show["A receber (diferença)"] = show["A receber (diferença)"].apply(br_money)
-
-                show = show.sort_values("Data de abertura", ascending=False)
-
-                st.markdown(f"**Mês de referência:** {mes_atual_calc} — **Faixa:** {faixa_nome_calc}")
-                st.dataframe(show, use_container_width=True, hide_index=True)
-
-    st.divider()
-
-    st.subheader("Comparativo mensal de remuneração")
-
-    saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
-    if not saved:
-        st.info("Sem histórico mensal ainda. Importe diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
-    else:
-        rows = []
-        for mes, info in saved.items():
-            rows.append([
-                mes,
-                info.get("faixa", ""),
-                int(info.get("qualificadas", 0)),
-                int(info.get("n1", 0)),
-                int(info.get("n2", 0)),
-                int(info.get("n3", 0)),
-                int(info.get("n4", 0)),
-                float(info.get("deveria_receber", 0.0)),
-                float(info.get("ja_pago_ref", 0.0)),
-                float(info.get("receber_mes", 0.0)),
-            ])
-
-        dfm = pd.DataFrame(rows, columns=[
-            "Mês", "Faixa", "Qualificadas", "N1", "N2", "N3", "N4",
-            "Deveria receber (cheio)", "Já pago (referência)", "A receber no mês"
-        ]).sort_values("Mês", key=lambda col: col.map(month_key_str), ascending=True)
-
-        view = dfm.copy()
-        view["Qualificadas"] = view["Qualificadas"].apply(br_int)
-        view["N1"] = view["N1"].apply(br_int)
-        view["N2"] = view["N2"].apply(br_int)
-        view["N3"] = view["N3"].apply(br_int)
-        view["N4"] = view["N4"].apply(br_int)
-        view["Deveria receber (cheio)"] = view["Deveria receber (cheio)"].apply(br_money)
-        view["Já pago (referência)"] = view["Já pago (referência)"].apply(br_money)
-        view["A receber no mês"] = view["A receber no mês"].apply(br_money)
-
-        st.dataframe(view, use_container_width=True, hide_index=True)
-
-        last = dfm.iloc[-1]
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Último mês", str(last["Mês"]))
-        c2.metric("Qualificadas", br_int(int(last["Qualificadas"])))
-        c3.metric("Receita cheia", br_money(float(last["Deveria receber (cheio)"])))
-        c4.metric("A receber", br_money(float(last["A receber no mês"])))
-
 
 # =========================================================
 # =====================  TAB 2  ===========================
@@ -1587,7 +1444,6 @@ with tab_meta:
         return None
 
     def _load_groups_from_summary(summary: dict) -> dict:
-        # summary["groups"] = {group: {"monthly": [...], "daily": [...]} }
         return (summary.get("groups") or {}) if isinstance(summary.get("groups"), dict) else {}
 
     def _groups_to_dfs(groups_obj: dict) -> Dict[str, Tuple[pd.DataFrame, pd.DataFrame]]:
@@ -1606,169 +1462,6 @@ with tab_meta:
                 ddf["Data"] = pd.to_datetime(ddf["Data"], errors="coerce").dt.date
             out[g] = (mdf, ddf)
         return out
-
-    def _merge_group_tables(old_m: pd.DataFrame, old_d: pd.DataFrame, new_m: pd.DataFrame, new_d: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        if old_m is None or old_m.empty:
-            mm = new_m.copy()
-        else:
-            mm = pd.concat([old_m, new_m], ignore_index=True)
-            mm = mm.groupby(["Mes", "message_status"], as_index=False)["qty"].sum()
-
-        if old_d is None or old_d.empty:
-            dd = new_d.copy()
-        else:
-            dd = pd.concat([old_d, new_d], ignore_index=True)
-            dd = dd.groupby(["Mes", "Data", "message_status"], as_index=False)["qty"].sum()
-
-        return mm, dd
-
-    def _incremental_upsert_summary(new_df_5cols: pd.DataFrame, new_files_meta: List[dict], imported_hashes: List[str], mode: str = "totais") -> dict:
-        """
-        mode:
-          - "totais": atualiza totais gerais (monthly/daily) e também atualiza grupos
-          - "grupos": atualiza SOMENTE grupos (não mexe nos totais gerais)
-        """
-        existing = _load_persisted_summary()
-        existing = existing or {}
-
-        # sets persistidos
-        status_set = set(existing.get("status_set", []) or [])
-        campaign_set = set(existing.get("campaign_set", []) or [])
-
-        # arquivos já importados nos TOTAIS
-        files = existing.get("files", []) or []
-        seen_hashes_totais = set(existing.get("file_hashes", []) or [])
-
-        # arquivos já processados nos GRUPOS (pode ser diferente)
-        seen_hashes_groups = set(existing.get("group_file_hashes", []) or [])
-
-        # decide quais hashes considerar "novos" conforme modo
-        if mode == "totais":
-            actually_new_hashes = [h for h in imported_hashes if h not in seen_hashes_totais]
-            if not actually_new_hashes:
-                # mesmo sem novos totais, ainda pode querer atualizar grupos via outro caminho
-                return existing
-        else:
-            actually_new_hashes = [h for h in imported_hashes if h not in seen_hashes_groups]
-            if not actually_new_hashes:
-                return existing
-
-        # Tabelas existentes (totais)
-        old_monthly, old_daily = _normalize_existing_tables(existing)
-
-        # Grupos existentes
-        groups_obj = _load_groups_from_summary(existing)
-        groups_dfs = _groups_to_dfs(groups_obj)
-
-        df = new_df_5cols.copy()
-        df["message_status"] = df["message_status"].astype(str).str.strip().str.lower()
-        df["broadcast_description"] = df["broadcast_description"].astype(str)
-        df["Data"] = df["message_date_time"].dt.date
-        df["Mes"] = df["message_date_time"].dt.to_period("M").astype(str)
-
-        # Atualiza sets
-        status_set |= set(df["message_status"].dropna().unique().tolist())
-        campaign_set |= set(df["broadcast_description"].dropna().unique().tolist())
-
-        # =========================
-        # ✅ GRUPOS: sempre atualiza (se mode permitir)
-        # =========================
-        # Classifica por grupo
-        df["_group"] = df["broadcast_description"].apply(_classify_group)
-
-        for gname in GROUPS_DEF.keys():
-            sub = df[df["_group"] == gname].copy()
-            if sub.empty:
-                continue
-            new_monthly_g = sub.groupby(["Mes", "message_status"]).size().reset_index(name="qty")
-            new_daily_g = sub.groupby(["Mes", "Data", "message_status"]).size().reset_index(name="qty")
-
-            old_m_g, old_d_g = groups_dfs.get(gname, (pd.DataFrame(), pd.DataFrame()))
-            mm, dd = _merge_group_tables(old_m_g, old_d_g, new_monthly_g, new_daily_g)
-            groups_dfs[gname] = (mm, dd)
-
-        # =========================
-        # ✅ TOTAIS: só se mode == "totais"
-        # =========================
-        if mode == "totais":
-            new_monthly = df.groupby(["Mes", "message_status"]).size().reset_index(name="qty")
-            new_daily = df.groupby(["Mes", "Data", "message_status"]).size().reset_index(name="qty")
-
-            if old_monthly.empty:
-                merged_monthly = new_monthly.copy()
-            else:
-                merged_monthly = pd.concat([old_monthly, new_monthly], ignore_index=True)
-                merged_monthly = merged_monthly.groupby(["Mes", "message_status"], as_index=False)["qty"].sum()
-
-            if old_daily.empty:
-                merged_daily = new_daily.copy()
-            else:
-                merged_daily = pd.concat([old_daily, new_daily], ignore_index=True)
-                merged_daily = merged_daily.groupby(["Mes", "Data", "message_status"], as_index=False)["qty"].sum()
-
-            # globais derivados do consolidado
-            global_total = int(merged_monthly["qty"].sum()) if not merged_monthly.empty else 0
-            global_enviados = int(
-                merged_monthly[merged_monthly["message_status"].isin(["sent", "delivered", "read"])]["qty"].sum()
-            ) if not merged_monthly.empty else 0
-            dias_unicos = int(merged_daily["Data"].nunique()) if not merged_daily.empty else 0
-            status_unicos = int(len(status_set))
-            campanhas = int(len(campaign_set))
-        else:
-            # não mexe nos totais: reaproveita global existente
-            g = (existing.get("global") or {})
-            global_total = int(g.get("total", 0))
-            global_enviados = int(g.get("enviados", 0))
-            dias_unicos = int(g.get("dias_unicos", 0))
-            campanhas = int(g.get("campanhas", 0))
-            status_unicos = int(g.get("status_unicos", 0))
-            merged_monthly = old_monthly
-            merged_daily = old_daily
-
-        # atualiza lista de arquivos (sem duplicar por hash) — apenas no modo totais
-        if mode == "totais":
-            for meta in new_files_meta:
-                h = meta.get("hash")
-                if h and h not in seen_hashes_totais:
-                    files.append({"name": meta.get("name", ""), "size": int(meta.get("size", 0) or 0), "hash": h})
-            seen_hashes_totais |= set(actually_new_hashes)
-        else:
-            # modo grupos: não mexe em files/file_hashes
-            pass
-
-        # atualiza hashes de grupos
-        seen_hashes_groups |= set(actually_new_hashes)
-
-        # serializa grupos
-        groups_payload = {}
-        for gname, (mdf, ddf) in groups_dfs.items():
-            groups_payload[gname] = {
-                "monthly": _records_firestore_safe((mdf if mdf is not None else pd.DataFrame()).to_dict(orient="records")),
-                "daily": _records_firestore_safe((ddf if ddf is not None else pd.DataFrame()).to_dict(orient="records")),
-            }
-
-        summary = {
-            "updated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "files": _records_firestore_safe(files),
-            "file_hashes": list(seen_hashes_totais),
-            "group_file_hashes": list(seen_hashes_groups),
-            "status_set": sorted(list(status_set)),
-            "campaign_set": sorted(list(campaign_set)),
-            "global": {
-                "total": int(global_total),
-                "enviados": int(global_enviados),
-                "dias_unicos": int(dias_unicos),
-                "campanhas": int(campanhas),
-                "status_unicos": int(status_unicos),
-            },
-            "monthly": _records_firestore_safe((merged_monthly if merged_monthly is not None else pd.DataFrame()).to_dict(orient="records")),
-            "daily": _records_firestore_safe((merged_daily if merged_daily is not None else pd.DataFrame()).to_dict(orient="records")),
-            # ✅ novo (acréscimo)
-            "groups": groups_payload,
-        }
-
-        _save_persisted_summary(summary)
-        return summary
 
     def _render_monthly_daily_tables(df_monthly: pd.DataFrame, df_daily: pd.DataFrame, key_prefix: str):
         if df_monthly.empty or df_daily.empty:
@@ -1799,7 +1492,6 @@ with tab_meta:
         )
         mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
 
-        # ✅ Mantém esta tabela (não remover)
         st.markdown("### Sintético mensal por status (mês selecionado)")
         mdf = df_monthly[df_monthly["Mes"] == mes_sel].copy().sort_values("qty", ascending=False)
         enviados_mes = int(mdf[mdf["message_status"].isin(["sent", "delivered", "read"])]["qty"].sum())
@@ -1812,7 +1504,6 @@ with tab_meta:
         view_m["Quantidade"] = view_m["Quantidade"].apply(_fmt_int_pt)
         st.dataframe(view_m, use_container_width=True, hide_index=True)
 
-        # ✅ Mantém esta tabela (não remover)
         st.markdown("### Totais por dia (dentro do mês selecionado)")
         ddf = df_daily[df_daily["Mes"] == mes_sel].copy()
         if ddf.empty:
@@ -1834,6 +1525,199 @@ with tab_meta:
             view_d.index = [d.strftime("%d/%m/%Y") if isinstance(d, dt.date) else str(d) for d in view_d.index]
             view_d = view_d.reset_index().rename(columns={"index": "Data"})
             st.dataframe(view_d, use_container_width=True, hide_index=True)
+
+    # =========================================================
+    # ✅ AJUSTE CRÍTICO (SÓ AQUI): GRUPOS IDPOTENTES POR ARQUIVO
+    # - Guarda contribuições por hash em summary["group_contrib"]
+    # - Reprocessar mesmo arquivo SOBRESCREVE contribuição (não duplica e não ignora)
+    # - Grupos consolidados = soma das contribuições
+    # =========================================================
+    def _rebuild_groups_from_contrib(group_contrib: dict) -> dict:
+        # group_contrib: {hash: {group: {"monthly":[...], "daily":[...]}}}
+        agg_monthly = {g: [] for g in GROUPS_DEF.keys()}
+        agg_daily = {g: [] for g in GROUPS_DEF.keys()}
+
+        for _, by_group in (group_contrib or {}).items():
+            if not isinstance(by_group, dict):
+                continue
+            for gname in GROUPS_DEF.keys():
+                payload = by_group.get(gname, {}) or {}
+                agg_monthly[gname].extend(payload.get("monthly", []) or [])
+                agg_daily[gname].extend(payload.get("daily", []) or [])
+
+        groups_payload = {}
+        for gname in GROUPS_DEF.keys():
+            mdf = pd.DataFrame(agg_monthly[gname])
+            ddf = pd.DataFrame(agg_daily[gname])
+
+            if not mdf.empty:
+                mdf["Mes"] = mdf["Mes"].astype(str)
+                mdf["message_status"] = mdf["message_status"].astype(str).str.lower()
+                mdf["qty"] = pd.to_numeric(mdf["qty"], errors="coerce").fillna(0).astype(int)
+                mdf = mdf.groupby(["Mes", "message_status"], as_index=False)["qty"].sum()
+
+            if not ddf.empty:
+                ddf["Mes"] = ddf["Mes"].astype(str)
+                ddf["message_status"] = ddf["message_status"].astype(str).str.lower()
+                ddf["qty"] = pd.to_numeric(ddf["qty"], errors="coerce").fillna(0).astype(int)
+                ddf["Data"] = pd.to_datetime(ddf["Data"], errors="coerce").dt.date
+                ddf = ddf.groupby(["Mes", "Data", "message_status"], as_index=False)["qty"].sum()
+
+            groups_payload[gname] = {
+                "monthly": _records_firestore_safe(mdf.to_dict(orient="records") if not mdf.empty else []),
+                "daily": _records_firestore_safe(ddf.to_dict(orient="records") if not ddf.empty else []),
+            }
+
+        return groups_payload
+
+    def _incremental_upsert_summary(new_df_5cols: pd.DataFrame, new_files_meta: List[dict], imported_hashes: List[str], mode: str = "totais") -> dict:
+        """
+        mode:
+          - "totais": atualiza totais gerais (monthly/daily) e também atualiza grupos
+          - "grupos": atualiza SOMENTE grupos (não mexe nos totais gerais)
+        """
+        existing = _load_persisted_summary()
+        existing = existing or {}
+
+        status_set = set(existing.get("status_set", []) or [])
+        campaign_set = set(existing.get("campaign_set", []) or [])
+
+        files = existing.get("files", []) or []
+        seen_hashes_totais = set(existing.get("file_hashes", []) or [])
+
+        old_monthly, old_daily = _normalize_existing_tables(existing)
+
+        df = new_df_5cols.copy()
+        df["message_status"] = df["message_status"].astype(str).str.strip().str.lower()
+        df["broadcast_description"] = df["broadcast_description"].astype(str)
+        df["Data"] = df["message_date_time"].dt.date
+        df["Mes"] = df["message_date_time"].dt.to_period("M").astype(str)
+
+        status_set |= set(df["message_status"].dropna().unique().tolist())
+        campaign_set |= set(df["broadcast_description"].dropna().unique().tolist())
+
+        # -------------------------
+        # ✅ GRUPOS (idempotente por hash)
+        # -------------------------
+        group_contrib = existing.get("group_contrib", {}) or {}
+        if not isinstance(group_contrib, dict):
+            group_contrib = {}
+
+        if "_src_hash" in df.columns:
+            hashes_in_df = [h for h in df["_src_hash"].dropna().astype(str).unique().tolist() if h.strip() != ""]
+        else:
+            hashes_in_df = []
+
+        # classifica
+        df["_group"] = df["broadcast_description"].apply(_classify_group)
+
+        # Para cada hash: recalcula e SOBRESCREVE contribuição
+        for h in hashes_in_df:
+            sub_h = df[df.get("_src_hash", "") == h].copy()
+            if sub_h.empty:
+                continue
+
+            by_group_payload = {}
+            for gname in GROUPS_DEF.keys():
+                sub = sub_h[sub_h["_group"] == gname].copy()
+                if sub.empty:
+                    continue
+                new_monthly_g = sub.groupby(["Mes", "message_status"]).size().reset_index(name="qty")
+                new_daily_g = sub.groupby(["Mes", "Data", "message_status"]).size().reset_index(name="qty")
+
+                by_group_payload[gname] = {
+                    "monthly": _records_firestore_safe(new_monthly_g.to_dict(orient="records")),
+                    "daily": _records_firestore_safe(new_daily_g.to_dict(orient="records")),
+                }
+
+            group_contrib[str(h)] = by_group_payload
+
+        # Reconstrói consolidados de grupos
+        groups_payload = _rebuild_groups_from_contrib(group_contrib)
+
+        # -------------------------
+        # ✅ TOTAIS (somente se mode == "totais")
+        # -------------------------
+        if mode == "totais":
+            actually_new_hashes = [h for h in imported_hashes if h not in seen_hashes_totais]
+            if not actually_new_hashes:
+                # ainda salva grupos (pois pode ter _src_hash)
+                summary = existing
+                summary["groups"] = groups_payload
+                summary["group_contrib"] = group_contrib
+                summary["group_file_hashes"] = list(group_contrib.keys())
+                summary["updated_at"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                _save_persisted_summary(summary)
+                return summary
+
+            # filtra df somente dos hashes novos para totais, se tiver _src_hash
+            if "_src_hash" in df.columns and actually_new_hashes:
+                df_tot = df[df["_src_hash"].isin(actually_new_hashes)].copy()
+            else:
+                df_tot = df.copy()
+
+            new_monthly = df_tot.groupby(["Mes", "message_status"]).size().reset_index(name="qty")
+            new_daily = df_tot.groupby(["Mes", "Data", "message_status"]).size().reset_index(name="qty")
+
+            if old_monthly.empty:
+                merged_monthly = new_monthly.copy()
+            else:
+                merged_monthly = pd.concat([old_monthly, new_monthly], ignore_index=True)
+                merged_monthly = merged_monthly.groupby(["Mes", "message_status"], as_index=False)["qty"].sum()
+
+            if old_daily.empty:
+                merged_daily = new_daily.copy()
+            else:
+                merged_daily = pd.concat([old_daily, new_daily], ignore_index=True)
+                merged_daily = merged_daily.groupby(["Mes", "Data", "message_status"], as_index=False)["qty"].sum()
+
+            global_total = int(merged_monthly["qty"].sum()) if not merged_monthly.empty else 0
+            global_enviados = int(
+                merged_monthly[merged_monthly["message_status"].isin(["sent", "delivered", "read"])]["qty"].sum()
+            ) if not merged_monthly.empty else 0
+            dias_unicos = int(merged_daily["Data"].nunique()) if not merged_daily.empty else 0
+            status_unicos = int(len(status_set))
+            campanhas = int(len(campaign_set))
+
+            for meta in new_files_meta:
+                h = meta.get("hash")
+                if h and h not in seen_hashes_totais:
+                    files.append({"name": meta.get("name", ""), "size": int(meta.get("size", 0) or 0), "hash": h})
+            seen_hashes_totais |= set(actually_new_hashes)
+
+        else:
+            # não mexe nos totais
+            merged_monthly, merged_daily = old_monthly, old_daily
+            g = (existing.get("global") or {})
+            global_total = int(g.get("total", 0))
+            global_enviados = int(g.get("enviados", 0))
+            dias_unicos = int(g.get("dias_unicos", 0))
+            campanhas = int(g.get("campanhas", 0))
+            status_unicos = int(g.get("status_unicos", 0))
+
+        summary = {
+            "updated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "files": _records_firestore_safe(files),
+            "file_hashes": list(seen_hashes_totais),
+            "status_set": sorted(list(status_set)),
+            "campaign_set": sorted(list(campaign_set)),
+            "global": {
+                "total": int(global_total),
+                "enviados": int(global_enviados),
+                "dias_unicos": int(dias_unicos),
+                "campanhas": int(campanhas),
+                "status_unicos": int(status_unicos),
+            },
+            "monthly": _records_firestore_safe((merged_monthly if merged_monthly is not None else pd.DataFrame()).to_dict(orient="records")),
+            "daily": _records_firestore_safe((merged_daily if merged_daily is not None else pd.DataFrame()).to_dict(orient="records")),
+            # ✅ grupos
+            "groups": groups_payload,
+            "group_contrib": group_contrib,
+            "group_file_hashes": list(group_contrib.keys()),
+        }
+
+        _save_persisted_summary(summary)
+        return summary
 
     if "meta_c6_summary" not in st.session_state:
         st.session_state["meta_c6_summary"] = _load_persisted_summary() or None
@@ -1866,7 +1750,7 @@ with tab_meta:
 
             try:
                 df_raw = _read_meta_file(f.name, raw)
-                dfs_meta.append(df_raw)
+                dfs_meta.append((h, df_raw))
                 imported_hashes.append(h)
             except Exception as e:
                 st.error(f"Erro ao ler {f.name}: {e}")
@@ -1875,32 +1759,33 @@ with tab_meta:
             st.info(f"{skipped} arquivo(s) já tinham sido importados antes e foram ignorados (para não duplicar).")
 
         if dfs_meta:
-            df_raw = pd.concat(dfs_meta, ignore_index=True)
-            df = _auto_rename_to_required(df_raw)
+            frames = []
+            for h, df_raw in dfs_meta:
+                df = _auto_rename_to_required(df_raw)
+                required_cols = ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
+                missing = [c for c in required_cols if c not in df.columns]
+                if missing:
+                    st.error(f"Arquivo (hash {h}) com colunas ausentes: {missing}")
+                    continue
 
-            required_cols = ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
-            missing = [c for c in required_cols if c not in df.columns]
-            if missing:
-                st.error(f"Colunas obrigatórias ausentes (após tentativa automática): {missing}")
-                st.markdown("**Colunas encontradas no arquivo (para conferência):**")
-                st.write(sorted([str(c) for c in df_raw.columns]))
-            else:
                 df = df[required_cols].copy()
                 df["broadcast_description"] = df["broadcast_description"].astype(str)
-
-                # filtro C6
                 df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
-
                 df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                 df = df.dropna(subset=["message_date_time"])
-
                 if df.empty:
-                    st.warning("Nenhum registro com 'c6' encontrado nas campanhas após o filtro.")
-                else:
-                    st.session_state["meta_c6_summary"] = _incremental_upsert_summary(
-                        df, files_meta, imported_hashes, mode="totais"
-                    )
-                    st.success("Importação concluída. O histórico foi acumulado com sucesso.")
+                    continue
+                df["_src_hash"] = h
+                frames.append(df)
+
+            if not frames:
+                st.warning("Nenhum registro com 'c6' encontrado nas campanhas após o filtro.")
+            else:
+                df_all = pd.concat(frames, ignore_index=True)
+                st.session_state["meta_c6_summary"] = _incremental_upsert_summary(
+                    df_all, files_meta, imported_hashes, mode="totais"
+                )
+                st.success("Importação concluída. O histórico foi acumulado com sucesso.")
 
     summary = st.session_state.get("meta_c6_summary") or _load_persisted_summary() or None
     st.session_state["meta_c6_summary"] = summary
@@ -1931,76 +1816,63 @@ with tab_meta:
             _render_monthly_daily_tables(df_monthly, df_daily, key_prefix="meta_totais")
 
         # =========================================================
-        # ✅ NOVO (ACRÉSCIMO): VISUALIZAÇÕES POR GRUPO (ESCONDIDO)
+        # ✅ VISUALIZAÇÕES POR GRUPO (ESCONDIDO)
         # =========================================================
         st.divider()
         with st.expander("Visualizações por grupo (Varejo / Fundação FFM / FIEB / Exponencial / I9 / Junta Comercial) — clique para abrir", expanded=False):
             st.caption("Baseado em broadcast_description. Isso é um ACRÉSCIMO e não altera os relatórios atuais.")
 
-            # opcional: reprocessar somente segmentação (grupos), sem mexer nos totais
             with st.expander("Opcional: Reprocessar apenas segmentação (grupos)", expanded=False):
                 grp_files = st.file_uploader(
-                    "Envie CSV/XLSX (se quiser). Isso só preenche os GRUPOS e NÃO mexe nos totais gerais.",
+                    "Envie CSV/XLSX (os mesmos arquivos, se quiser). Isso só preenche os GRUPOS e NÃO mexe nos totais gerais.",
                     type=["csv", "xlsx"],
                     accept_multiple_files=True,
                     key="meta_group_reprocess_upload"
                 )
 
                 if grp_files:
-                    existing = _load_persisted_summary()
-                    seen_group_hashes = set((existing or {}).get("group_file_hashes", []) or [])
-
-                    dfs_meta2 = []
-                    files_meta2 = []
-                    imported_hashes2 = []
-                    skipped2 = 0
+                    dfs = []
+                    metas = []
+                    hashes = []
+                    reproc = 0
 
                     for f in grp_files:
                         raw = f.getvalue()
                         h = file_md5(raw)
-                        files_meta2.append({"name": f.name, "size": int(getattr(f, "size", 0) or 0), "hash": h})
-
-                        if h in seen_group_hashes:
-                            skipped2 += 1
-                            continue
+                        metas.append({"name": f.name, "size": int(getattr(f, "size", 0) or 0), "hash": h})
+                        hashes.append(h)
 
                         try:
-                            df_raw2 = _read_meta_file(f.name, raw)
-                            dfs_meta2.append(df_raw2)
-                            imported_hashes2.append(h)
+                            df_raw = _read_meta_file(f.name, raw)
+                            df = _auto_rename_to_required(df_raw)
+                            required_cols = ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
+                            missing = [c for c in required_cols if c not in df.columns]
+                            if missing:
+                                st.error(f"{f.name}: colunas ausentes {missing}")
+                                continue
+
+                            df = df[required_cols].copy()
+                            df["broadcast_description"] = df["broadcast_description"].astype(str)
+                            df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
+                            df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
+                            df = df.dropna(subset=["message_date_time"])
+                            if df.empty:
+                                continue
+                            df["_src_hash"] = h
+                            dfs.append(df)
+                            reproc += 1
                         except Exception as e:
                             st.error(f"Erro ao ler {f.name}: {e}")
 
-                    if skipped2 > 0:
-                        st.info(f"{skipped2} arquivo(s) já estavam processados para GRUPOS e foram ignorados.")
+                    if not dfs:
+                        st.warning("Nenhum registro com 'c6' encontrado após o filtro.")
+                    else:
+                        df_all = pd.concat(dfs, ignore_index=True)
+                        st.session_state["meta_c6_summary"] = _incremental_upsert_summary(
+                            df_all, metas, hashes, mode="grupos"
+                        )
+                        st.success("Segmentação (grupos) atualizada (reprocessa e atualiza mesmo arquivos já enviados, sem duplicar).")
 
-                    if dfs_meta2:
-                        df_raw2 = pd.concat(dfs_meta2, ignore_index=True)
-                        df2 = _auto_rename_to_required(df_raw2)
-
-                        required_cols = ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
-                        missing = [c for c in required_cols if c not in df2.columns]
-                        if missing:
-                            st.error(f"Colunas obrigatórias ausentes (após tentativa automática): {missing}")
-                        else:
-                            df2 = df2[required_cols].copy()
-                            df2["broadcast_description"] = df2["broadcast_description"].astype(str)
-
-                            # filtro C6
-                            df2 = df2[df2["broadcast_description"].str.lower().str.contains("c6", na=False)]
-
-                            df2["message_date_time"] = _parse_datetime_br_priority(df2["message_date_time"])
-                            df2 = df2.dropna(subset=["message_date_time"])
-
-                            if df2.empty:
-                                st.warning("Nenhum registro com 'c6' encontrado após o filtro.")
-                            else:
-                                st.session_state["meta_c6_summary"] = _incremental_upsert_summary(
-                                    df2, files_meta2, imported_hashes2, mode="grupos"
-                                )
-                                st.success("Segmentação (grupos) atualizada sem alterar os totais gerais.")
-
-            # recarrega summary atualizada
             summary = _load_persisted_summary() or summary
             groups_obj = _load_groups_from_summary(summary)
             groups_dfs = _groups_to_dfs(groups_obj)
@@ -2018,7 +1890,7 @@ with tab_meta:
                 mdf_g, ddf_g = groups_dfs.get(chosen, (pd.DataFrame(), pd.DataFrame()))
                 st.markdown(f"## {chosen}")
                 if (mdf_g is None or mdf_g.empty) and (ddf_g is None or ddf_g.empty):
-                    st.warning("Ainda não há dados nesse grupo. Importe (ou reprocese) arquivos para preencher.")
+                    st.warning("Ainda não há dados nesse grupo. Reprocese os arquivos para preencher.")
                 else:
                     _render_monthly_daily_tables(mdf_g, ddf_g, key_prefix=f"meta_grp_{chosen.replace(' ', '_').lower()}")
 
@@ -2064,9 +1936,6 @@ with tab_leads_status:
         return pd.read_excel(io.BytesIO(raw_bytes))
 
     def _extract_date_base_from_col_b(df: pd.DataFrame) -> Optional[dt.date]:
-        """
-        ✅ A data base vem do arquivo (coluna B).
-        """
         if df.shape[1] < 2:
             return None
         s = df.iloc[:, 1]  # Coluna B
@@ -2079,19 +1948,12 @@ with tab_leads_status:
         return max(d)
 
     def _calc_valid_within_14_days(df: pd.DataFrame, data_base: dt.date) -> int:
-        """
-        ✅ INDICAÇÕES DENTRO DO PRAZO:
-        (Data base col. B) – (Data/hora cadastro col. M) <= 14 dias
-        """
         if df.shape[1] < 13:
             return 0
-        # Coluna M => índice 12 (0-based)
         cad = pd.to_datetime(df.iloc[:, 12], errors="coerce", dayfirst=True)
         cad_date = cad.dt.date
         base_dt = pd.to_datetime(pd.Series([data_base] * len(df)), errors="coerce").dt.date
-        # diferença em dias (data_base - cadastro)
         diff = (pd.to_datetime(base_dt) - pd.to_datetime(cad_date)).dt.days
-        # considera somente onde cadastro existe
         ok = diff.notna() & (diff <= 14)
         return int(ok.sum())
 
@@ -2136,7 +1998,6 @@ with tab_leads_status:
                     st.error(f"{upl.name}: não consegui ler a DATA BASE na coluna B.")
                     continue
 
-                # status (coluna Q)
                 s = df_status.iloc[:, 16].astype("string").fillna("").str.strip()
                 s = s[s != ""]
                 if s.empty:
@@ -2146,14 +2007,12 @@ with tab_leads_status:
                 counts = s.value_counts().to_dict()
                 day_key = data_base.strftime("%d/%m/%Y")
 
-                # ✅ novo: indicações dentro do prazo
                 valid_14 = _calc_valid_within_14_days(df_status, data_base)
 
                 if day_key in store and isinstance(store.get(day_key), dict):
                     overwritten_days.append(day_key)
 
                 store[day_key] = {str(k): int(v) for k, v in counts.items()}
-                # guarda junto no mesmo dia (não atrapalha contagem por status)
                 store[day_key]["__valid_14"] = int(valid_14)
 
                 seen_hashes.add(h)
@@ -2172,7 +2031,6 @@ with tab_leads_status:
         if imported:
             st.success(f"Importação concluída: {imported} arquivo(s) novos acumulados no histórico.")
 
-    # recarrega
     store = _leads_status_load()
     if "_file_hashes" in store:
         store = {k: v for k, v in store.items() if k != "_file_hashes"}
@@ -2186,7 +2044,6 @@ with tab_leads_status:
             if not isinstance(m, dict):
                 continue
 
-            # ✅ novo: pega indicações válidas do dia
             valid_rows.append({"Data": dkey, "IndicacoesValidas": int(m.get("__valid_14", 0) or 0)})
 
             for status, qtd in m.items():
@@ -2212,7 +2069,8 @@ with tab_leads_status:
             c2.metric("Status únicos", br_int(status_unicos))
             c3.metric("Total (somatório)", br_int(total_reg))
 
-            dfh["Mes"] = dfh["_date"].dt.to_period("M").astype(str)  # YYYY-MM
+            dfh["Mes"] = dfh["_date"].dt.to_period("M").astype(str)
+
             meses = sorted(dfh["Mes"].unique())
             meses_lbl = []
             for m in meses:
@@ -2237,7 +2095,6 @@ with tab_leads_status:
             else:
                 st.markdown("### Comparativo diário (Δ vs dia anterior)")
 
-                # top statuses
                 topn = 6
                 totals_by_status = (
                     dfm.groupby("Status")["Quantidade"].sum().sort_values(ascending=False)
@@ -2262,7 +2119,6 @@ with tab_leads_status:
                 if "OUTROS" in base_cols:
                     order_status += ["OUTROS"]
 
-                # ✅ novo: indicações válidas por dia (no mês)
                 dfv["_date"] = pd.to_datetime(dfv["Data"], format="%d/%m/%Y", errors="coerce")
                 dfv = dfv.dropna(subset=["_date"])
                 dfv["Mes"] = dfv["_date"].dt.to_period("M").astype(str)
@@ -2279,7 +2135,6 @@ with tab_leads_status:
                 view["Total"] = pivot["TOTAL"]
                 view["Δ Total"] = delta["TOTAL"]
 
-                # ✅ novo: coluna solicitada
                 view["Indicações dentro do prazo"] = valid_by_day.values
                 view["Δ Indicações dentro do prazo"] = valid_delta.values
 
