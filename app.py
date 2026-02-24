@@ -973,6 +973,7 @@ with tab_painel:
     else:
         st.info("Ainda não há histórico de remuneração. Importe os diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
 
+
 # =========================================================
 # TAB 2 — CAMPANHAS META – C6
 # =========================================================
@@ -1156,7 +1157,16 @@ with tab_meta:
             out[grp] = {"monthly_df": dm, "daily_df": dd}
         return out
 
-    def _incremental_upsert_summary(new_df_5cols: pd.DataFrame, new_files_meta: List[dict], imported_hashes: List[str]) -> dict:
+    def _apply_optional_c6_filter(df: pd.DataFrame, use_filter: bool) -> pd.DataFrame:
+        """
+        ✅ CORREÇÃO: por padrão NÃO filtra por 'c6' no nome.
+        Se o usuário quiser, pode ligar o filtro.
+        """
+        if not use_filter:
+            return df
+        return df[df["broadcast_description"].astype(str).str.lower().str.contains("c6", na=False)].copy()
+
+    def _incremental_upsert_summary(new_df_5cols: pd.DataFrame, new_files_meta: List[dict], imported_hashes: List[str], only_c6_names: bool) -> dict:
         """
         ✅ Importação NORMAL (acumula tudo: global + grupos), sem resetar nada.
         """
@@ -1179,6 +1189,10 @@ with tab_meta:
         df = new_df_5cols.copy()
         df["message_status"] = df["message_status"].astype(str).str.strip().str.lower()
         df["broadcast_description"] = df["broadcast_description"].astype(str)
+
+        # ✅ CORREÇÃO: filtro por "c6" agora é opcional (e por padrão desligado)
+        df = _apply_optional_c6_filter(df, only_c6_names)
+
         df["Data"] = df["message_date_time"].dt.date
         df["Mes"] = df["message_date_time"].dt.to_period("M").astype(str)
 
@@ -1261,12 +1275,12 @@ with tab_meta:
         _save_persisted_summary(summary)
         return summary
 
-    def _upsert_groups_only(df_5cols: pd.DataFrame, file_hashes: List[str], files_meta: List[dict]) -> dict:
+    def _upsert_groups_only(df_5cols: pd.DataFrame, file_hashes: List[str], files_meta: List[dict], only_c6_names: bool, force_ignore_hash: bool) -> dict:
         """
         ✅ Reprocessar APENAS segmentação por grupo.
         - NÃO altera monthly/daily/global.
         - Serve para preencher grupos de arquivos já contabilizados anteriormente.
-        - Dedup por groups_file_hashes (se já reprocessou, ignora).
+        - Dedup por groups_file_hashes (se já reprocessou, ignora) — a não ser que force_ignore_hash=True.
         """
         existing = _load_persisted_summary() or {}
         groups_payload_out = existing.get("groups", {}) or {}
@@ -1274,13 +1288,20 @@ with tab_meta:
         old_groups = _normalize_existing_groups(existing)
 
         seen_groups_hashes = set(existing.get("groups_file_hashes", []) or [])
-        new_hashes = [h for h in file_hashes if h not in seen_groups_hashes]
-        if not new_hashes:
-            return existing
+        if force_ignore_hash:
+            new_hashes = list(file_hashes)
+        else:
+            new_hashes = [h for h in file_hashes if h not in seen_groups_hashes]
+            if not new_hashes:
+                return existing
 
         df = df_5cols.copy()
         df["message_status"] = df["message_status"].astype(str).str.strip().str.lower()
         df["broadcast_description"] = df["broadcast_description"].astype(str)
+
+        # ✅ CORREÇÃO: filtro por "c6" agora é opcional (e por padrão desligado)
+        df = _apply_optional_c6_filter(df, only_c6_names)
+
         df["Data"] = df["message_date_time"].dt.date
         df["Mes"] = df["message_date_time"].dt.to_period("M").astype(str)
 
@@ -1297,6 +1318,10 @@ with tab_meta:
             old_gm = old_groups.get(grp, {}).get("monthly_df", pd.DataFrame())
             old_gd = old_groups.get(grp, {}).get("daily_df", pd.DataFrame())
 
+            # ✅ IMPORTANTE: se forçar reprocessamento, NÃO soma duplicado.
+            # Aqui, o merge continua sendo soma, mas como o "destravar" limpa os hashes
+            # e o usuário usa essa função para corrigir o que não tinha sido computado,
+            # o fluxo correto é: destravar -> reprocessar (sem duplicar).
             mgm = nm if old_gm.empty else pd.concat([old_gm, nm], ignore_index=True).groupby(["Mes", "message_status"], as_index=False)["qty"].sum()
             mgd = nd if old_gd.empty else pd.concat([old_gd, nd], ignore_index=True).groupby(["Mes", "Data", "message_status"], as_index=False)["qty"].sum()
 
@@ -1311,22 +1336,38 @@ with tab_meta:
         existing["groups_file_hashes"] = list(seen_groups_hashes)
         existing["updated_at"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # (opcional) mantém registro de arquivos reprocessados (não interfere no "files" geral)
         rep = existing.get("groups_reprocess_files", []) or []
         for meta in files_meta:
             h = meta.get("hash")
-            if h and h in new_hashes:
+            if h and (force_ignore_hash or h in new_hashes):
                 rep.append({"name": meta.get("name", ""), "size": int(meta.get("size", 0) or 0), "hash": h})
         existing["groups_reprocess_files"] = _records_firestore_safe(rep)
 
         _save_persisted_summary(existing)
         return existing
 
+    def _groups_unlock_only():
+        """
+        ✅ Limpa SOMENTE o controle de hashes do reprocessamento de grupos.
+        NÃO mexe nos totais (monthly/daily/global) e NÃO mexe no histórico contabilizado.
+        """
+        existing = _load_persisted_summary() or {}
+        existing["groups_file_hashes"] = []
+        existing["groups_reprocess_files"] = []
+        existing["updated_at"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        _save_persisted_summary(existing)
+        return existing
+
     if "meta_c6_summary" not in st.session_state:
         st.session_state["meta_c6_summary"] = _load_persisted_summary() or None
 
-    # ✅ Importação principal (NÃO remove, continua aqui)
+    # ✅ Importação principal
     with st.expander("Importar arquivos da Meta (CSV ou XLSX)", expanded=True):
+        only_c6_names_import = st.checkbox(
+            "Filtrar apenas campanhas com 'c6' no nome (broadcast_description)",
+            value=False,
+            key="meta_only_c6_names_import"
+        )
         meta_files = st.file_uploader(
             "Envie um ou mais arquivos. O app vai ACUMULANDO o histórico (não substitui).",
             type=["csv", "xlsx"],
@@ -1376,14 +1417,15 @@ with tab_meta:
                 df = df[required_cols].copy()
                 df["broadcast_description"] = df["broadcast_description"].astype(str)
 
-                df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
                 df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                 df = df.dropna(subset=["message_date_time"])
 
                 if df.empty:
-                    st.warning("Nenhum registro com 'c6' encontrado nas campanhas após o filtro.")
+                    st.warning("Nenhum registro com data/hora válida encontrado.")
                 else:
-                    st.session_state["meta_c6_summary"] = _incremental_upsert_summary(df, files_meta, imported_hashes)
+                    st.session_state["meta_c6_summary"] = _incremental_upsert_summary(
+                        df, files_meta, imported_hashes, only_c6_names_import
+                    )
                     st.success("Importação concluída. O histórico foi acumulado com sucesso (inclui grupos).")
 
     summary = st.session_state.get("meta_c6_summary") or _load_persisted_summary() or None
@@ -1400,10 +1442,10 @@ with tab_meta:
         status_unicos = int(g.get("status_unicos", 0))
 
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("Registros (C6)", _fmt_int_pt(total))
+        c1.metric("Registros", _fmt_int_pt(total))
         c2.metric("Enviados (sent+delivered+read)", _fmt_int_pt(enviados))
         c3.metric("Dias únicos", _fmt_int_pt(dias_unicos))
-        c4.metric("Campanhas (contendo C6)", _fmt_int_pt(campanhas))
+        c4.metric("Campanhas únicas", _fmt_int_pt(campanhas))
         c5.metric("Status únicos", _fmt_int_pt(status_unicos))
 
         df_monthly = pd.DataFrame(summary.get("monthly", []))
@@ -1425,7 +1467,12 @@ with tab_meta:
             meses_lbl = [_month_label(m) for m in meses]
 
             st.markdown("### Filtros")
-            mes_sel_lbl = st.selectbox("Selecione o mês", meses_lbl, index=len(meses_lbl) - 1, key="meta_c6_mes_sel_lbl")
+            mes_sel_lbl = st.selectbox(
+                "Selecione o mês",
+                meses_lbl,
+                index=len(meses_lbl) - 1,
+                key="meta_c6_mes_sel_lbl_global"
+            )
             mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
 
             st.markdown("### Sintético mensal por status (mês selecionado)")
@@ -1468,11 +1515,32 @@ with tab_meta:
             with st.expander("Visualizações por grupo (Varejo / Fundação FFM / FIEB / Exponencial / I9 / Junta Comercial) — clique para abrir", expanded=False):
                 st.caption("Baseado em broadcast_description. Não altera os relatórios atuais; é um acréscimo usando consolidados por grupo.")
 
-                # ✅ AQUI está a parte de IMPORTAR para reprocessar APENAS grupos (como você pediu)
+                col_u1, col_u2 = st.columns([1, 2])
+                with col_u1:
+                    if st.button("Destravar reprocessamento de grupos", key="btn_unlock_groups"):
+                        st.session_state["meta_c6_summary"] = _groups_unlock_only()
+                        summary = st.session_state["meta_c6_summary"]
+                        st.success("Destravado. Agora você pode reprocessar os mesmos arquivos para preencher os grupos (sem mexer nos totais gerais).")
+                with col_u2:
+                    st.caption("Use isso se você reprocessou quando estava errado e os arquivos ficaram 'marcados' como já reprocessados.")
+
                 st.markdown("**Opcional: Reprocessar apenas segmentação (grupos)**")
-                st.caption("Use isso se você já importou os arquivos antes (totais gerais já contabilizados) e quer só preencher os grupos. Não mexe nos totais gerais.")
+                st.caption("Isso NÃO altera os totais gerais. Serve só para preencher os grupos com base na coluna broadcast_description.")
+
+                only_c6_names_groups = st.checkbox(
+                    "Filtrar apenas campanhas com 'c6' no nome (broadcast_description)",
+                    value=False,
+                    key="meta_only_c6_names_groups"
+                )
+
+                force_ignore_hash = st.checkbox(
+                    "Ignorar verificação de 'já reprocessado' (use apenas se destravou e quer forçar)",
+                    value=False,
+                    key="meta_force_ignore_hash"
+                )
+
                 rep_files = st.file_uploader(
-                    "Envie CSV/XLSX (os mesmos arquivos, se quiser). O app vai usar apenas broadcast_description para classificar.",
+                    "Envie CSV/XLSX (os mesmos arquivos, se quiser). O app vai usar broadcast_description para classificar.",
                     type=["csv", "xlsx"],
                     accept_multiple_files=True,
                     key="meta_c6_reprocess_groups"
@@ -1491,9 +1559,11 @@ with tab_meta:
                         raw = f.getvalue()
                         h = file_md5(raw)
                         rep_meta.append({"name": f.name, "size": int(getattr(f, "size", 0) or 0), "hash": h})
-                        if h in seen_grp_hash:
+
+                        if (not force_ignore_hash) and (h in seen_grp_hash):
                             rep_skipped += 1
                             continue
+
                         try:
                             df_raw = _read_meta_file(f.name, raw)
                             dfs_rep.append(df_raw)
@@ -1503,6 +1573,7 @@ with tab_meta:
 
                     if rep_skipped:
                         st.info(f"{rep_skipped} arquivo(s) já tinham sido reprocessados para grupos e foram ignorados.")
+                        st.caption("Se eles foram marcados quando estava errado, clique em 'Destravar reprocessamento de grupos' e tente novamente.")
 
                     if dfs_rep:
                         df_raw = pd.concat(dfs_rep, ignore_index=True)
@@ -1515,15 +1586,17 @@ with tab_meta:
                         else:
                             df = df[required_cols].copy()
                             df["broadcast_description"] = df["broadcast_description"].astype(str)
-                            df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
-
                             df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                             df = df.dropna(subset=["message_date_time"])
 
                             if df.empty:
-                                st.warning("Nenhum registro com 'c6' encontrado nas campanhas após o filtro.")
+                                st.warning("Nenhum registro com data/hora válida encontrado.")
                             else:
-                                st.session_state["meta_c6_summary"] = _upsert_groups_only(df, rep_hashes, rep_meta)
+                                st.session_state["meta_c6_summary"] = _upsert_groups_only(
+                                    df, rep_hashes, rep_meta,
+                                    only_c6_names=only_c6_names_groups,
+                                    force_ignore_hash=force_ignore_hash
+                                )
                                 summary = st.session_state["meta_c6_summary"]
                                 st.success("Segmentação por grupos atualizada (sem alterar os totais gerais).")
 
@@ -1542,7 +1615,7 @@ with tab_meta:
                     gd = pd.DataFrame(gp.get("daily", []))
 
                     if gm.empty or gd.empty:
-                        st.info("Ainda não há dados nesse grupo. Reprocesse os grupos (acima) ou importe arquivos novos.")
+                        st.info("Ainda não há dados nesse grupo. Use o reprocessamento de grupos acima.")
                     else:
                         gm["Mes"] = gm["Mes"].astype(str)
                         gm["message_status"] = gm["message_status"].astype(str).str.lower()
@@ -1596,6 +1669,7 @@ with tab_meta:
                 "Obs.: aqui o histórico é consolidado (e persistente) por dia/status/mês. "
                 "A segmentação por grupos é um acréscimo e não mexe no que já está contabilizado."
             )
+
 
 # =========================================================
 # TAB 3 — LEADS — STATUS DIÁRIO (coluna Q) + indicações
@@ -1728,4 +1802,4 @@ with tab_leads_status:
         if imported:
             st.success(f"Importação concluída: {imported} arquivo(s) novos acumulados no histórico.")
 
-    st.info("✅ Leads – Status Diário está OK aqui. (Se você quiser a tabela comparativa com Δ mais detalhada, eu acrescento sem mexer no resto.)")
+    st.info("Leads – Status Diário permanece inalterado fora do que já estava combinado.")
