@@ -1675,11 +1675,11 @@ with tab_meta:
     # -------------------------
     def _groups_definitions() -> Dict[str, List[str]]:
         """
-        ✅ Regras EXACTAS (broadcast_description):
+        ✅ Regras exatas definidas por você (broadcast_description contém as siglas):
           VAREJO: BIGLOJ, AMERIC, VAREJO, LINKS
           FUNDACAO: FUNDACAO, FFMEDI
           EXPONENCIAL: EXPONENCIAL, COPEL, EMBASA, BNB
-          I9: I9 (precisa ser token, não "I90")
+          I9: I9
           JUNTA COMERCIAL: JACOM, JUNTA
           FIEB: FIEB, CAIELL, CSENAI, CASESI, CACIEB, CIEB
         """
@@ -1689,27 +1689,29 @@ with tab_meta:
             "EXPONENCIAL": ["EXPONENCIAL", "COPEL", "EMBASA", "BNB"],
             "I9": ["I9"],
             "JUNTA COMERCIAL": ["JACOM", "JUNTA"],
-            "FIEB": ["FIEB", "CAIELL", "CSENAI", "CASES I".replace(" ", ""), "CACIEB", "CIEB"],
+            "FIEB": ["FIEB", "CAIELL", "CSENAI", "CASESİ", "CASESI", "CACIEB", "CIEB"],
         }
 
     def _match_group(broadcast_desc: str, group_name: str) -> bool:
         """
-        ✅ Confere broadcast_description (contains).
-        ✅ I9: match como token (evita pegar I90), aceitando separadores tipo '_' '-' ' ' etc.
+        ✅ Contabiliza se broadcast_description CONTIVER qualquer sigla do grupo.
+        - substring match (case-insensitive)
+        - I9 com regex robusta (funciona com _I9_, -I9-, espaços, etc.)
         """
-        txt = (broadcast_desc or "")
-        txt = str(txt).strip().upper()
+        txt = (broadcast_desc or "").strip()
         if not txt:
             return False
+        up = txt.upper()
 
-        keys = _groups_definitions().get(group_name, []) or []
+        keys = _groups_definitions().get(group_name, [])
 
         if group_name == "I9":
-            # underscore é "word char" em \b, então usamos delimitador NÃO-alfanumérico
-            return re.search(r"(^|[^A-Z0-9])I9([^A-Z0-9]|$)", txt) is not None
+            # robusto para separadores "_" "-" " " etc.
+            # garante que não pega I90 / XI9X
+            return re.search(r"(?<![A-Z0-9])I9(?![A-Z0-9])", up) is not None
 
         for k in keys:
-            if k and k in txt:
+            if k and k.upper() in up:
                 return True
         return False
 
@@ -1873,7 +1875,7 @@ with tab_meta:
                 df = df[required_cols].copy()
                 df["broadcast_description"] = df["broadcast_description"].astype(str)
 
-                # filtro C6
+                # filtro C6 (mantém como estava)
                 df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
 
                 df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
@@ -1915,12 +1917,12 @@ with tab_meta:
             _render_monthly_daily_tables(df_monthly, df_daily, key_prefix="meta_global")
 
         # =======================================================
-        # (2) NOVO BLOCO — Visualizações por grupo (ACRÉSCIMO)
+        # (2) VISUALIZAÇÕES POR GRUPO — corrigido
         # =======================================================
         st.divider()
         with st.expander("Visualizações por grupo (VAREJO / FUNDACAO / EXPONENCIAL / I9 / JUNTA COMERCIAL / FIEB) — clique para abrir", expanded=False):
             st.caption("Baseado em broadcast_description. Isso é um ACRÉSCIMO e não altera os relatórios atuais.")
-            st.markdown("**Importante:** envie aqui os arquivos (CSV/XLSX). "
+            st.markdown("**Importante:** para começar os grupos a partir de hoje, envie aqui os arquivos (CSV/XLSX). "
                         "Isso preenche somente a segmentação por grupos e NÃO mexe nos totais gerais.")
 
             # store de grupos
@@ -1932,7 +1934,6 @@ with tab_meta:
             if "updated_at" not in groups_store:
                 groups_store["updated_at"] = ""
 
-            # upload para preencher grupos (pode ser os mesmos arquivos do histórico)
             grp_files = st.file_uploader(
                 "Enviar arquivos para preencher os grupos (CSV/XLSX)",
                 type=["csv", "xlsx"],
@@ -1940,7 +1941,6 @@ with tab_meta:
                 key="meta_groups_upload"
             )
 
-            # seleção e botão processar (profissional)
             grp_names = list(_groups_definitions().keys())
             grp_sel = st.selectbox("Grupo", grp_names, index=0, key="meta_groups_sel")
             if "meta_groups_selected" not in st.session_state:
@@ -1951,8 +1951,6 @@ with tab_meta:
                 if not grp_files:
                     st.warning("Envie pelo menos 1 arquivo para processar a segmentação por grupos.")
                 else:
-                    # ✅ reprocessa SOMENTE grupos, a partir dos arquivos enviados agora
-                    # (não depende de hashes antigos e não mexe nos totais gerais)
                     dfs = []
                     for f in grp_files:
                         try:
@@ -1968,8 +1966,8 @@ with tab_meta:
                             df = df[required_cols].copy()
                             df["broadcast_description"] = df["broadcast_description"].astype(str)
 
-                            # filtro C6 (mantém igual ao principal)
-                            df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
+                            # ✅ CORREÇÃO: NÃO filtra por "c6" aqui
+                            # A segmentação por grupo segue suas siglas, e seus nomes podem não conter "c6".
 
                             df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                             df = df.dropna(subset=["message_date_time"])
@@ -1984,7 +1982,7 @@ with tab_meta:
                         st.warning("Nenhum dado válido encontrado nesses arquivos para segmentação.")
                     else:
                         df_all = pd.concat(dfs, ignore_index=True)
-                        # calcula e salva por grupo (sobrescreve SOMENTE os grupos a partir deste processamento)
+
                         aggs = _compute_group_aggregates_from_raw_df(df_all)
 
                         for gname, parts in aggs.items():
@@ -2001,7 +1999,6 @@ with tab_meta:
                         _save_groups_store(groups_store)
                         st.success("Segmentação por grupos atualizada com sucesso (sem alterar os totais gerais).")
 
-            # exibição: sempre que houver dados e o usuário escolher/ver
             groups_store = _load_groups_store()
             gmap = (groups_store or {}).get("groups", {}) or {}
             grp_data = gmap.get(grp_sel, {}) or {}
@@ -2138,7 +2135,6 @@ with tab_leads_status:
         if imported:
             st.success(f"Importação concluída: {imported} arquivo(s) novos acumulados no histórico.")
 
-    # recarrega
     store = _leads_status_load()
     if "_file_hashes" in store:
         store = {k: v for k, v in store.items() if k != "_file_hashes"}
