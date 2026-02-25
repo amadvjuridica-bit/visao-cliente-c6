@@ -826,7 +826,7 @@ show_logo_and_title()
 st.divider()
 
 tab_painel, tab_meta, tab_leads_status = st.tabs(
-    ["📊 Painel C6", "Campanhas Meta", "🧾 Leads – Status Diário"]
+    ["📊 Painel C6", "💬 Campanhas Meta", "🧾 Leads – Status Diário"]
 )
 
 # =========================================================
@@ -1469,11 +1469,11 @@ with tab_painel:
 
 # =========================================================
 # =====================  TAB 2  ===========================
-# ================ Campanhas Meta ==============
+# ================ 💬 Campanhas Meta ==============
 # =========================================================
 with tab_meta:
 
-    st.subheader("Campanhas Meta")
+    st.subheader("💬 Campanhas Meta")
 
     META_SUMMARY_PATH = os.path.join(DATA_DIR, "meta_c6_summary.json")
     META_GROUPS_PATH = os.path.join(DATA_DIR, "meta_c6_groups.json")
