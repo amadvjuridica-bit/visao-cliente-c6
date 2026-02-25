@@ -1674,25 +1674,42 @@ with tab_meta:
     # ✅ GRUPOS (APENAS UM ACRÉSCIMO)
     # -------------------------
     def _groups_definitions() -> Dict[str, List[str]]:
+        """
+        ✅ Regras EXACTAS (broadcast_description):
+          VAREJO: BIGLOJ, AMERIC, VAREJO, LINKS
+          FUNDACAO: FUNDACAO, FFMEDI
+          EXPONENCIAL: EXPONENCIAL, COPEL, EMBASA, BNB
+          I9: I9 (precisa ser token, não "I90")
+          JUNTA COMERCIAL: JACOM, JUNTA
+          FIEB: FIEB, CAIELL, CSENAI, CASESI, CACIEB, CIEB
+        """
         return {
-            "VAREJO": ["americ", "bigloj", "links", "varejo", "carioc"],
-            "FUNDAÇÃO FFM": ["fundacao", "ffmedi"],
-            "FIEB": ["fieb", "sesi", "senai", "iel", "cieb", "csenai", "casesi", "caiell"],
-            "EXPONENCIAL": ["exponencial", "copel", "embasa", "bnb"],
-            "I9": ["i9"],
-            "JUNTA COMERCIAL": ["junta", "jacom"],
+            "VAREJO": ["BIGLOJ", "AMERIC", "VAREJO", "LINKS"],
+            "FUNDACAO": ["FUNDACAO", "FFMEDI"],
+            "EXPONENCIAL": ["EXPONENCIAL", "COPEL", "EMBASA", "BNB"],
+            "I9": ["I9"],
+            "JUNTA COMERCIAL": ["JACOM", "JUNTA"],
+            "FIEB": ["FIEB", "CAIELL", "CSENAI", "CASES I".replace(" ", ""), "CACIEB", "CIEB"],
         }
 
     def _match_group(broadcast_desc: str, group_name: str) -> bool:
-        txt = (broadcast_desc or "").strip().lower()
+        """
+        ✅ Confere broadcast_description (contains).
+        ✅ I9: match como token (evita pegar I90), aceitando separadores tipo '_' '-' ' ' etc.
+        """
+        txt = (broadcast_desc or "")
+        txt = str(txt).strip().upper()
         if not txt:
             return False
-        keys = _groups_definitions().get(group_name, [])
+
+        keys = _groups_definitions().get(group_name, []) or []
+
         if group_name == "I9":
-            # i9 precisa ser mais "exato" (evita pegar "i90")
-            return re.search(r"\bi9\b", txt) is not None
+            # underscore é "word char" em \b, então usamos delimitador NÃO-alfanumérico
+            return re.search(r"(^|[^A-Z0-9])I9([^A-Z0-9]|$)", txt) is not None
+
         for k in keys:
-            if k in txt:
+            if k and k in txt:
                 return True
         return False
 
@@ -1901,9 +1918,9 @@ with tab_meta:
         # (2) NOVO BLOCO — Visualizações por grupo (ACRÉSCIMO)
         # =======================================================
         st.divider()
-        with st.expander("Visualizações por grupo (Varejo / Fundação FFM / FIEB / Exponencial / I9 / Junta Comercial) — clique para abrir", expanded=False):
+        with st.expander("Visualizações por grupo (VAREJO / FUNDACAO / EXPONENCIAL / I9 / JUNTA COMERCIAL / FIEB) — clique para abrir", expanded=False):
             st.caption("Baseado em broadcast_description. Isso é um ACRÉSCIMO e não altera os relatórios atuais.")
-            st.markdown("**Importante:** para começar os grupos a partir de hoje, envie aqui os arquivos (CSV/XLSX). "
+            st.markdown("**Importante:** envie aqui os arquivos (CSV/XLSX). "
                         "Isso preenche somente a segmentação por grupos e NÃO mexe nos totais gerais.")
 
             # store de grupos
@@ -1970,9 +1987,6 @@ with tab_meta:
                         # calcula e salva por grupo (sobrescreve SOMENTE os grupos a partir deste processamento)
                         aggs = _compute_group_aggregates_from_raw_df(df_all)
 
-                        # mantém o que já existe e faz merge incremental por grupo (somando),
-                        # porém baseado no que você importou agora como "base inicial do dia"
-                        # → para não dar confusão de duplicar/ignorar, aqui nós SUBSTITUÍMOS o consolidado do grupo.
                         for gname, parts in aggs.items():
                             gm = parts.get("monthly", pd.DataFrame())
                             gd = parts.get("daily", pd.DataFrame())
