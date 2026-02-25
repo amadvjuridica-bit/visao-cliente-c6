@@ -1987,7 +1987,7 @@ with tab_meta:
         # (2) VISUALIZAÇÕES POR GRUPO — ✅ CORRIGIDO (PERSISTE + NÃO DUPLICA + UPDATE)
         # =======================================================
         st.divider()
-        with st.expander("Visualizações por grupo (VAREJO / FUNDACAO / EXPONENCIAL / I9 / JUNTA COMERCIAL / FIEB) — clique para abrir", expanded=False):
+        with st.expander("Carteiras — clique para abrir", expanded=False):
             st.caption("Baseado em broadcast_description. Isso é um ACRÉSCIMO e não altera os relatórios atuais.")
             st.markdown("**Importante:** envie aqui os arquivos (CSV/XLSX). "
                         "Isso preenche somente a segmentação por grupos e NÃO mexe nos totais gerais.")
