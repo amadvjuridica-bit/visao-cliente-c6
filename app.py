@@ -692,33 +692,78 @@ def apply_theme():
     st.markdown(
         """
         <style>
-            section[data-testid="stSidebar"]{ background:#0f1b3a; }
-            section[data-testid="stSidebar"] * { color:#ffffff !important; }
+            /* Sidebar mais elegante */
+            section[data-testid="stSidebar"]{
+                background: linear-gradient(180deg, #0f1b3a 0%, #1a2b4e 100%);
+            }
+            section[data-testid="stSidebar"] * {
+                color: #ffffff !important;
+            }
+            section[data-testid="stSidebar"] .stButton button {
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                color: white !important;
+            }
 
+            /* Cards métricos */
             div[data-testid="stMetric"]{
                 background:#ffffff;
                 border:1px solid #e9eef7;
                 border-radius:14px;
-                padding:12px 14px;
-                box-shadow:0 2px 10px rgba(15,27,58,0.05);
+                padding:16px 18px;
+                box-shadow:0 4px 12px rgba(15,27,58,0.08);
+                transition: all 0.2s ease;
+            }
+            div[data-testid="stMetric"]:hover {
+                box-shadow:0 8px 20px rgba(15,27,58,0.12);
+                transform: translateY(-2px);
             }
 
-            h1,h2,h3{ color:#0f1b3a; }
+            /* Títulos */
+            h1, h2, h3{
+                color: #0f1b3a;
+                font-weight: 600;
+                letter-spacing: -0.02em;
+            }
 
+            /* Badges */
             .am-badge-ok{
-                display:inline-block; padding:4px 10px; border-radius:999px;
+                display:inline-block; padding:6px 16px; border-radius:999px;
                 background:rgba(0,122,255,0.12); color:#007AFF;
-                font-weight:900; font-size:12px;
+                font-weight:600; font-size:13px; border:1px solid rgba(0,122,255,0.2);
             }
             .am-badge-bad{
-                display:inline-block; padding:4px 10px; border-radius:999px;
+                display:inline-block; padding:6px 16px; border-radius:999px;
                 background:rgba(255,59,48,0.12); color:#FF3B30;
-                font-weight:900; font-size:12px;
+                font-weight:600; font-size:13px; border:1px solid rgba(255,59,48,0.2);
             }
 
-            /* tabela mais compacta */
-            .am-compact-table thead tr th { font-size: 12px !important; }
-            .am-compact-table tbody tr td { font-size: 12px !important; }
+            /* Tabelas compactas e profissionais */
+            .am-compact-table thead tr th {
+                font-size: 13px !important;
+                background: #f8fafd !important;
+                color: #0f1b3a !important;
+                font-weight: 600 !important;
+            }
+            .am-compact-table tbody tr td {
+                font-size: 13px !important;
+            }
+
+            /* Upload area */
+            .stFileUploader > div {
+                border: 2px dashed #e9eef7;
+                border-radius: 16px;
+                padding: 20px;
+                background: #ffffff;
+            }
+
+            /* Divisor */
+            hr {
+                margin: 2rem 0;
+                border: none;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, #e9eef7, transparent);
+            }
         </style>
         """,
         unsafe_allow_html=True,
@@ -739,11 +784,11 @@ def show_logo_and_title():
         st.markdown(
             """
             <div style="line-height:1.1">
-              <div style="font-size:28px;font-weight:900;color:#0f1b3a;margin-bottom:4px;">
-                Painel de controle Assis e Mollerke parceiro Banco C6
+              <div style="font-size:32px;font-weight:900;color:#0f1b3a;margin-bottom:4px;">
+                Assis e Mollerke
               </div>
-              <div style="color:#5b6b8c;font-weight:700;">
-                Visão Cliente + Leads + Remuneração
+              <div style="color:#5b6b8c;font-weight:600;font-size:16px;">
+                Painel de Controle Estratégico · Parceiro Banco C6
               </div>
             </div>
             """,
@@ -766,14 +811,14 @@ def reset_all_data():
 # =========================================================
 # APP
 # =========================================================
-st.set_page_config(page_title="Assis e Mollerke | Banco C6", layout="wide")
+st.set_page_config(page_title="Assis e Mollerke · C6", layout="wide")
 apply_theme()
 
 if not login_gate():
     st.stop()
 
 st.sidebar.markdown("---")
-if st.sidebar.button("RESETAR HISTÓRICO (ZERAR TUDO)"):
+if st.sidebar.button("🔄 RESETAR HISTÓRICO (ZERAR TUDO)"):
     reset_all_data()
     st.sidebar.success("Histórico resetado. Reimporte Nov/25 e Dez/25 (se quiser) e depois os diários.")
 
@@ -781,7 +826,7 @@ show_logo_and_title()
 st.divider()
 
 tab_painel, tab_meta, tab_leads_status = st.tabs(
-    ["📊 Painel C6", "📢 Campanhas Meta – C6", "🧾 Leads – Status Diário"]
+    ["📊 Painel C6", "📢 CARTEIRAS Assis e Mollerke", "🧾 Leads – Status Diário"]
 )
 
 # =========================================================
@@ -1424,11 +1469,11 @@ with tab_painel:
 
 # =========================================================
 # =====================  TAB 2  ===========================
-# ===================== META C6 ============================
+# ================ CARTEIRAS Assis e Mollerke ==============
 # =========================================================
 with tab_meta:
 
-    st.subheader("📢 Campanhas Meta – C6")
+    st.subheader("📢 CARTEIRAS Assis e Mollerke")
 
     META_SUMMARY_PATH = os.path.join(DATA_DIR, "meta_c6_summary.json")
     META_GROUPS_PATH = os.path.join(DATA_DIR, "meta_c6_groups.json")
@@ -1670,9 +1715,9 @@ with tab_meta:
         _save_persisted_summary(summary)
         return summary
 
-    # -------------------------
-    # ✅ GRUPOS (APENAS UM ACRÉSCIMO)
-    # -------------------------
+    # =======================================================
+    # GRUPOS (CORRIGIDO)
+    # =======================================================
     def _groups_definitions() -> Dict[str, List[str]]:
         """
         ✅ Regras exatas definidas por você (broadcast_description contém as siglas):
@@ -1689,7 +1734,7 @@ with tab_meta:
             "EXPONENCIAL": ["EXPONENCIAL", "COPEL", "EMBASA", "BNB"],
             "I9": ["I9"],
             "JUNTA COMERCIAL": ["JACOM", "JUNTA"],
-            "FIEB": ["FIEB", "CAIELL", "CSENAI", "CASESİ", "CASESI", "CACIEB", "CIEB"],
+            "FIEB": ["FIEB", "CAIELL", "CSENAI", "CASESI", "CACIEB", "CIEB"],
         }
 
     def _match_group(broadcast_desc: str, group_name: str) -> bool:
@@ -1705,9 +1750,11 @@ with tab_meta:
 
         keys = _groups_definitions().get(group_name, [])
 
+        # Tratamento especial para I9 (palavra independente)
         if group_name == "I9":
             return re.search(r"(?<![A-Z0-9])I9(?![A-Z0-9])", up) is not None
 
+        # Para os demais grupos, verifica se qualquer sigla está contida no texto
         for k in keys:
             if k and k.upper() in up:
                 return True
@@ -1988,7 +2035,9 @@ with tab_meta:
                             df = df[required_cols].copy()
                             df["broadcast_description"] = df["broadcast_description"].astype(str)
 
-                            # ✅ aqui NÃO filtra por "c6"
+                            # ✅ CORREÇÃO: NÃO FILTRAR POR "c6" AQUI, para capturar todos os grupos
+                            # df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
+
                             df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                             df = df.dropna(subset=["message_date_time"])
                             if df.empty:
