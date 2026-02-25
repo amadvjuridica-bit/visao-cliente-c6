@@ -481,10 +481,6 @@ def month_levels_upsert_from_daily_df(df_c6: pd.DataFrame):
     """
     Grava qualificação por MÊS DO RELATÓRIO (mês do arquivo),
     não por DT_CONTA_CRIADA.
-
-    Regra:
-    - Para o mês do arquivo, para cada CNPJ, salva o MAIOR nível visto no mês.
-    - Só a partir de Jan/26 em diante.
     """
     store = safe_json_load(HIST_MONTH_LEVELS, default={})
 
@@ -784,7 +780,6 @@ tab_painel, tab_meta, tab_leads_status = st.tabs(
 # ===================== PAINEL C6 ==========================
 # =========================================================
 with tab_painel:
-
     st.subheader("Importação diária (Janeiro/26 em diante)")
 
     colA, colB = st.columns(2)
@@ -1283,7 +1278,6 @@ with tab_painel:
 # ===================== META C6 ============================
 # =========================================================
 with tab_meta:
-
     st.subheader("📢 Campanhas Meta – C6")
 
     META_SUMMARY_PATH = os.path.join(DATA_DIR, "meta_c6_summary.json")
@@ -1527,13 +1521,9 @@ with tab_meta:
             st.dataframe(view_d, use_container_width=True, hide_index=True)
 
     # =========================================================
-    # ✅ AJUSTE CRÍTICO (SÓ AQUI): GRUPOS IDPOTENTES POR ARQUIVO
-    # - Guarda contribuições por hash em summary["group_contrib"]
-    # - Reprocessar mesmo arquivo SOBRESCREVE contribuição (não duplica e não ignora)
-    # - Grupos consolidados = soma das contribuições
+    # ✅ GRUPOS IDPOTENTES POR ARQUIVO
     # =========================================================
     def _rebuild_groups_from_contrib(group_contrib: dict) -> dict:
-        # group_contrib: {hash: {group: {"monthly":[...], "daily":[...]}}}
         agg_monthly = {g: [] for g in GROUPS_DEF.keys()}
         agg_daily = {g: [] for g in GROUPS_DEF.keys()}
 
@@ -1603,15 +1593,12 @@ with tab_meta:
         if not isinstance(group_contrib, dict):
             group_contrib = {}
 
+        hashes_in_df = []
         if "_src_hash" in df.columns:
             hashes_in_df = [h for h in df["_src_hash"].dropna().astype(str).unique().tolist() if h.strip() != ""]
-        else:
-            hashes_in_df = []
 
-        # classifica
         df["_group"] = df["broadcast_description"].apply(_classify_group)
 
-        # Para cada hash: recalcula e SOBRESCREVE contribuição
         for h in hashes_in_df:
             sub_h = df[df.get("_src_hash", "") == h].copy()
             if sub_h.empty:
@@ -1632,7 +1619,6 @@ with tab_meta:
 
             group_contrib[str(h)] = by_group_payload
 
-        # Reconstrói consolidados de grupos
         groups_payload = _rebuild_groups_from_contrib(group_contrib)
 
         # -------------------------
@@ -1641,7 +1627,6 @@ with tab_meta:
         if mode == "totais":
             actually_new_hashes = [h for h in imported_hashes if h not in seen_hashes_totais]
             if not actually_new_hashes:
-                # ainda salva grupos (pois pode ter _src_hash)
                 summary = existing
                 summary["groups"] = groups_payload
                 summary["group_contrib"] = group_contrib
@@ -1650,7 +1635,6 @@ with tab_meta:
                 _save_persisted_summary(summary)
                 return summary
 
-            # filtra df somente dos hashes novos para totais, se tiver _src_hash
             if "_src_hash" in df.columns and actually_new_hashes:
                 df_tot = df[df["_src_hash"].isin(actually_new_hashes)].copy()
             else:
@@ -1686,7 +1670,6 @@ with tab_meta:
             seen_hashes_totais |= set(actually_new_hashes)
 
         else:
-            # não mexe nos totais
             merged_monthly, merged_daily = old_monthly, old_daily
             g = (existing.get("global") or {})
             global_total = int(g.get("total", 0))
@@ -1710,7 +1693,6 @@ with tab_meta:
             },
             "monthly": _records_firestore_safe((merged_monthly if merged_monthly is not None else pd.DataFrame()).to_dict(orient="records")),
             "daily": _records_firestore_safe((merged_daily if merged_daily is not None else pd.DataFrame()).to_dict(orient="records")),
-            # ✅ grupos
             "groups": groups_payload,
             "group_contrib": group_contrib,
             "group_file_hashes": list(group_contrib.keys()),
@@ -1770,7 +1752,10 @@ with tab_meta:
 
                 df = df[required_cols].copy()
                 df["broadcast_description"] = df["broadcast_description"].astype(str)
-                df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
+
+                # ✅ CORREÇÃO: NÃO FILTRAR POR "c6" NO NOME (isso estava zerando seus grupos)
+                # df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
+
                 df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                 df = df.dropna(subset=["message_date_time"])
                 if df.empty:
@@ -1779,7 +1764,7 @@ with tab_meta:
                 frames.append(df)
 
             if not frames:
-                st.warning("Nenhum registro com 'c6' encontrado nas campanhas após o filtro.")
+                st.warning("Nenhum registro válido após leitura e parse de data/hora.")
             else:
                 df_all = pd.concat(frames, ignore_index=True)
                 st.session_state["meta_c6_summary"] = _incremental_upsert_summary(
@@ -1801,10 +1786,10 @@ with tab_meta:
         status_unicos = int(g.get("status_unicos", 0))
 
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("Registros (C6)", _fmt_int_pt(total))
+        c1.metric("Registros", _fmt_int_pt(total))
         c2.metric("Enviados (sent+delivered+read)", _fmt_int_pt(enviados))
         c3.metric("Dias únicos", _fmt_int_pt(dias_unicos))
-        c4.metric("Campanhas (contendo C6)", _fmt_int_pt(campanhas))
+        c4.metric("Campanhas (únicas)", _fmt_int_pt(campanhas))
         c5.metric("Status únicos", _fmt_int_pt(status_unicos))
 
         df_monthly = pd.DataFrame(summary.get("monthly", []))
@@ -1815,9 +1800,6 @@ with tab_meta:
         else:
             _render_monthly_daily_tables(df_monthly, df_daily, key_prefix="meta_totais")
 
-        # =========================================================
-        # ✅ VISUALIZAÇÕES POR GRUPO (ESCONDIDO)
-        # =========================================================
         st.divider()
         with st.expander("Visualizações por grupo (Varejo / Fundação FFM / FIEB / Exponencial / I9 / Junta Comercial) — clique para abrir", expanded=False):
             st.caption("Baseado em broadcast_description. Isso é um ACRÉSCIMO e não altera os relatórios atuais.")
@@ -1853,7 +1835,10 @@ with tab_meta:
 
                             df = df[required_cols].copy()
                             df["broadcast_description"] = df["broadcast_description"].astype(str)
-                            df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
+
+                            # ✅ CORREÇÃO: NÃO FILTRAR POR "c6" NO NOME (isso estava zerando seus grupos)
+                            # df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
+
                             df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                             df = df.dropna(subset=["message_date_time"])
                             if df.empty:
@@ -1865,7 +1850,7 @@ with tab_meta:
                             st.error(f"Erro ao ler {f.name}: {e}")
 
                     if not dfs:
-                        st.warning("Nenhum registro com 'c6' encontrado após o filtro.")
+                        st.warning("Nenhum registro válido após leitura e parse de data/hora.")
                     else:
                         df_all = pd.concat(dfs, ignore_index=True)
                         st.session_state["meta_c6_summary"] = _incremental_upsert_summary(
@@ -1890,7 +1875,7 @@ with tab_meta:
                 mdf_g, ddf_g = groups_dfs.get(chosen, (pd.DataFrame(), pd.DataFrame()))
                 st.markdown(f"## {chosen}")
                 if (mdf_g is None or mdf_g.empty) and (ddf_g is None or ddf_g.empty):
-                    st.warning("Ainda não há dados nesse grupo. Reprocese os arquivos para preencher.")
+                    st.warning("Ainda não há dados nesse grupo. Reprocesse os arquivos para preencher.")
                 else:
                     _render_monthly_daily_tables(mdf_g, ddf_g, key_prefix=f"meta_grp_{chosen.replace(' ', '_').lower()}")
 
@@ -1905,7 +1890,6 @@ with tab_meta:
 # =========== LEADS — STATUS DIÁRIO (AJUSTADO) =============
 # =========================================================
 with tab_leads_status:
-
     st.subheader("🧾 Leads — Status diário (coluna Q)")
 
     LEADS_STATUS_DAILY_PATH = os.path.join(DATA_DIR, "leads_status_daily_q.json")
