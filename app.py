@@ -757,7 +757,7 @@ def reset_all_data():
         HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL,
         HIST_COMPARE_DAILY,
         os.path.join(DATA_DIR, "meta_c6_summary.json"),
-        os.path.join(DATA_DIR, "meta_c6_groups.json"),   # ✅ apenas store de grupos (meta)
+        os.path.join(DATA_DIR, "meta_c6_groups.json"),
         os.path.join(DATA_DIR, "leads_status_daily_q.json"),
     ]:
         safe_json_delete(p)
@@ -1706,8 +1706,6 @@ with tab_meta:
         keys = _groups_definitions().get(group_name, [])
 
         if group_name == "I9":
-            # robusto para separadores "_" "-" " " etc.
-            # garante que não pega I90 / XI9X
             return re.search(r"(?<![A-Z0-9])I9(?![A-Z0-9])", up) is not None
 
         for k in keys:
@@ -1716,7 +1714,30 @@ with tab_meta:
         return False
 
     def _load_groups_store() -> dict:
-        return safe_json_load(META_GROUPS_PATH, default={}) or {}
+        """
+        ✅ Store persistente de grupos:
+          {
+            "updated_at": "...",
+            "file_hashes": [...],
+            "groups": {
+              "<GRUPO>": {
+                "daily": [...],   # consolidado
+                "monthly": [...], # derivado
+                "updated_at": "..."
+              }
+            }
+          }
+        """
+        store = safe_json_load(META_GROUPS_PATH, default={}) or {}
+        if not isinstance(store, dict):
+            store = {}
+        if "groups" not in store or not isinstance(store.get("groups"), dict):
+            store["groups"] = {}
+        if "file_hashes" not in store or not isinstance(store.get("file_hashes"), list):
+            store["file_hashes"] = []
+        if "updated_at" not in store:
+            store["updated_at"] = ""
+        return store
 
     def _save_groups_store(store: dict):
         safe_json_save(META_GROUPS_PATH, store)
@@ -1754,7 +1775,7 @@ with tab_meta:
 
     def _render_monthly_daily_tables(df_monthly: pd.DataFrame, df_daily: pd.DataFrame, key_prefix: str):
         """
-        ✅ Função visual reutilizável (evita duplicação).
+        ✅ Função visual reutilizável.
         ✅ key_prefix garante que NÃO haverá StreamlitDuplicateElementKey.
         """
         if df_monthly.empty or df_daily.empty:
@@ -1913,26 +1934,16 @@ with tab_meta:
         if df_monthly.empty or df_daily.empty:
             st.warning("Resumo vazio. Importe arquivos para começar.")
         else:
-            # ✅ render padrão (sem alterar nada)
             _render_monthly_daily_tables(df_monthly, df_daily, key_prefix="meta_global")
 
         # =======================================================
-        # (2) VISUALIZAÇÕES POR GRUPO — corrigido
+        # (2) VISUALIZAÇÕES POR GRUPO — ✅ CORRIGIDO (PERSISTE + NÃO DUPLICA + UPDATE)
         # =======================================================
         st.divider()
         with st.expander("Visualizações por grupo (VAREJO / FUNDACAO / EXPONENCIAL / I9 / JUNTA COMERCIAL / FIEB) — clique para abrir", expanded=False):
             st.caption("Baseado em broadcast_description. Isso é um ACRÉSCIMO e não altera os relatórios atuais.")
-            st.markdown("**Importante:** para começar os grupos a partir de hoje, envie aqui os arquivos (CSV/XLSX). "
+            st.markdown("**Importante:** envie aqui os arquivos (CSV/XLSX). "
                         "Isso preenche somente a segmentação por grupos e NÃO mexe nos totais gerais.")
-
-            # store de grupos
-            groups_store = _load_groups_store()
-            if not isinstance(groups_store, dict):
-                groups_store = {}
-            if "groups" not in groups_store or not isinstance(groups_store.get("groups"), dict):
-                groups_store["groups"] = {}
-            if "updated_at" not in groups_store:
-                groups_store["updated_at"] = ""
 
             grp_files = st.file_uploader(
                 "Enviar arquivos para preencher os grupos (CSV/XLSX)",
@@ -1943,62 +1954,121 @@ with tab_meta:
 
             grp_names = list(_groups_definitions().keys())
             grp_sel = st.selectbox("Grupo", grp_names, index=0, key="meta_groups_sel")
-            if "meta_groups_selected" not in st.session_state:
-                st.session_state["meta_groups_selected"] = grp_sel
-            st.session_state["meta_groups_selected"] = grp_sel
 
             if st.button("Processar", key="meta_groups_process_btn"):
                 if not grp_files:
                     st.warning("Envie pelo menos 1 arquivo para processar a segmentação por grupos.")
                 else:
+                    groups_store = _load_groups_store()
+                    seen_hashes = set(groups_store.get("file_hashes", []) or [])
+
                     dfs = []
+                    new_hashes = []
+                    skipped = 0
+                    errs = 0
+
                     for f in grp_files:
                         try:
                             raw = f.getvalue()
+                            h = file_md5(raw)
+
+                            if h in seen_hashes:
+                                skipped += 1
+                                continue
+
                             df_raw = _read_meta_file(f.name, raw)
                             df = _auto_rename_to_required(df_raw)
                             required_cols = ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
                             missing = [c for c in required_cols if c not in df.columns]
                             if missing:
                                 st.error(f"{f.name}: colunas obrigatórias ausentes: {missing}")
+                                errs += 1
                                 continue
 
                             df = df[required_cols].copy()
                             df["broadcast_description"] = df["broadcast_description"].astype(str)
 
-                            # ✅ CORREÇÃO: NÃO filtra por "c6" aqui
-                            # A segmentação por grupo segue suas siglas, e seus nomes podem não conter "c6".
-
+                            # ✅ aqui NÃO filtra por "c6"
                             df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                             df = df.dropna(subset=["message_date_time"])
                             if df.empty:
                                 continue
 
                             dfs.append(df)
+                            new_hashes.append(h)
+
                         except Exception as e:
                             st.error(f"Erro ao ler {f.name}: {e}")
+                            errs += 1
+
+                    if skipped > 0:
+                        st.info(f"{skipped} arquivo(s) já tinham sido importados antes e foram ignorados (para não duplicar).")
 
                     if not dfs:
-                        st.warning("Nenhum dado válido encontrado nesses arquivos para segmentação.")
+                        if errs == 0:
+                            st.warning("Nenhum dado válido encontrado nesses arquivos para segmentação.")
                     else:
                         df_all = pd.concat(dfs, ignore_index=True)
 
                         aggs = _compute_group_aggregates_from_raw_df(df_all)
 
-                        for gname, parts in aggs.items():
-                            gm = parts.get("monthly", pd.DataFrame())
-                            gd = parts.get("daily", pd.DataFrame())
+                        # ✅ merge persistente por grupo:
+                        # - diário: upsert por chave (Mes, Data, message_status) mantendo histórico e atualizando se repetir a mesma chave
+                        # - mensal: recalcula a partir do diário consolidado
+                        for gname in _groups_definitions().keys():
+                            parts = aggs.get(gname, {}) or {}
+                            new_daily = pd.DataFrame(parts.get("daily", []))
+                            if new_daily.empty:
+                                # nada novo para esse grupo
+                                continue
+
+                            # carrega diário antigo
+                            old = groups_store.get("groups", {}).get(gname, {}) or {}
+                            old_daily = pd.DataFrame(old.get("daily", []) or [])
+
+                            # normaliza
+                            if not old_daily.empty:
+                                old_daily["Mes"] = old_daily["Mes"].astype(str)
+                                old_daily["message_status"] = old_daily["message_status"].astype(str).str.lower()
+                                old_daily["qty"] = pd.to_numeric(old_daily["qty"], errors="coerce").fillna(0).astype(int)
+                                old_daily["Data"] = pd.to_datetime(old_daily["Data"], errors="coerce").dt.date
+
+                            new_daily = new_daily.copy()
+                            new_daily["Mes"] = new_daily["Mes"].astype(str)
+                            new_daily["message_status"] = new_daily["message_status"].astype(str).str.lower()
+                            new_daily["qty"] = pd.to_numeric(new_daily["qty"], errors="coerce").fillna(0).astype(int)
+                            new_daily["Data"] = pd.to_datetime(new_daily["Data"], errors="coerce").dt.date
+
+                            # concat e mantém o "novo" por último pra overwrite
+                            merged_daily = pd.concat([old_daily, new_daily], ignore_index=True) if not old_daily.empty else new_daily.copy()
+
+                            # drop duplicates por chave mantendo última ocorrência (update)
+                            merged_daily["_k"] = (
+                                merged_daily["Mes"].astype(str) + "|" +
+                                merged_daily["Data"].astype(str) + "|" +
+                                merged_daily["message_status"].astype(str)
+                            )
+                            merged_daily = merged_daily.drop_duplicates(subset=["_k"], keep="last").drop(columns=["_k"])
+
+                            # recalcula mensal
+                            merged_monthly = (
+                                merged_daily.groupby(["Mes", "message_status"], as_index=False)["qty"].sum()
+                            )
 
                             groups_store["groups"][gname] = {
-                                "monthly": _records_firestore_safe(gm.to_dict(orient="records")),
-                                "daily": _records_firestore_safe(gd.to_dict(orient="records")),
+                                "daily": _records_firestore_safe(merged_daily.to_dict(orient="records")),
+                                "monthly": _records_firestore_safe(merged_monthly.to_dict(orient="records")),
                                 "updated_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                             }
 
+                        # registra hashes novos (anti duplicação)
+                        groups_store["file_hashes"] = list(seen_hashes.union(set(new_hashes)))
                         groups_store["updated_at"] = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         _save_groups_store(groups_store)
-                        st.success("Segmentação por grupos atualizada com sucesso (sem alterar os totais gerais).")
 
+                        st.success("Segmentação por grupos atualizada com sucesso (persistente, sem duplicar e com update por dia/status).")
+
+            # render do grupo selecionado (persistente)
             groups_store = _load_groups_store()
             gmap = (groups_store or {}).get("groups", {}) or {}
             grp_data = gmap.get(grp_sel, {}) or {}
