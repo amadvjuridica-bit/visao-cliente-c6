@@ -68,18 +68,20 @@ COL_ABERTURA = "DT_CONTA_CRIADA"
 COL_FUNDACAO = "DT_FUNDACAO_EMPRESA"
 COL_PIX = "CHAVES_PIX_FORTE"
 COL_SALDO = "VL_SALDO_MEDIO_MENSALIZADO"
-COL_CASHIN_MTD = "VL_CASH_IN_MTD"
+COL_CASHIN_MTD = "VL_CASH_IN_MTD"  # ✅ usado como "Saldo total (snapshot)"
 COL_STATUS = "STATUS_CC"
 COL_DOMICILIO = "BANCO_DOMICILIO"
 COL_BY = "FL_QUALIFICADO_COMISS"
-COL_BR = "MES_REF_COMISS"
+COL_BR = "MES_REF_COMISS"  # M0/M1/M2
 COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"
 
-# Leads (cadastros)
+# Leads (cadastros) – coluna M (13ª col) como fallback
 COL_LEADS_DATA = "DATA_CADASTRO"
 
-# Data base
+# Data base (mês/dia do relatório)
 COL_DATA_BASE = "DATA_BASE"
+
+# Possíveis colunas para detectar o "mês do relatório" (mês do arquivo)
 POSSIVEIS_COL_DATA_BASE = [
     "DATA_BASE", "DT_BASE", "DATA_REFERENCIA", "DT_REFERENCIA",
     "DATA_RELATORIO", "DT_RELATORIO", "DATA_ATUALIZACAO", "DT_ATUALIZACAO"
@@ -107,39 +109,47 @@ FAIXAS = [
 DATA_DIR = "data_store"
 os.makedirs(DATA_DIR, exist_ok=True)
 
-HIST_OPEN_DAILY = os.path.join(DATA_DIR, "hist_aberturas_diario.json")
-HIST_LEADS_DAILY = os.path.join(DATA_DIR, "hist_cadastros_diario.json")
-HIST_MONTH_LEVELS = os.path.join(DATA_DIR, "hist_mes_cnpj_nivel.json")
-HIST_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "pago_max_por_cnpj.json")
-HIST_RESUMO_MENSAL = os.path.join(DATA_DIR, "resumo_mensal.json")
-HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")
-HIST_COMPARE_DAILY = os.path.join(DATA_DIR, "hist_comparativo_diario.json")
+HIST_OPEN_DAILY = os.path.join(DATA_DIR, "hist_aberturas_diario.json")        # dd/mm/aaaa -> aberturas
+HIST_LEADS_DAILY = os.path.join(DATA_DIR, "hist_cadastros_diario.json")       # dd/mm/aaaa -> cadastradas
+HIST_MONTH_LEVELS = os.path.join(DATA_DIR, "hist_mes_cnpj_nivel.json")        # mm/aaaa -> {cnpj: nivel_max_no_mes}
+HIST_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "pago_max_por_cnpj.json")         # cnpj -> max pago acumulado
+HIST_RESUMO_MENSAL = os.path.join(DATA_DIR, "resumo_mensal.json")             # mm/aaaa -> resumo calculado
+HIST_SNAPSHOT_MENSAL = os.path.join(DATA_DIR, "snapshot_mensal.json")         # mm/aaaa -> estado (saldo/pix/domicilio/qualificadas)
 
-# Meta
+# ✅ histórico comparativo diário (por DATA_BASE)
+HIST_COMPARE_DAILY = os.path.join(DATA_DIR, "hist_comparativo_diario.json")   # dd/mm/aaaa -> métricas do dia
+
+# Meta - arquivos separados (não interferem no C6)
 META_SUMMARY_PATH = os.path.join(DATA_DIR, "meta_c6_summary.json")
 META_GROUPS_PATH = os.path.join(DATA_DIR, "meta_c6_groups.json")
-
-# Controle de arquivos
 META_FILE_CONTROL = os.path.join(DATA_DIR, "meta_file_control.json")
 META_GROUPS_CONTROL = os.path.join(DATA_DIR, "meta_groups_control.json")
+LEADS_STATUS_DAILY_PATH = os.path.join(DATA_DIR, "leads_status_daily_q.json")
+LEADS_CONTROL_PATH = os.path.join(DATA_DIR, "leads_control.json")
+
 
 # =========================================================
-# HELPERS
+# HELPERS - EXATAMENTE COMO ESTAVAM
 # =========================================================
 def safe_json_load(path: str, default):
+    """
+    ✅ Se existir st.secrets["firebase"], lê do Firestore.
+    Caso contrário, mantém comportamento local.
+    """
     if "firebase" in st.secrets:
         return _fs_load_payload(_fs_doc_id_from_path(path), default)
 
     if os.path.exists(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except:
-            return default
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
     return default
 
 
 def safe_json_save(path: str, obj):
+    """
+    ✅ Se existir st.secrets["firebase"], salva no Firestore.
+    Caso contrário, mantém comportamento local.
+    """
     if "firebase" in st.secrets:
         _fs_save_payload(_fs_doc_id_from_path(path), obj)
         return
@@ -149,6 +159,9 @@ def safe_json_save(path: str, obj):
 
 
 def safe_json_delete(path: str):
+    """
+    Remove somente o doc/arquivo daquele relatório.
+    """
     if "firebase" in st.secrets:
         _fs_delete_doc(_fs_doc_id_from_path(path))
     if os.path.exists(path):
@@ -160,15 +173,11 @@ def file_md5(b: bytes) -> str:
 
 
 def br_money(v: float) -> str:
-    if pd.isna(v) or v is None:
-        return "R$ 0,00"
     s = f"{float(v):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {s}"
 
 
 def br_int(n: int) -> str:
-    if pd.isna(n) or n is None:
-        return "0"
     return f"{int(n):,}".replace(",", ".")
 
 
@@ -180,7 +189,7 @@ def fmt_date(d) -> str:
     if isinstance(d, dt.datetime):
         d = d.date()
     if not isinstance(d, dt.date):
-        return str(d)
+        return ""
     return d.strftime("%d/%m/%Y")
 
 
@@ -201,7 +210,7 @@ def month_key_str(m: str) -> int:
 
 
 def to_date_series(s: pd.Series) -> pd.Series:
-    return pd.to_datetime(s, errors="coerce", dayfirst=True).dt.date
+    return pd.to_datetime(s, errors="coerce").dt.date
 
 
 def normalize_str(s: pd.Series) -> pd.Series:
@@ -219,42 +228,60 @@ def contains_c6(x) -> bool:
 
 
 # =========================================================
-# ✅ CONTROLE DE ARQUIVOS (REIMPORTAÇÃO INTELIGENTE)
+# CONTROLE DE ARQUIVOS - APENAS PARA META (NÃO AFETA C6)
 # =========================================================
-def get_file_control(control_path: str) -> dict:
-    """Retorna controle de arquivos para um tipo específico"""
-    return safe_json_load(control_path, default={})
+def get_meta_file_control() -> dict:
+    """Retorna controle de arquivos para Meta (não afeta C6)"""
+    return safe_json_load(META_FILE_CONTROL, default={})
 
 
-def save_file_control(control_path: str, control: dict):
-    """Salva controle de arquivos"""
-    safe_json_save(control_path, control)
+def save_meta_file_control(control: dict):
+    """Salva controle de arquivos para Meta"""
+    safe_json_save(META_FILE_CONTROL, control)
 
 
-def process_files_with_control(
+def get_meta_groups_control() -> dict:
+    """Retorna controle de arquivos para grupos Meta"""
+    return safe_json_load(META_GROUPS_CONTROL, default={})
+
+
+def save_meta_groups_control(control: dict):
+    """Salva controle de arquivos para grupos Meta"""
+    safe_json_save(META_GROUPS_CONTROL, control)
+
+
+def get_leads_control() -> dict:
+    """Retorna controle de arquivos para Leads"""
+    return safe_json_load(LEADS_CONTROL_PATH, default={})
+
+
+def save_leads_control(control: dict):
+    """Salva controle de arquivos para Leads"""
+    safe_json_save(LEADS_CONTROL_PATH, control)
+
+
+def process_meta_files_with_control(
     uploaded_files, 
     control_path: str,
     process_func,
-    tipo: str = "meta"
 ) -> Tuple[List, List, int, int]:
     """
-    Processa arquivos com controle inteligente:
-    - Se mesmo nome e mesmo hash → ignora (já importado)
-    - Se mesmo nome e hash diferente → substitui (remove o antigo)
-    - Se nome novo → adiciona
+    Processa arquivos da Meta com controle inteligente.
+    Totalmente isolado - não afeta dados do C6.
     
-    Retorna: (dfs_processados, metadados_arquivos, qtd_novos, qtd_substituidos)
+    Regras:
+    - Mesmo nome + mesmo hash → ignora
+    - Mesmo nome + hash diferente → substitui
+    - Nome novo → adiciona
     """
-    control = get_file_control(control_path)
+    control = safe_json_load(control_path, default={})
     files_meta = control.get("files", [])
-    file_hashes = control.get("file_hashes", [])
     
     # Mapear por nome para busca rápida
     files_by_name = {f["name"]: f for f in files_meta}
     
     dfs = []
     novos_metadados = []
-    novos_hashes = []
     qtd_novos = 0
     qtd_substituidos = 0
     
@@ -272,9 +299,6 @@ def process_files_with_control(
             else:
                 # Mesmo nome, hash diferente → substituir
                 qtd_substituidos += 1
-                
-                # Remover dados antigos deste arquivo do summary
-                # (será feito pelo process_func)
         else:
             # Arquivo novo
             qtd_novos += 1
@@ -284,11 +308,10 @@ def process_files_with_control(
             if df is not None and not df.empty:
                 dfs.append(df)
                 novos_metadados.append({"name": f.name, "hash": h, "size": f.size})
-                novos_hashes.append(h)
         except Exception as e:
             st.error(f"Erro ao processar {f.name}: {e}")
     
-    # Atualizar controle
+    # Atualizar controle apenas para Meta
     if qtd_novos > 0 or qtd_substituidos > 0:
         # Remover arquivos que foram substituídos
         nomes_substituidos = [f.name for f in uploaded_files if f.name in files_by_name and file_md5(f.getvalue()) != files_by_name[f.name]["hash"]]
@@ -299,14 +322,11 @@ def process_files_with_control(
         # Adicionar novos metadados
         files_meta.extend(novos_metadados)
         
-        # Atualizar hashes
-        file_hashes = [f["hash"] for f in files_meta]
-        
         # Salvar controle
         control["files"] = files_meta
-        control["file_hashes"] = file_hashes
+        control["file_hashes"] = [f["hash"] for f in files_meta]
         control["updated_at"] = dt.datetime.now().isoformat()
-        save_file_control(control_path, control)
+        safe_json_save(control_path, control)
     
     return dfs, novos_metadados, qtd_novos, qtd_substituidos
 
@@ -315,6 +335,12 @@ def process_files_with_control(
 # ✅ DETECTAR DATA_BASE (DIA) DO ARQUIVO
 # =========================================================
 def detect_report_day_from_df(df: pd.DataFrame) -> Optional[dt.date]:
+    """
+    Prioridade:
+      1) DATA_BASE (ou equivalentes)
+      2) fallback: maior data em DT_CONTA_CRIADA (se existir)
+    Retorna dt.date (dia).
+    """
     for c in POSSIVEIS_COL_DATA_BASE:
         if c in df.columns:
             d = to_date_series(df[c]).dropna()
@@ -332,7 +358,16 @@ def detect_report_day_from_df(df: pd.DataFrame) -> Optional[dt.date]:
     return None
 
 
+# =========================================================
+# DETECÇÃO DO MÊS DO RELATÓRIO (mês do arquivo)
+# =========================================================
 def detect_report_month_from_df(df: pd.DataFrame) -> Optional[dt.date]:
+    """
+    Detecta o mês do relatório (mês do arquivo), NÃO o mês de abertura.
+    Prioridade:
+      1) Colunas tipo DATA_BASE/DT_BASE etc
+      2) Fallback: maior data existente em DT_CONTA_CRIADA
+    """
     for c in POSSIVEIS_COL_DATA_BASE:
         if c in df.columns:
             d = to_date_series(df[c]).dropna()
@@ -354,6 +389,10 @@ def detect_report_month_from_df(df: pd.DataFrame) -> Optional[dt.date]:
 # QUALIFICAÇÃO (NÍVEL) - NÃO ALTERADO
 # =========================================================
 def parse_level_from_criterios(txt: str) -> int:
+    """
+    Ex.: "CASH IN: 3 | DOMICILIO: 0 | SALDO MEDIO: 4 | ..."
+    Regra: considerar SOMENTE o maior valor (1..4).
+    """
     if not isinstance(txt, str) or not txt.strip():
         return 0
     nums = [int(n) for n in re.findall(r":\s*(\d+)", txt)]
@@ -366,6 +405,12 @@ def parse_level_from_criterios(txt: str) -> int:
 
 
 def parse_level(df: pd.DataFrame) -> pd.Series:
+    """
+    Regra robusta:
+    - BY pode vir 0/1/2/3/4 ou texto. Se for número 1..4, considera como nível.
+    - CRITERIOS_ATINGIDOS_COMISS também tem níveis por critério -> pega o maior.
+    - nível final = max(nível_BY, nível_CRIT)
+    """
     by_raw = df.get(COL_BY, pd.Series([None] * len(df)))
     by_num = pd.to_numeric(by_raw, errors="coerce").fillna(0).astype(int)
     level_by = by_num.where(by_num.between(1, 4), 0)
@@ -415,9 +460,13 @@ def pix_summary(df: pd.DataFrame) -> Tuple[int, int, pd.DataFrame]:
 
 
 # =========================================================
-# HISTÓRICO DIÁRIO
+# HISTÓRICO DIÁRIO (SALVA SOMENTE O QUE EXISTE NO ARQUIVO)
 # =========================================================
 def daily_upsert_many(path: str, counts: Dict[str, int]):
+    """
+    counts: {"dd/mm/aaaa": qty}
+    Salva/atualiza SEM criar datas.
+    """
     base = safe_json_load(path, default={})
     for k, v in counts.items():
         base[k] = int(v)
@@ -440,7 +489,7 @@ def hist_to_df(path: str, colname: str) -> pd.DataFrame:
 
 
 # =========================================================
-# HISTÓRICO COMPARATIVO
+# HISTÓRICO COMPARATIVO (UPsert + TABELA COM Δ)
 # =========================================================
 def compare_daily_upsert(day_key: str, payload: dict):
     base = safe_json_load(HIST_COMPARE_DAILY, default={})
@@ -465,9 +514,12 @@ def compare_daily_df() -> pd.DataFrame:
             "Contas (C6) total": int(v.get("c6_total", 0)),
             "Leads total": int(v.get("leads_total", 0)),
             "Qualificadas total": int(v.get("qual_total", 0)),
+
+            # ✅ qualificadas por BR (M0/M1/M2)
             "Qualificadas M0": int(v.get("qual_m0", 0)),
             "Qualificadas M1": int(v.get("qual_m1", 0)),
             "Qualificadas M2": int(v.get("qual_m2", 0)),
+
             "Chaves Pix total": int(v.get("pix_total", 0)),
             "Saldo total (VL_CASH_IN_MTD)": float(v.get("cashin_total", 0.0)),
             "Base (A receber no mês)": float(v.get("base_receber_mes", 0.0)),
@@ -480,31 +532,45 @@ def compare_daily_df() -> pd.DataFrame:
     df = pd.DataFrame(rows).sort_values("_date", ascending=True).reset_index(drop=True)
 
     for col in [
-        "Contas (C6) total", "Leads total", "Qualificadas total",
-        "Qualificadas M0", "Qualificadas M1", "Qualificadas M2", "Chaves Pix total"
+        "Contas (C6) total",
+        "Leads total",
+        "Qualificadas total",
+        "Qualificadas M0",
+        "Qualificadas M1",
+        "Qualificadas M2",
+        "Chaves Pix total",
+        "Saldo total (VL_CASH_IN_MTD)",
+        "Base (A receber no mês)",
     ]:
         df[f"Δ {col}"] = df[col].diff().fillna(0)
-
-    df["Δ Saldo total"] = df["Saldo total (VL_CASH_IN_MTD)"].diff().fillna(0)
-    df["Δ Base"] = df["Base (A receber no mês)"].diff().fillna(0)
 
     df = df.sort_values("_date", ascending=False).reset_index(drop=True)
 
     df["Saldo total (VL_CASH_IN_MTD)"] = df["Saldo total (VL_CASH_IN_MTD)"].apply(br_money)
-    df["Δ Saldo total"] = df["Δ Saldo total"].apply(br_money)
+    df["Δ Saldo total (VL_CASH_IN_MTD)"] = df["Δ Saldo total (VL_CASH_IN_MTD)"].apply(br_money)
+
     df["Base (A receber no mês)"] = df["Base (A receber no mês)"].apply(br_money)
-    df["Δ Base"] = df["Δ Base"].apply(br_money)
+    df["Δ Base (A receber no mês)"] = df["Δ Base (A receber no mês)"].apply(br_money)
 
     for c in [
-        "Contas (C6) total", "Leads total", "Qualificadas total",
-        "Qualificadas M0", "Qualificadas M1", "Qualificadas M2", "Chaves Pix total",
-        "Δ Contas (C6) total", "Δ Leads total", "Δ Qualificadas total",
-        "Δ Qualificadas M0", "Δ Qualificadas M1", "Δ Qualificadas M2", "Δ Chaves Pix total"
+        "Contas (C6) total",
+        "Leads total",
+        "Qualificadas total",
+        "Qualificadas M0",
+        "Qualificadas M1",
+        "Qualificadas M2",
+        "Chaves Pix total",
+        "Δ Contas (C6) total",
+        "Δ Leads total",
+        "Δ Qualificadas total",
+        "Δ Qualificadas M0",
+        "Δ Qualificadas M1",
+        "Δ Qualificadas M2",
+        "Δ Chaves Pix total",
     ]:
-        if c in df.columns:
-            df[c] = df[c].apply(br_int)
+        df[c] = df[c].apply(br_int)
 
-    colunas_exibicao = [
+    df = df[[
         "Data base", "_mes_ref",
         "Contas (C6) total", "Δ Contas (C6) total",
         "Leads total", "Δ Leads total",
@@ -513,19 +579,25 @@ def compare_daily_df() -> pd.DataFrame:
         "Qualificadas M1", "Δ Qualificadas M1",
         "Qualificadas M2", "Δ Qualificadas M2",
         "Chaves Pix total", "Δ Chaves Pix total",
-        "Saldo total (VL_CASH_IN_MTD)", "Δ Saldo total",
-        "Base (A receber no mês)", "Δ Base"
-    ]
-    
-    colunas_presentes = [c for c in colunas_exibicao if c in df.columns]
-    
-    return df[colunas_presentes].rename(columns={"_mes_ref": "Mês ref (remuneração)"})
+        "Saldo total (VL_CASH_IN_MTD)", "Δ Saldo total (VL_CASH_IN_MTD)",
+        "Base (A receber no mês)", "Δ Base (A receber no mês)"
+    ]].rename(columns={"_mes_ref": "Mês ref (remuneração)"})
+
+    return df
 
 
 # =========================================================
-# MENSAL POR CNPJ
+# MENSAL POR CNPJ (NÍVEL MÁXIMO NO MÊS) - A PARTIR DO DIÁRIO
 # =========================================================
 def month_levels_upsert_from_daily_df(df_c6: pd.DataFrame):
+    """
+    Grava qualificação por MÊS DO RELATÓRIO (mês do arquivo),
+    não por DT_CONTA_CRIADA.
+
+    Regra:
+    - Para o mês do arquivo, para cada CNPJ, salva o MAIOR nível visto no mês.
+    - Só a partir de Jan/26 em diante.
+    """
     store = safe_json_load(HIST_MONTH_LEVELS, default={})
 
     mes_rel = detect_report_month_from_df(df_c6)
@@ -547,22 +619,28 @@ def month_levels_upsert_from_daily_df(df_c6: pd.DataFrame):
     df["_nivel"] = parse_level(df)
 
     q = df[(df["_cnpj"] != "") & (df["_nivel"] >= 1)].copy()
-    
+    if q.empty:
+        store[mkey] = store.get(mkey, {}) or {}
+        safe_json_save(HIST_MONTH_LEVELS, store)
+        return
+
+    by_cnpj = q.groupby("_cnpj")["_nivel"].max().reset_index()
+
     month_map: Dict[str, int] = store.get(mkey, {}) or {}
-    
-    if not q.empty:
-        by_cnpj = q.groupby("_cnpj")["_nivel"].max().reset_index()
-        for _, r in by_cnpj.iterrows():
-            cnpj = str(r["_cnpj"])
-            lvl = int(r["_nivel"])
-            prev = int(month_map.get(cnpj, 0))
-            if lvl > prev:
-                month_map[cnpj] = lvl
+    for _, r in by_cnpj.iterrows():
+        cnpj = str(r["_cnpj"])
+        lvl = int(r["_nivel"])
+        prev = int(month_map.get(cnpj, 0))
+        if lvl > prev:
+            month_map[cnpj] = lvl
 
     store[mkey] = month_map
     safe_json_save(HIST_MONTH_LEVELS, store)
 
 
+# =========================================================
+# IMPORTAÇÃO MENSAL (EXCEÇÃO NOV/25 e DEZ/25) - SEED
+# =========================================================
 def detect_month_from_filename(name: str) -> Optional[dt.date]:
     n = name.upper()
     if "NOVEMBRO2025" in n or "NOV/2025" in n or "NOV_2025" in n or "NOV-2025" in n:
@@ -599,22 +677,25 @@ def month_levels_upsert_from_monthly_file(file_name: str, file_bytes: bytes):
     df["_nivel"] = parse_level(df)
 
     q = df[(df["_cnpj"] != "") & (df["_nivel"] >= 1)].copy()
-    
-    if not q.empty:
-        by_cnpj = q.groupby("_cnpj")["_nivel"].max().reset_index()
-        for _, r in by_cnpj.iterrows():
-            cnpj = str(r["_cnpj"])
-            lvl = int(r["_nivel"])
-            prev = int(month_map.get(cnpj, 0))
-            if lvl > prev:
-                month_map[cnpj] = lvl
+    if q.empty:
+        store[mkey] = month_map
+        safe_json_save(HIST_MONTH_LEVELS, store)
+        return
+
+    by_cnpj = q.groupby("_cnpj")["_nivel"].max().reset_index()
+    for _, r in by_cnpj.iterrows():
+        cnpj = str(r["_cnpj"])
+        lvl = int(r["_nivel"])
+        prev = int(month_map.get(cnpj, 0))
+        if lvl > prev:
+            month_map[cnpj] = lvl
 
     store[mkey] = month_map
     safe_json_save(HIST_MONTH_LEVELS, store)
 
 
 # =========================================================
-# FAIXA - NÃO ALTERADO
+# FAIXA
 # =========================================================
 def faixa_por_qtd(qtd_qualificadas: int) -> Tuple[str, Dict[int, float]]:
     chosen_name, chosen_tbl = FAIXAS[0][1], FAIXAS[0][2]
@@ -632,13 +713,13 @@ def faixa_tbl_por_nome(nome: str) -> Dict[int, float]:
 
 
 # =========================================================
-# RECOMPUTE INCREMENTAL - NÃO ALTERADO
+# RECOMPUTE INCREMENTAL (SEM CRIAR MESES)
 # =========================================================
 def recompute_incremental() -> pd.DataFrame:
     month_levels = safe_json_load(HIST_MONTH_LEVELS, default={})
     months = sorted(list(month_levels.keys()), key=month_key_str)
 
-    paid_max: Dict[str, float] = safe_json_load(HIST_PAGO_POR_CNPJ, default={})
+    paid_max: Dict[str, float] = {}
     resumo: Dict[str, dict] = {}
 
     rows = []
@@ -723,39 +804,72 @@ def apply_theme():
     st.markdown(
         """
         <style>
+            /* Sidebar mais elegante */
             section[data-testid="stSidebar"]{
                 background: linear-gradient(180deg, #0f1b3a 0%, #1a2b4e 100%);
             }
             section[data-testid="stSidebar"] * {
                 color: #ffffff !important;
             }
+            section[data-testid="stSidebar"] .stButton button {
+                background: rgba(255,255,255,0.1);
+                border: 1px solid rgba(255,255,255,0.2);
+                color: white !important;
+            }
+
+            /* Cards métricos */
             div[data-testid="stMetric"]{
                 background:#ffffff;
                 border:1px solid #e9eef7;
                 border-radius:14px;
                 padding:16px 18px;
                 box-shadow:0 4px 12px rgba(15,27,58,0.08);
+                transition: all 0.2s ease;
             }
+            div[data-testid="stMetric"]:hover {
+                box-shadow:0 8px 20px rgba(15,27,58,0.12);
+                transform: translateY(-2px);
+            }
+
+            /* Títulos */
             h1, h2, h3{
                 color: #0f1b3a;
                 font-weight: 600;
+                letter-spacing: -0.02em;
             }
+
+            /* Badges */
             .am-badge-ok{
                 display:inline-block; padding:6px 16px; border-radius:999px;
                 background:rgba(0,122,255,0.12); color:#007AFF;
-                font-weight:600; font-size:13px;
+                font-weight:600; font-size:13px; border:1px solid rgba(0,122,255,0.2);
             }
             .am-badge-bad{
                 display:inline-block; padding:6px 16px; border-radius:999px;
                 background:rgba(255,59,48,0.12); color:#FF3B30;
-                font-weight:600; font-size:13px;
+                font-weight:600; font-size:13px; border:1px solid rgba(255,59,48,0.2);
             }
+
+            /* Tabelas compactas e profissionais */
+            .am-compact-table thead tr th {
+                font-size: 13px !important;
+                background: #f8fafd !important;
+                color: #0f1b3a !important;
+                font-weight: 600 !important;
+            }
+            .am-compact-table tbody tr td {
+                font-size: 13px !important;
+            }
+
+            /* Upload area */
             .stFileUploader > div {
                 border: 2px dashed #e9eef7;
                 border-radius: 16px;
                 padding: 20px;
                 background: #ffffff;
             }
+
+            /* Divisor */
             hr {
                 margin: 2rem 0;
                 border: none;
@@ -798,8 +912,13 @@ def reset_all_data():
     for p in [
         HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
         HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL,
-        HIST_COMPARE_DAILY, META_SUMMARY_PATH, META_GROUPS_PATH,
-        META_FILE_CONTROL, META_GROUPS_CONTROL
+        HIST_COMPARE_DAILY,
+        os.path.join(DATA_DIR, "meta_c6_summary.json"),
+        os.path.join(DATA_DIR, "meta_c6_groups.json"),
+        os.path.join(DATA_DIR, "leads_status_daily_q.json"),
+        META_FILE_CONTROL,
+        META_GROUPS_CONTROL,
+        LEADS_CONTROL_PATH,
     ]:
         safe_json_delete(p)
 
@@ -925,7 +1044,6 @@ with tab_painel:
                 "domicilio_c6": domicilio_c6,
                 "qualificadas_arquivo": qualificadas,
                 "arquivo_c6": up_c6.name if up_c6 else "",
-                "ultima_atualizacao": dt.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
             }
             safe_json_save(HIST_SNAPSHOT_MENSAL, snap)
 
@@ -1055,11 +1173,7 @@ with tab_painel:
 
         c5, c6, c7, c8 = st.columns(4)
         c5.metric("Saldo total (snapshot)", br_money(float(s.get("saldo_total", 0.0))))
-        
-        pix_com = int(s.get("pix_com", 0))
-        pix_sem = int(s.get("pix_sem", 0))
-        c6.metric("Pix (snapshot)", f"{br_int(pix_com)} com | {br_int(pix_sem)} sem")
-        
+        c6.metric("Pix (snapshot)", f'{br_int(int(s.get("pix_com",0)))} com | {br_int(int(s.get("pix_sem",0)))} sem')
         c7.metric("Domicílio C6 (snapshot)", br_int(int(s.get("domicilio_c6", 0))))
         c8.metric("Qualificadas (arquivo)", br_int(int(s.get("qualificadas_arquivo", 0))))
 
@@ -1697,7 +1811,7 @@ with tab_meta:
         return summary
 
     # =======================================================
-    # GRUPOS - REGRA SIMPLES: SUBSTRING CASE INSENSITIVE
+    # GRUPOS - REGRA: SUBSTRING EM QUALQUER LUGAR
     # =======================================================
     def _groups_definitions() -> Dict[str, List[str]]:
         """
@@ -1833,7 +1947,7 @@ with tab_meta:
         return groups_store
 
     def _render_monthly_daily_tables(df_monthly: pd.DataFrame, df_daily: pd.DataFrame, key_prefix: str):
-        """Renderiza tabelas mensais e diárias"""
+        """Renderiza tabelas mensais e diárias - formato igual à imagem"""
         if df_monthly.empty or df_daily.empty:
             st.info("Sem dados consolidados para este filtro.")
             return
@@ -1895,7 +2009,7 @@ with tab_meta:
             view_d.index = [d.strftime("%d/%m/%Y") if isinstance(d, dt.date) else str(d) for d in view_d.index]
             view_d = view_d.reset_index().rename(columns={"index": "Data"})
             
-            # Reordenar colunas
+            # Reordenar colunas para corresponder à imagem
             status_cols = [c for c in view_d.columns if c not in ["Data", "total_dia", "enviados_dia"]]
             col_order = ["Data"] + status_cols + ["total_dia", "enviados_dia"]
             view_d = view_d[[c for c in col_order if c in view_d.columns]]
@@ -1910,19 +2024,18 @@ with tab_meta:
 
     with st.expander("Importar arquivos da Meta (CSV ou XLSX)", expanded=True):
         meta_files = st.file_uploader(
-            "Envie um ou mais arquivos",
+            "Envie um ou mais arquivos. O app vai ACUMULANDO o histórico (não substitui).",
             type=["csv", "xlsx"],
             accept_multiple_files=True,
             key="meta_c6_upload"
         )
 
     if meta_files:
-        # Processar arquivos com controle inteligente
-        dfs, novos_metadados, qtd_novos, qtd_substituidos = process_files_with_control(
+        # Processar arquivos com controle inteligente (apenas para Meta)
+        dfs, novos_metadados, qtd_novos, qtd_substituidos = process_meta_files_with_control(
             meta_files,
             META_FILE_CONTROL,
-            lambda name, raw: _read_meta_file(name, raw),
-            "meta"
+            lambda name, raw: _read_meta_file(name, raw)
         )
         
         if qtd_substituidos > 0:
@@ -1937,19 +2050,21 @@ with tab_meta:
             required_cols = ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
             missing = [c for c in required_cols if c not in df.columns]
             if missing:
-                st.error(f"Colunas obrigatórias ausentes: {missing}")
+                st.error(f"Colunas obrigatórias ausentes (após tentativa automática): {missing}")
+                st.markdown("**Colunas encontradas no arquivo (para conferência):**")
+                st.write(sorted([str(c) for c in df_raw.columns]))
             else:
                 df = df[required_cols].copy()
                 df["broadcast_description"] = df["broadcast_description"].astype(str)
 
-                # Filtrar apenas C6
+                # filtro C6
                 df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
 
                 df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
                 df = df.dropna(subset=["message_date_time"])
 
                 if df.empty:
-                    st.warning("Nenhum registro com 'c6' encontrado.")
+                    st.warning("Nenhum registro com 'c6' encontrado nas campanhas após o filtro.")
                 else:
                     # Atualizar summary
                     existing = _load_persisted_summary()
@@ -1966,7 +2081,7 @@ with tab_meta:
     st.session_state["meta_c6_summary"] = summary
 
     if not summary:
-        st.info("Importe um ou mais arquivos para gerar os relatórios.")
+        st.info("Importe um ou mais arquivos para gerar os relatórios. (Depois disso, o histórico fica salvo.)")
     else:
         g = summary.get("global", {})
         total = int(g.get("total", 0))
@@ -1985,7 +2100,9 @@ with tab_meta:
         df_monthly = pd.DataFrame(summary.get("monthly", []))
         df_daily = pd.DataFrame(summary.get("daily", []))
 
-        if not df_monthly.empty and not df_daily.empty:
+        if df_monthly.empty or df_daily.empty:
+            st.warning("Resumo vazio. Importe arquivos para começar.")
+        else:
             _render_monthly_daily_tables(df_monthly, df_daily, "meta_global")
 
         # =======================================================
@@ -1993,11 +2110,13 @@ with tab_meta:
         # =======================================================
         st.divider()
         with st.expander("Carteira — clique para abrir", expanded=False):
-            st.caption("Baseado em broadcast_description. Regra: se a palavra aparecer em qualquer lugar do texto, contabiliza.")
-            st.markdown("**Exemplos:** 'matheusameric' → VAREJO, 'i9hoje' → I9, 'fundacaox' → FUNDACAO")
+            st.caption("Baseado em broadcast_description. Isso é um ACRÉSCIMO e não altera os relatórios atuais.")
+            st.markdown("**Importante:** envie aqui os arquivos (CSV/XLSX). "
+                       "Isso preenche somente a segmentação por grupos e NÃO mexe nos totais gerais.")
+            st.markdown("**Regra:** se a palavra aparecer em qualquer lugar do texto, contabiliza. Ex: 'matheusameric' → VAREJO, 'i9hoje' → I9")
 
             grp_files = st.file_uploader(
-                "Enviar arquivos para preencher os grupos",
+                "Enviar arquivos para preencher os grupos (CSV/XLSX)",
                 type=["csv", "xlsx"],
                 accept_multiple_files=True,
                 key="meta_groups_upload"
@@ -2008,18 +2127,17 @@ with tab_meta:
 
             if st.button("Processar", key="meta_groups_process_btn"):
                 if not grp_files:
-                    st.warning("Envie pelo menos 1 arquivo.")
+                    st.warning("Envie pelo menos 1 arquivo para processar a segmentação por grupos.")
                 else:
-                    # Processar arquivos com controle
-                    dfs, novos_metadados, qtd_novos, qtd_substituidos = process_files_with_control(
+                    # Processar arquivos com controle (apenas para grupos)
+                    dfs, novos_metadados, qtd_novos, qtd_substituidos = process_meta_files_with_control(
                         grp_files,
                         META_GROUPS_CONTROL,
-                        lambda name, raw: _read_meta_file(name, raw),
-                        "groups"
+                        lambda name, raw: _read_meta_file(name, raw)
                     )
                     
                     if qtd_substituidos > 0:
-                        st.warning(f"⚠️ {qtd_substituidos} arquivo(s) substituídos por versões mais recentes.")
+                        st.warning(f"⚠️ {qtd_substituidos} arquivo(s) foram reimportados com dados diferentes (substituindo versão anterior).")
                     
                     if dfs:
                         df_all = pd.concat(dfs, ignore_index=True)
@@ -2032,6 +2150,9 @@ with tab_meta:
                         if not missing:
                             df_all = df_all[required_cols].copy()
                             df_all["broadcast_description"] = df_all["broadcast_description"].astype(str)
+                            
+                            # ✅ NÃO FILTRAR POR "c6" AQUI, para capturar todos os grupos
+                            
                             df_all["message_date_time"] = _parse_datetime_br_priority(df_all["message_date_time"])
                             df_all = df_all.dropna(subset=["message_date_time"])
                             
@@ -2042,15 +2163,16 @@ with tab_meta:
                                 _save_groups_store(groups_store)
                                 
                                 if qtd_substituidos > 0:
-                                    st.success(f"✅ Grupos atualizados: {qtd_novos} novo(s), {qtd_substituidos} substituído(s)")
+                                    st.success(f"✅ Segmentação por grupos atualizada: {qtd_novos} novo(s), {qtd_substituidos} substituído(s)")
                                 else:
-                                    st.success("✅ Grupos atualizados com sucesso.")
+                                    st.success("✅ Segmentação por grupos atualizada com sucesso.")
                             else:
-                                st.warning("Nenhum dado válido após processamento.")
+                                st.warning("Nenhum dado válido encontrado nesses arquivos para segmentação.")
                         else:
                             st.error(f"Colunas obrigatórias ausentes: {missing}")
                     else:
-                        st.warning("Nenhum dado novo para processar.")
+                        if qtd_novos == 0 and qtd_substituidos == 0:
+                            st.info("Nenhum arquivo novo para processar.")
 
             # Renderizar grupo selecionado
             groups_store = _load_groups_store()
@@ -2065,6 +2187,9 @@ with tab_meta:
             else:
                 _render_monthly_daily_tables(dfm_g, dfd_g, f"meta_group__{grp_sel.replace(' ', '_').lower()}")
 
+        # Observação única (não duplicada)
+        st.info("Obs.: para 'Baixar analítico do dia' com linhas, precisaríamos guardar o arquivo cru (muito pesado). Aqui o histórico é consolidado (e persistente) por dia/status/mês e por grupo.")
+
 
 # =========================================================
 # =====================  TAB 3  ===========================
@@ -2073,9 +2198,6 @@ with tab_meta:
 with tab_leads_status:
 
     st.subheader("🧾 Leads — Status diário (coluna Q)")
-
-    LEADS_STATUS_DAILY_PATH = os.path.join(DATA_DIR, "leads_status_daily_q.json")
-    LEADS_CONTROL_PATH = os.path.join(DATA_DIR, "leads_control.json")
 
     def _leads_status_load():
         return safe_json_load(LEADS_STATUS_DAILY_PATH, default={}) or {}
@@ -2122,11 +2244,11 @@ with tab_leads_status:
     with r1:
         if st.button("🧹 Resetar somente Leads – Status Diário", use_container_width=True):
             _leads_status_reset_only()
-            st.success("Relatório 'Leads – Status Diário' resetado.")
+            st.success("Relatório 'Leads – Status Diário' resetado. Os demais relatórios NÃO foram afetados.")
 
     with st.expander("Importar arquivo(s) diário(s) (status na coluna Q | data base na coluna B)", expanded=True):
         up_status_files = st.file_uploader(
-            "Envie XLSX/CSV",
+            "Envie XLSX/CSV. O histórico é ACUMULADO (não substitui os outros dias).",
             type=["xlsx", "csv"],
             accept_multiple_files=True,
             key="leads_status_upload_q"
@@ -2134,33 +2256,32 @@ with tab_leads_status:
 
     if up_status_files:
         # Processar com controle
-        dfs, novos_metadados, qtd_novos, qtd_substituidos = process_files_with_control(
+        dfs, novos_metadados, qtd_novos, qtd_substituidos = process_meta_files_with_control(
             up_status_files,
             LEADS_CONTROL_PATH,
-            lambda name, raw: _read_any_status_file(name, raw),
-            "leads"
+            lambda name, raw: _read_any_status_file(name, raw)
         )
         
         if qtd_substituidos > 0:
-            st.warning(f"⚠️ {qtd_substituidos} arquivo(s) substituídos por versões mais recentes.")
+            st.warning(f"⚠️ {qtd_substituidos} arquivo(s) foram reimportados com dados diferentes (substituindo versão anterior).")
         
         if dfs:
             for i, df_status in enumerate(dfs):
                 meta = novos_metadados[i]
                 
                 if df_status.shape[1] < 17:
-                    st.error(f"{meta['name']}: não possui coluna Q")
+                    st.error(f"{meta['name']}: arquivo não possui coluna Q (precisa ter pelo menos 17 colunas).")
                     continue
 
                 data_base = _extract_date_base_from_col_b(df_status)
                 if data_base is None:
-                    st.error(f"{meta['name']}: não consegui ler DATA BASE na coluna B")
+                    st.error(f"{meta['name']}: não consegui ler a DATA BASE na coluna B.")
                     continue
 
                 s = df_status.iloc[:, 16].astype("string").fillna("").str.strip()
                 s = s[s != ""]
                 if s.empty:
-                    st.warning(f"{meta['name']}: coluna Q vazia")
+                    st.warning(f"{meta['name']}: coluna Q vazia (nenhum status).")
                     continue
 
                 counts = s.value_counts().to_dict()
@@ -2180,7 +2301,7 @@ with tab_leads_status:
     store = {k: v for k, v in store.items() if not k.startswith("_")}
 
     if not store:
-        st.info("Ainda não há histórico. Importe arquivos para começar.")
+        st.info("Ainda não há histórico. Importe o(s) arquivo(s) para começar.")
     else:
         rows = []
         for dkey, m in store.items():
@@ -2218,7 +2339,7 @@ with tab_leads_status:
 
             dfm = dfh[dfh["Mes"] == mes_sel].copy()
             if not dfm.empty:
-                st.markdown("### Totais por dia")
+                st.markdown("### Totais por dia (dentro do mês selecionado)")
 
                 pivot = dfm.pivot_table(
                     index="_date", 
