@@ -77,6 +77,7 @@ COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"
 
 # Leads (cadastros) – coluna M (13ª col) como fallback
 COL_LEADS_DATA = "DATA_CADASTRO"
+COL_LEADS_HORA = "DATA_HORA_CADASTRO"  # Nome correto da coluna no arquivo
 
 # Data base (mês/dia do relatório)
 COL_DATA_BASE = "DATA_BASE"
@@ -2247,12 +2248,23 @@ with tab_leads_status:
         Calcula o número de linhas onde a diferença entre a DATA_BASE (coluna B)
         e a DATA_HORA_CADASTRO (coluna M) é <= 14 dias.
         """
-        if df.shape[1] < 13:  # Se não tiver coluna M
-            return 0
-
-        col_cadastro = df.iloc[:, 12]  # Coluna M (índice 12)
-        # Converte a coluna de cadastro para datetime, lidando com erros
-        datas_cadastro = pd.to_datetime(col_cadastro, errors="coerce", dayfirst=True)
+        # Tentar encontrar a coluna de cadastro pelo nome
+        col_cadastro_nome = None
+        for col in df.columns:
+            if "DATA_HORA_CADASTRO" in col.upper() or "CADASTRO" in col.upper():
+                col_cadastro_nome = col
+                break
+        
+        if col_cadastro_nome is None:
+            # Fallback: usar índice se não encontrar pelo nome
+            if df.shape[1] < 13:
+                return 0
+            col_cadastro = df.iloc[:, 12]  # Coluna M (índice 12)
+        else:
+            col_cadastro = df[col_cadastro_nome]
+        
+        # Converte a coluna de cadastro para datetime - formato ISO (YYYY-MM-DD)
+        datas_cadastro = pd.to_datetime(col_cadastro, errors="coerce")
 
         df_filtrado = df[datas_cadastro.notna()].copy()
         if df_filtrado.empty:
@@ -2368,6 +2380,7 @@ with tab_leads_status:
         for dkey, payload in store_clean.items():
             if not isinstance(payload, dict):
                 continue
+            # PEGA o valor sem remover (usando get em vez de pop)
             validas = payload.get('_validas_14d', 0) if isinstance(payload, dict) else 0
             for status, qtd in payload.items():
                 if status == '_validas_14d':
