@@ -2461,15 +2461,18 @@ with tab_leads_status:
                 for name in pivot_display.columns:
                     if name.startswith("Δ "):
                         original_name = name[2:]
-                        short_name_map[name] = f"Δ {short_name_map.get(original_name, original_name[:15])}..."
+                        # Tenta pegar o nome curto do original, senão cria um genérico
+                        base_name = short_name_map.get(original_name, original_name[:15])
+                        short_name_map[name] = f"Δ {base_name}"
                     elif name in ["Total", "Δ Total", "Indicações Válidas", "Δ Indicações Válidas"]:
                         short_name_map[name] = name
                     else:
                         # Encurta nomes de status longos
                         if len(name) > 20:
-                            short_name_map[name] = name[:15] + "..."
+                            short_name = name[:15] + "..."
                         else:
-                            short_name_map[name] = name
+                            short_name = name
+                        short_name_map[name] = short_name
 
                 pivot_display_renamed = pivot_display.rename(columns=short_name_map)
 
@@ -2478,28 +2481,32 @@ with tab_leads_status:
                 pivot_display_renamed["_date"] = pivot_display_renamed["_date"].dt.strftime("%d/%m/%Y")
                 pivot_display_renamed = pivot_display_renamed.rename(columns={"_date": "Data base"})
 
-                # --- Aplicar Estilo de Cores aos Δs ---
-                def color_delta(val, col_name):
-                    if col_name.startswith("Δ "):
+                # --- CORREÇÃO: Aplicar Estilo de Cores aos Δs ---
+                def color_delta_series(s):
+                    """Aplica cor a uma série (coluna) baseado nos valores"""
+                    colors = []
+                    for val in s:
                         try:
-                            # Tenta converter para número, se falhar, retorna string vazia (sem cor)
+                            # Remove pontos de milhar e converte para inteiro
                             num_val = int(str(val).replace('.', ''))
                             if num_val > 0:
-                                return 'background-color: rgba(0,122,255,0.10); color: #007AFF; font-weight: 800;'
+                                colors.append('background-color: rgba(0,122,255,0.10); color: #007AFF; font-weight: 800;')
                             elif num_val < 0:
-                                return 'background-color: rgba(255,59,48,0.10); color: #FF3B30; font-weight: 800;'
+                                colors.append('background-color: rgba(255,59,48,0.10); color: #FF3B30; font-weight: 800;')
                             else:
-                                return ''
+                                colors.append('')
                         except:
-                            return ''
-                    return ''
+                            colors.append('')
+                    return colors
 
-                # Aplicar estilo apenas nas colunas de Δ
+                # Identificar colunas de Δ
                 delta_cols = [c for c in pivot_display_renamed.columns if c.startswith("Δ ")]
-                styled_df = pivot_display_renamed.style.applymap(
-                    lambda val: color_delta(val, val),  # Passa o valor e o nome da coluna
-                    subset=delta_cols
-                )
+                
+                # Aplicar estilo usando apply (não applymap)
+                styled_df = pivot_display_renamed.style
+                
+                if delta_cols:
+                    styled_df = styled_df.apply(color_delta_series, subset=delta_cols)
 
                 # Aplicar negrito à coluna Total
                 styled_df = styled_df.applymap(
