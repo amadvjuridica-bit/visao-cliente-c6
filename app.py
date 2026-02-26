@@ -2193,7 +2193,7 @@ with tab_meta:
 
 # =========================================================
 # =====================  TAB 3  ===========================
-# ================ 📋 LEADS DIÁRIOS =======================
+# ================ 📋 LEADS DIÁRIOS (CORRIGIDO) ============
 # =========================================================
 with tab_leads_status:
 
@@ -2434,38 +2434,83 @@ with tab_leads_status:
                 
                 # Calcular Δ para cada status
                 for col in pivot.columns:
-                    pivot[f"Δ {col}"] = pivot[col].diff().fillna(0).astype(int)
+                    pivot[f"Δ {col}"] = pivot[col].diff().fillna(0)
 
                 # Adicionar coluna de Total e Δ Total
                 pivot["Total"] = pivot[[c for c in pivot.columns if not str(c).startswith("Δ ")]].sum(axis=1)
-                pivot["Δ Total"] = pivot["Total"].diff().fillna(0).astype(int)
+                pivot["Δ Total"] = pivot["Total"].diff().fillna(0)
 
                 # Adicionar coluna de Indicações Válidas (pegar do dfh)
                 validas_por_dia = df_mes.groupby("_date")["Indicações Válidas (≤14d)"].first().to_dict()
-                pivot["Indicações Válidas"] = pivot.index.map(validas_por_dia).fillna(0).astype(int)
-                pivot["Δ Indicações Válidas"] = pivot["Indicações Válidas"].diff().fillna(0).astype(int)
+                pivot["Indicações Válidas"] = pivot.index.map(validas_por_dia).fillna(0)
+                pivot["Δ Indicações Válidas"] = pivot["Indicações Válidas"].diff().fillna(0)
 
                 # Reordenar para exibição (decrescente)
                 pivot = pivot.sort_index(ascending=False)
 
-                # Formatar números
-                view = pivot.copy()
-                for col in view.columns:
-                    view[col] = view[col].apply(br_int)
-
                 # Reset index para mostrar a data
-                view = view.reset_index()
-                view["_date"] = view["_date"].dt.strftime("%d/%m/%Y")
-                view = view.rename(columns={"_date": "Data Base"})
-
-                # Reordenar colunas: Data, Total, Δ Total, depois status e seus Δs, depois válidas
-                status_cols = [c for c in view.columns if not c.startswith("Δ ") and c not in ["Data Base", "Total", "Indicações Válidas"]]
-                delta_status_cols = [f"Δ {c}" for c in status_cols if f"Δ {c}" in view.columns]
-
-                col_order = ["Data Base", "Total", "Δ Total"] + status_cols + delta_status_cols + ["Indicações Válidas", "Δ Indicações Válidas"]
+                view = pivot.reset_index()
+                view["Data Base"] = view["_date"].dt.strftime("%d/%m/%Y")
+                
+                # Selecionar colunas para exibição
+                status_cols = [c for c in view.columns if not c.startswith("Δ ") and c not in ["_date", "Data Base", "Total", "Indicações Válidas"]]
+                delta_cols = [f"Δ {c}" for c in status_cols if f"Δ {c}" in view.columns]
+                
+                # Ordem das colunas
+                col_order = ["Data Base", "Total", "Δ Total"] + status_cols + delta_cols + ["Indicações Válidas", "Δ Indicações Válidas"]
                 view = view[[c for c in col_order if c in view.columns]]
 
-                st.dataframe(view, use_container_width=True, hide_index=True)
+                # Aplicar formatação numérica com br_int (apenas para exibição)
+                view_display = view.copy()
+                numeric_cols = [c for c in view_display.columns if c != "Data Base"]
+                for col in numeric_cols:
+                    view_display[col] = view_display[col].apply(br_int)
+
+                # Aplicar estilo condicional
+                def highlight_delta(val, col_name):
+                    """Retorna estilo CSS baseado no valor da coluna Δ"""
+                    if pd.isna(val) or not isinstance(val, (int, float)):
+                        return ""
+                    if col_name.startswith("Δ "):
+                        if val > 0:
+                            return "color: #0a7d2a; font-weight: 900;"
+                        elif val < 0:
+                            return "color: #b00020; font-weight: 900;"
+                    return ""
+
+                # Aplicar estilo célula por célula
+                styled = view_display.style
+                
+                # Destacar totais em negrito
+                styled = styled.applymap(lambda x: "font-weight: 900;", subset=["Total"])
+                
+                # Aplicar cores nas colunas de Δ
+                for col in view_display.columns:
+                    if col.startswith("Δ "):
+                        styled = styled.applymap(
+                            lambda x, col=col: highlight_delta(x, col), 
+                            subset=[col]
+                        )
+
+                # Configurar tabela
+                styled = styled.set_table_styles([
+                    {"selector": "th", "props": [
+                        ("background-color", "#f3f6fb"),
+                        ("color", "#0f1b3a"),
+                        ("font-weight", "900"),
+                        ("border", "1px solid #e9eef7"),
+                        ("padding", "8px")
+                    ]},
+                    {"selector": "td", "props": [
+                        ("border", "1px solid #e9eef7"),
+                        ("padding", "8px")
+                    ]},
+                    {"selector": "tr:nth-of-type(even)", "props": [
+                        ("background-color", "#fbfcff")
+                    ]},
+                ])
+
+                st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # ----- Botão de Reset (FORA do Expander, no final da aba) -----
     st.divider()
