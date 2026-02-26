@@ -77,7 +77,6 @@ COL_CRIT = "CRITERIOS_ATINGIDOS_COMISS"
 
 # Leads (cadastros) – coluna M (13ª col) como fallback
 COL_LEADS_DATA = "DATA_CADASTRO"
-COL_LEADS_HORA = "DATA_HORA_CADASTRO"  # Nome correto da coluna no arquivo
 
 # Data base (mês/dia do relatório)
 COL_DATA_BASE = "DATA_BASE"
@@ -2248,40 +2247,30 @@ with tab_leads_status:
         Calcula o número de linhas onde a diferença entre a DATA_BASE (coluna B)
         e a DATA_HORA_CADASTRO (coluna M) é <= 14 dias.
         """
-        # Tentar encontrar a coluna de cadastro pelo nome
-        col_cadastro_nome = None
-        for col in df.columns:
-            if "DATA_HORA_CADASTRO" in col.upper() or "CADASTRO" in col.upper():
-                col_cadastro_nome = col
-                break
-        
-        if col_cadastro_nome is None:
-            # Fallback: usar índice se não encontrar pelo nome
-            if df.shape[1] < 13:
-                return 0
-            col_cadastro = df.iloc[:, 12]  # Coluna M (índice 12)
-        else:
-            col_cadastro = df[col_cadastro_nome]
-        
-        # Converte a coluna de cadastro para datetime - formato ISO (YYYY-MM-DD)
-        datas_cadastro = pd.to_datetime(col_cadastro, errors="coerce")
-
-        df_filtrado = df[datas_cadastro.notna()].copy()
-        if df_filtrado.empty:
+        if df.shape[1] < 13:  # Se não tiver coluna M
             return 0
 
-        # Atribui a série de datas já convertida
-        df_filtrado.loc[:, '_data_cadastro'] = datas_cadastro
-
-        # Converte a data_base para Timestamp do pandas para a operação de subtração
-        data_base_ts = pd.Timestamp(data_base)
-
-        # Agora a subtração funciona, e .dt.days pode ser acessado
-        df_filtrado.loc[:, '_diferenca_dias'] = (data_base_ts - df_filtrado['_data_cadastro']).dt.days
-
-        # Conta onde a diferença é <= 14 e >= 0 (cadastro não pode ser depois da data base)
-        validas = df_filtrado[(df_filtrado['_diferenca_dias'] <= 14) & (df_filtrado['_diferenca_dias'] >= 0)]
-        return len(validas)
+        # Extrai a coluna M (índice 12) que contém a data/hora de cadastro
+        col_cadastro = df.iloc[:, 12]
+        
+        # Converte para datetime, priorizando formato dia/mês/ano
+        datas_cadastro = pd.to_datetime(col_cadastro, errors="coerce", dayfirst=True)
+        
+        # Filtra apenas linhas com datas válidas
+        mascara_valida = datas_cadastro.notna()
+        if not mascara_valida.any():
+            return 0
+            
+        # Converte a data_base para datetime para comparação
+        data_base_dt = pd.to_datetime(data_base)
+        
+        # Calcula a diferença em dias apenas para linhas válidas
+        diferencas = (data_base_dt - datas_cadastro[mascara_valida]).dt.days
+        
+        # Conta quantas têm diferença entre 0 e 14 dias (não pode ser negativa)
+        validas = ((diferencas >= 0) & (diferencas <= 14)).sum()
+        
+        return int(validas)
 
     # ----- Carregar Estado Atual -----
     store = _leads_status_load()
@@ -2357,7 +2346,7 @@ with tab_leads_status:
                     else:
                         store_clean[day_key] = status_counts
 
-                    # Salvar o valor de válidas em uma chave separada (ex: "_validas_14d")
+                    # Salvar o valor de válidas em uma chave separada
                     if not isinstance(store_clean[day_key], dict):
                         store_clean[day_key] = {}
                     store_clean[day_key]['_validas_14d'] = validas
@@ -2380,8 +2369,7 @@ with tab_leads_status:
         for dkey, payload in store_clean.items():
             if not isinstance(payload, dict):
                 continue
-            # PEGA o valor sem remover (usando get em vez de pop)
-            validas = payload.get('_validas_14d', 0) if isinstance(payload, dict) else 0
+            validas = payload.pop('_validas_14d', 0) if isinstance(payload, dict) else 0
             for status, qtd in payload.items():
                 if status == '_validas_14d':
                     continue
@@ -2454,53 +2442,53 @@ with tab_leads_status:
                 
                 # Calcular Δ para cada status
                 status_cols = list(pivot.columns)
+                
+                # --- REDUZIR NOMES DAS COLUNAS DE STATUS ---
+                short_names = {}
                 for col in status_cols:
+                    # Reduzir nomes muito longos
+                    if len(col) > 25:
+                        # Tenta pegar as primeiras palavras
+                        words = col.split()
+                        if len(words) > 3:
+                            short = ' '.join(words[:3]) + '...'
+                        else:
+                            short = col[:22] + '...'
+                    else:
+                        short = col
+                    short_names[col] = short
+                
+                # Renomear colunas no pivot
+                pivot = pivot.rename(columns=short_names)
+                status_cols_short = [short_names.get(c, c) for c in status_cols]
+                
+                # Calcular Δ para cada status
+                for col in status_cols_short:
                     pivot[f"Δ {col}"] = pivot[col].diff().fillna(0).astype(int)
 
                 # Adicionar coluna de Total e Δ Total
-                pivot["Total"] = pivot[status_cols].sum(axis=1)
+                pivot["Total"] = pivot[status_cols_short].sum(axis=1)
                 pivot["Δ Total"] = pivot["Total"].diff().fillna(0).astype(int)
 
-                # Adicionar coluna de Indicações Válidas (pegar do dfh)
+                # Adicionar coluna de Indicações Válidas e Δ
                 validas_por_dia = df_mes.groupby("_date")["Indicações Válidas"].first().to_dict()
                 pivot["Indicações Válidas"] = pivot.index.map(validas_por_dia).fillna(0).astype(int)
                 pivot["Δ Indicações Válidas"] = pivot["Indicações Válidas"].diff().fillna(0).astype(int)
 
-                # --- Reordenar para exibição (decrescente) e preparar DataFrame para formatação ---
+                # --- Reordenar para exibição (decrescente) ---
                 pivot_display = pivot.sort_index(ascending=False).copy()
 
-                # Criar um mapeamento de nomes longos para curtos
-                short_name_map = {}
-                for name in pivot_display.columns:
-                    if name.startswith("Δ "):
-                        original_name = name[2:]
-                        # Tenta pegar o nome curto do original, senão cria um genérico
-                        base_name = short_name_map.get(original_name, original_name[:15])
-                        short_name_map[name] = f"Δ {base_name}"
-                    elif name in ["Total", "Δ Total", "Indicações Válidas", "Δ Indicações Válidas"]:
-                        short_name_map[name] = name
-                    else:
-                        # Encurta nomes de status longos
-                        if len(name) > 20:
-                            short_name = name[:15] + "..."
-                        else:
-                            short_name = name
-                        short_name_map[name] = short_name
-
-                pivot_display_renamed = pivot_display.rename(columns=short_name_map)
-
                 # Reset index para mostrar a data
-                pivot_display_renamed = pivot_display_renamed.reset_index()
-                pivot_display_renamed["_date"] = pivot_display_renamed["_date"].dt.strftime("%d/%m/%Y")
-                pivot_display_renamed = pivot_display_renamed.rename(columns={"_date": "Data base"})
+                pivot_display = pivot_display.reset_index()
+                pivot_display["_date"] = pivot_display["_date"].dt.strftime("%d/%m/%Y")
+                pivot_display = pivot_display.rename(columns={"_date": "Data base"})
 
-                # --- CORREÇÃO: Aplicar Estilo de Cores aos Δs ---
+                # --- APLICAR ESTILO DE CORES AOS Δs ---
                 def color_delta_series(s):
                     """Aplica cor a uma série (coluna) baseado nos valores"""
                     colors = []
                     for val in s:
                         try:
-                            # Remove pontos de milhar e converte para inteiro
                             num_val = int(str(val).replace('.', ''))
                             if num_val > 0:
                                 colors.append('background-color: rgba(0,122,255,0.10); color: #007AFF; font-weight: 800;')
@@ -2513,18 +2501,18 @@ with tab_leads_status:
                     return colors
 
                 # Identificar colunas de Δ
-                delta_cols = [c for c in pivot_display_renamed.columns if c.startswith("Δ ")]
+                delta_cols = [c for c in pivot_display.columns if c.startswith("Δ ")]
                 
-                # Aplicar estilo usando apply (não applymap)
-                styled_df = pivot_display_renamed.style
+                # Aplicar estilo
+                styled_df = pivot_display.style
                 
                 if delta_cols:
                     styled_df = styled_df.apply(color_delta_series, subset=delta_cols)
 
-                # Aplicar negrito à coluna Total
+                # Aplicar negrito à coluna Total e Indicações Válidas
                 styled_df = styled_df.applymap(
                     lambda x: 'font-weight: 800;' if pd.notna(x) else '',
-                    subset=["Total"]
+                    subset=["Total", "Indicações Válidas"]
                 )
 
                 st.dataframe(styled_df, use_container_width=True, hide_index=True)
