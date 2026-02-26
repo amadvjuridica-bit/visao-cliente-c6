@@ -2193,13 +2193,15 @@ with tab_meta:
 
 # =========================================================
 # =====================  TAB 3  ===========================
-# ================ 📋 LEADS DIÁRIOS (CORRIGIDO) ============
+# ================ 📋 LEADS DIÁRIOS =======================
 # =========================================================
 with tab_leads_status:
 
     st.subheader("📋 Leads Diários (Status por Data Base)")
 
-    # ----- Funções de Persistência -----
+    # =========================
+    # Persistência
+    # =========================
     def _leads_status_load():
         return safe_json_load(LEADS_STATUS_DAILY_PATH, default={}) or {}
 
@@ -2211,14 +2213,16 @@ with tab_leads_status:
         safe_json_delete(LEADS_CONTROL_PATH)
         st.rerun()
 
-    # ----- Funções de Processamento de Arquivo -----
+    # =========================
+    # Leitura de arquivo
+    # =========================
     def _detect_delim_for_csv(sample_text: str) -> str:
         candidates = [";", ",", "\t", "|"]
         counts = {sep: sample_text.count(sep) for sep in candidates}
         best = max(counts, key=counts.get)
         return best if counts[best] > 0 else ","
 
-    def _read_any_status_file(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
+    def _read_any_status_file(name: str, raw_bytes: bytes):
         try:
             if name.lower().endswith(".csv"):
                 sample = raw_bytes[:200_000].decode("utf-8-sig", errors="replace")
@@ -2229,7 +2233,10 @@ with tab_leads_status:
             st.error(f"Erro ao ler {name}: {e}")
             return None
 
-    def _extract_date_base_from_col_b(df: pd.DataFrame) -> Optional[dt.date]:
+    # =========================
+    # Data Base (coluna B)
+    # =========================
+    def _extract_date_base_from_col_b(df: pd.DataFrame):
         if df.shape[1] < 2:
             return None
         s = df.iloc[:, 1]
@@ -2241,131 +2248,69 @@ with tab_leads_status:
             return m.iloc[0]
         return max(d)
 
-    # ----- Função para Calcular Indicações Válidas (Regra dos 14 Dias) -----
+    # =========================
+    # REGRA 14 DIAS (CORRIGIDA)
+    # =========================
     def _calcular_validas_14d(df: pd.DataFrame, data_base: dt.date) -> int:
-        """
-        Calcula o número de linhas onde a diferença entre a DATA_BASE (coluna B)
-        e a DATA_HORA_CADASTRO (coluna com esse nome no cabeçalho) é <= 14 dias.
-        """
-        # PROCURAR A COLUNA QUE CONTÉM "DATA_HORA_CADASTRO" NO NOME
-        colunas_cadastro = [c for c in df.columns if 'DATA_HORA_CADASTRO' in str(c).upper()]
-        
-        if not colunas_cadastro:
-            # Se não encontrar, tenta variações
-            colunas_cadastro = [c for c in df.columns if 'CADASTRO' in str(c).upper() and 'DATA' in str(c).upper()]
-        
-        if not colunas_cadastro:
-            # Se ainda não encontrar, retorna 0
-            return 0
-        
-        # Pega a primeira coluna encontrada
-        nome_coluna_cadastro = colunas_cadastro[0]
-        
-        # Converte para datetime
-        datas_cadastro = pd.to_datetime(df[nome_coluna_cadastro], errors="coerce", dayfirst=True).dt.date
 
-        df_filtrado = df[datas_cadastro.notna()].copy()
-        if df_filtrado.empty:
+        colunas_cadastro = [
+            c for c in df.columns
+            if 'DATA_HORA_CADASTRO' in str(c).upper()
+        ]
+
+        if not colunas_cadastro:
+            colunas_cadastro = [
+                c for c in df.columns
+                if 'CADASTRO' in str(c).upper() and 'DATA' in str(c).upper()
+            ]
+
+        if not colunas_cadastro:
             return 0
 
-        df_filtrado.loc[:, '_data_cadastro'] = datas_cadastro
-        df_filtrado.loc[:, '_diferenca_dias'] = (data_base - df_filtrado['_data_cadastro']).dt.days
+        nome_col = colunas_cadastro[0]
 
-        # Conta onde a diferença é <= 14 e >= 0
-        validas = df_filtrado[(df_filtrado['_diferenca_dias'] <= 14) & (df_filtrado['_diferenca_dias'] >= 0)]
-        return len(validas)
+        datas_cadastro = pd.to_datetime(
+            df[nome_col],
+            errors="coerce",
+            dayfirst=True
+        )
 
-    # ----- Função para LIMPAR nomes dos status (remover caracteres especiais) -----
+        if datas_cadastro.isna().all():
+            return 0
+
+        data_base_dt = pd.to_datetime(data_base)
+
+        diferenca = (data_base_dt - datas_cadastro).dt.days
+
+        validas = diferenca[(diferenca >= 0) & (diferenca <= 14)]
+
+        return int(validas.count())
+
+    # =========================
+    # LIMPEZA STATUS
+    # =========================
     def limpar_nome_status(status: str) -> str:
-        """
-        Remove caracteres especiais que causam problemas nos nomes das colunas
-        """
         if not isinstance(status, str):
             return str(status)
-        
-        # Substituir caracteres problemáticos
+
         nome = status.strip()
-        nome = nome.replace("'", "")  # Remove apóstrofos
-        nome = nome.replace('"', '')  # Remove aspas
-        nome = nome.replace('`', '')  # Remove crases
-        nome = nome.replace('-', ' ')  # Transforma hífen em espaço
-        nome = nome.replace('_', ' ')  # Transforma underline em espaço
-        
-        # Remover espaços extras
-        nome = ' '.join(nome.split())
-        
+        nome = nome.replace("'", "")
+        nome = nome.replace('"', "")
+        nome = nome.replace("`", "")
+        nome = nome.replace("-", " ")
+        nome = nome.replace("_", " ")
+        nome = " ".join(nome.split())
+
         return nome
 
-    # ----- Função para encurtar status com regras de negócio -----
-    def encurtar_status(status: str) -> str:
-        """
-        Aplica regras de negócio para encurtar nomes de status
-        """
-        if not isinstance(status, str):
-            return str(status)
-        
-        # Primeiro limpa o nome
-        status_limpo = limpar_nome_status(status)
-        status_lower = status_limpo.lower()
-        
-        # Regras específicas de negócio
-        if "ainda nao iniciou a abertura de conta" in status_lower:
-            return "Ainda nao..."
-        
-        if "analise de credito" in status_lower or "análise de crédito" in status_lower:
-            return "Em análise"
-        
-        if "aprovada aguardando assinatura" in status_lower:
-            return "Aprovada"
-        
-        if "documentacao pendente" in status_lower or "documentação pendente" in status_lower:
-            return "Doc pendente"
-        
-        if "desistente" in status_lower:
-            return "Desistente"
-        
-        if "reprovado" in status_lower or "negado" in status_lower:
-            return "Reprovado"
-        
-        if "ativo" in status_lower or "ativa" in status_lower:
-            return "Ativo"
-        
-        if "cancelado" in status_lower:
-            return "Cancelado"
-        
-        if "orientar" in status_lower:
-            return "Orientar"
-        
-        if "atualizar" in status_lower:
-            return "Atualizar"
-        
-        if "desacordo" in status_lower:
-            return "Desacordo"
-        
-        # Se for muito longo, pega as primeiras palavras
-        palavras = status_limpo.split()
-        if len(palavras) > 3:
-            return ' '.join(palavras[:3]) + "..."
-        
-        # Se ainda for longo, corta
-        if len(status_limpo) > 20:
-            return status_limpo[:20] + "..."
-        
-        return status_limpo
-
-    # ----- Carregar Estado Atual -----
+    # =========================
+    # IMPORTAÇÃO
+    # =========================
     store = _leads_status_load()
-    # Remove metadados de controle da exibição
     store_clean = {k: v for k, v in store.items() if not k.startswith("_")}
 
-    # ----- Importação de Arquivos -----
     with st.expander("📤 Importar arquivo(s) diário(s)", expanded=True):
-        st.markdown("""
-        **Regras:**
-        *   A **Data Base** é extraída da **coluna B**.
-        *   Os **Status** são extraídos da **coluna Q** (obrigatório ter 17+ colunas).
-        *   **Indicações Válidas (≤14 dias)**: Calculado usando a coluna DATA_HORA_CADASTRO.
-        """)
+
         up_status_files = st.file_uploader(
             "Selecione os arquivos (XLSX/CSV). O histórico é ACUMULADO.",
             type=["xlsx", "csv"],
@@ -2374,224 +2319,74 @@ with tab_leads_status:
         )
 
         if up_status_files:
-            # Processar com controle
-            dfs, novos_metadados, qtd_novos, qtd_substituidos = process_meta_files_with_control(
-                up_status_files,
-                LEADS_CONTROL_PATH,
-                lambda name, raw: _read_any_status_file(name, raw)
-            )
 
-            if qtd_substituidos > 0:
-                st.warning(f"⚠️ {qtd_substituidos} arquivo(s) foram reimportados com dados diferentes (versão anterior substituída).")
-            if qtd_novos > 0:
-                st.info(f"📁 {qtd_novos} novo(s) arquivo(s) adicionados.")
+            for file in up_status_files:
 
-            if dfs:
-                for i, df_status in enumerate(dfs):
-                    meta = novos_metadados[i]
+                df_status = _read_any_status_file(file.name, file.getvalue())
+                if df_status is None:
+                    continue
 
-                    if df_status.shape[1] < 17:
-                        st.error(f"{meta['name']}: arquivo não possui coluna Q (precisa ter pelo menos 17 colunas).")
-                        continue
+                if df_status.shape[1] < 17:
+                    st.error(f"{file.name}: arquivo não possui coluna Q.")
+                    continue
 
-                    data_base = _extract_date_base_from_col_b(df_status)
-                    if data_base is None:
-                        st.error(f"{meta['name']}: não consegui ler a DATA BASE na coluna B.")
-                        continue
+                data_base = _extract_date_base_from_col_b(df_status)
+                if data_base is None:
+                    st.error(f"{file.name}: não consegui ler DATA BASE.")
+                    continue
 
-                    day_key = data_base.strftime("%d/%m/%Y")
+                day_key = data_base.strftime("%d/%m/%Y")
 
-                    # 1. Processar Status (coluna Q) - LIMPAR OS NOMES ANTES DE SALVAR
-                    s = df_status.iloc[:, 16].astype("string").fillna("").str.strip()
-                    s = s[s != ""]
-                    if s.empty:
-                        st.warning(f"{meta['name']}: coluna Q vazia (nenhum status).")
-                        status_counts = {}
-                    else:
-                        # Aplica limpeza nos status antes de contar
-                        s_limpo = s.apply(limpar_nome_status)
-                        status_counts = s_limpo.value_counts().to_dict()
-                        status_counts = {str(k): int(v) for k, v in status_counts.items()}
+                # STATUS (coluna Q)
+                s = df_status.iloc[:, 16].astype("string").fillna("").str.strip()
+                s = s[s != ""]
+                s_limpo = s.apply(limpar_nome_status)
+                status_counts = s_limpo.value_counts().to_dict()
 
-                    # 2. Calcular Indicações Válidas (agora funcionando!)
-                    validas = _calcular_validas_14d(df_status, data_base)
+                # 14 DIAS
+                validas = _calcular_validas_14d(df_status, data_base)
 
-                    # 3. Atualizar Store
-                    if day_key not in store_clean:
-                        store_clean[day_key] = {}
+                if day_key not in store_clean:
+                    store_clean[day_key] = {}
 
-                    payload_existente = store_clean.get(day_key, {})
-                    if isinstance(payload_existente, dict):
-                        payload_existente.update(status_counts)
-                        store_clean[day_key] = payload_existente
-                    else:
-                        store_clean[day_key] = status_counts
+                store_clean[day_key].update(status_counts)
+                store_clean[day_key]["_validas_14d"] = validas
 
-                    # Salvar válidas
-                    if not isinstance(store_clean[day_key], dict):
-                        store_clean[day_key] = {}
-                    store_clean[day_key]['_validas_14d'] = validas
+            _leads_status_save(store_clean)
+            st.success("✅ Histórico atualizado com sucesso!")
+            st.rerun()
 
-                _leads_status_save(store_clean)
-                st.success("✅ Histórico atualizado com sucesso!")
-                st.rerun()
-
-    # ----- Exibição do Painel -----
+    # =========================
+    # EXIBIÇÃO
+    # =========================
     store = _leads_status_load()
     store_clean = {k: v for k, v in store.items() if not k.startswith("_")}
 
     if not store_clean:
-        st.info("Ainda não há histórico. Importe o(s) arquivo(s) para começar.")
+        st.info("Ainda não há histórico.")
     else:
         rows = []
         for dkey, payload in store_clean.items():
-            if not isinstance(payload, dict):
-                continue
-            validas = payload.get('_validas_14d', 0)
+            validas = payload.get("_validas_14d", 0)
             for status, qtd in payload.items():
-                if status == '_validas_14d':
+                if status == "_validas_14d":
                     continue
                 rows.append({
                     "Data": dkey,
-                    "Status": str(status),
+                    "Status": status,
                     "Quantidade": int(qtd),
                     "Indicações Válidas (≤14d)": int(validas)
                 })
 
-        if not rows:
-            st.info("Nenhum dado de status encontrado no histórico.")
-        else:
-            dfh = pd.DataFrame(rows)
-            dfh["_date"] = pd.to_datetime(dfh["Data"], format="%d/%m/%Y", errors="coerce")
-            dfh = dfh.dropna(subset=["_date"])
+        dfh = pd.DataFrame(rows)
 
-            # Métricas
-            st.markdown("### 📊 Resumo Geral")
-            col_metric1, col_metric2 = st.columns(2)
-            col_metric3, col_metric4 = st.columns(2)
+        st.dataframe(dfh, use_container_width=True, hide_index=True)
 
-            dias_unicos = int(dfh["Data"].nunique())
-            status_unicos = int(dfh["Status"].nunique())
-            total_geral = int(dfh["Quantidade"].sum())
-            total_validas = int(dfh.groupby("Data")["Indicações Válidas (≤14d)"].first().sum())
+        total_validas = dfh.groupby("Data")["Indicações Válidas (≤14d)"].first().sum()
 
-            with col_metric1:
-                st.metric("📅 Dias no histórico", br_int(dias_unicos))
-            with col_metric2:
-                st.metric("🏷️ Status únicos", br_int(status_unicos))
-            with col_metric3:
-                st.metric("📊 Total de Leads", br_int(total_geral))
-            with col_metric4:
-                st.metric("✅ Indicações Válidas (≤14d)", br_int(total_validas))
+        st.metric("✅ Total Indicações Válidas (≤14d)", br_int(total_validas))
 
-            st.divider()
-
-            # Filtro por mês
-            dfh["Mes"] = dfh["_date"].dt.to_period("M").astype(str)
-            meses = sorted(dfh["Mes"].unique(), reverse=True)
-            meses_lbl = [f"{m.split('-')[1]}/{m.split('-')[0]}" for m in meses]
-
-            st.markdown("### Filtros")
-            mes_sel_lbl = st.selectbox(
-                "Selecione o mês",
-                meses_lbl,
-                index=0,
-                key="leads_status_mes_sel"
-            )
-            mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
-
-            # Tabela comparativa
-            df_mes = dfh[dfh["Mes"] == mes_sel].copy()
-
-            if not df_mes.empty:
-                st.markdown("### 📈 Comparativo Diário (Δ vs dia anterior)")
-
-                # Pivot
-                pivot = df_mes.pivot_table(
-                    index="_date",
-                    columns="Status",
-                    values="Quantidade",
-                    aggfunc="sum",
-                    fill_value=0
-                ).astype(int)
-
-                # APLICAR ENCURTAMENTO NOS NOMES DAS COLUNAS
-                pivot.columns = [encurtar_status(col) for col in pivot.columns]
-
-                pivot = pivot.sort_index(ascending=True)
-                
-                for col in pivot.columns:
-                    pivot[f"Δ {col}"] = pivot[col].diff().fillna(0)
-
-                pivot["Total"] = pivot[[c for c in pivot.columns if not str(c).startswith("Δ ")]].sum(axis=1)
-                pivot["Δ Total"] = pivot["Total"].diff().fillna(0)
-
-                validas_por_dia = df_mes.groupby("_date")["Indicações Válidas (≤14d)"].first().to_dict()
-                pivot["Indicações Válidas"] = pivot.index.map(validas_por_dia).fillna(0)
-                pivot["Δ Indicações Válidas"] = pivot["Indicações Válidas"].diff().fillna(0)
-
-                pivot = pivot.sort_index(ascending=False)
-
-                view = pivot.reset_index()
-                view["Data Base"] = view["_date"].dt.strftime("%d/%m/%Y")
-                
-                status_cols = [c for c in view.columns if not c.startswith("Δ ") and c not in ["_date", "Data Base", "Total", "Indicações Válidas"]]
-                delta_cols = [f"Δ {c}" for c in status_cols if f"Δ {c}" in view.columns]
-                
-                col_order = ["Data Base", "Total", "Δ Total"] + status_cols + delta_cols + ["Indicações Válidas", "Δ Indicações Válidas"]
-                view = view[[c for c in col_order if c in view.columns]]
-
-                # Formatação
-                view_display = view.copy()
-                numeric_cols = [c for c in view_display.columns if c != "Data Base"]
-                for col in numeric_cols:
-                    view_display[col] = view_display[col].apply(br_int)
-
-                # Cores
-                def color_delta(val):
-                    try:
-                        if isinstance(val, str):
-                            num = int(val.replace('.', ''))
-                        else:
-                            num = int(val)
-                        if num > 0:
-                            return 'color: #0a7d2a; font-weight: 900;'
-                        elif num < 0:
-                            return 'color: #b00020; font-weight: 900;'
-                    except:
-                        pass
-                    return ''
-
-                styled = view_display.style
-                delta_cols_display = [col for col in view_display.columns if col.startswith('Δ ')]
-                if delta_cols_display:
-                    styled = styled.applymap(color_delta, subset=delta_cols_display)
-
-                if 'Total' in view_display.columns:
-                    styled = styled.applymap(lambda x: 'font-weight: 900;', subset=['Total'])
-
-                styled = styled.set_table_styles([
-                    {"selector": "th", "props": [
-                        ("background-color", "#f3f6fb"),
-                        ("color", "#0f1b3a"),
-                        ("font-weight", "900"),
-                        ("border", "1px solid #e9eef7"),
-                        ("padding", "8px")
-                    ]},
-                    {"selector": "td", "props": [
-                        ("border", "1px solid #e9eef7"),
-                        ("padding", "8px")
-                    ]},
-                    {"selector": "tr:nth-of-type(even)", "props": [
-                        ("background-color", "#fbfcff")
-                    ]},
-                ])
-
-                st.dataframe(styled, use_container_width=True, hide_index=True)
-
-    # Botão de Reset
     st.divider()
-    col_reset1, col_reset2, col_reset3 = st.columns([1, 2, 1])
-    with col_reset2:
-        if st.button("🧹 Resetar somente Leads – Status Diário", use_container_width=True, type="secondary"):
-            _leads_status_reset_only()
+
+    if st.button("🧹 Resetar somente Leads – Status Diário"):
+        _leads_status_reset_only()
