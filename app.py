@@ -2245,13 +2245,24 @@ with tab_leads_status:
     def _calcular_validas_14d(df: pd.DataFrame, data_base: dt.date) -> int:
         """
         Calcula o número de linhas onde a diferença entre a DATA_BASE (coluna B)
-        e a DATA_HORA_CADASTRO (coluna M) é <= 14 dias.
+        e a DATA_HORA_CADASTRO (coluna com esse nome no cabeçalho) é <= 14 dias.
         """
-        if df.shape[1] < 13:  # Se não tiver coluna M
+        # PROCURAR A COLUNA QUE CONTÉM "DATA_HORA_CADASTRO" NO NOME
+        colunas_cadastro = [c for c in df.columns if 'DATA_HORA_CADASTRO' in str(c).upper()]
+        
+        if not colunas_cadastro:
+            # Se não encontrar, tenta variações
+            colunas_cadastro = [c for c in df.columns if 'CADASTRO' in str(c).upper() and 'DATA' in str(c).upper()]
+        
+        if not colunas_cadastro:
+            # Se ainda não encontrar, retorna 0
             return 0
-
-        col_cadastro = df.iloc[:, 12]  # Coluna M (índice 12)
-        datas_cadastro = pd.to_datetime(col_cadastro, errors="coerce", dayfirst=True).dt.date
+        
+        # Pega a primeira coluna encontrada
+        nome_coluna_cadastro = colunas_cadastro[0]
+        
+        # Converte para datetime
+        datas_cadastro = pd.to_datetime(df[nome_coluna_cadastro], errors="coerce", dayfirst=True).dt.date
 
         df_filtrado = df[datas_cadastro.notna()].copy()
         if df_filtrado.empty:
@@ -2260,9 +2271,30 @@ with tab_leads_status:
         df_filtrado.loc[:, '_data_cadastro'] = datas_cadastro
         df_filtrado.loc[:, '_diferenca_dias'] = (data_base - df_filtrado['_data_cadastro']).dt.days
 
-        # Conta onde a diferença é <= 14 e >= 0 (cadastro não pode ser depois da data base)
+        # Conta onde a diferença é <= 14 e >= 0
         validas = df_filtrado[(df_filtrado['_diferenca_dias'] <= 14) & (df_filtrado['_diferenca_dias'] >= 0)]
         return len(validas)
+
+    # ----- Função para LIMPAR nomes dos status (remover caracteres especiais) -----
+    def limpar_nome_status(status: str) -> str:
+        """
+        Remove caracteres especiais que causam problemas nos nomes das colunas
+        """
+        if not isinstance(status, str):
+            return str(status)
+        
+        # Substituir caracteres problemáticos
+        nome = status.strip()
+        nome = nome.replace("'", "")  # Remove apóstrofos
+        nome = nome.replace('"', '')  # Remove aspas
+        nome = nome.replace('`', '')  # Remove crases
+        nome = nome.replace('-', ' ')  # Transforma hífen em espaço
+        nome = nome.replace('_', ' ')  # Transforma underline em espaço
+        
+        # Remover espaços extras
+        nome = ' '.join(nome.split())
+        
+        return nome
 
     # ----- Função para encurtar status com regras de negócio -----
     def encurtar_status(status: str) -> str:
@@ -2272,7 +2304,9 @@ with tab_leads_status:
         if not isinstance(status, str):
             return str(status)
         
-        status_lower = status.lower().strip()
+        # Primeiro limpa o nome
+        status_limpo = limpar_nome_status(status)
+        status_lower = status_limpo.lower()
         
         # Regras específicas de negócio
         if "ainda nao iniciou a abertura de conta" in status_lower:
@@ -2299,19 +2333,25 @@ with tab_leads_status:
         if "cancelado" in status_lower:
             return "Cancelado"
         
-        # Fallback: encurtamento genérico se não achou regra
-        palavras = status.split()
-        if len(palavras) > 2:
-            # Pega primeiras letras de cada palavra
-            sigla = ''.join([p[0].upper() for p in palavras if p and p[0].isalpha()])
-            if len(sigla) <= 5:
-                return sigla
+        if "orientar" in status_lower:
+            return "Orientar"
         
-        # Último recurso: corta em 15 chars
-        if len(status) > 15:
-            return status[:15] + "…"
+        if "atualizar" in status_lower:
+            return "Atualizar"
         
-        return status
+        if "desacordo" in status_lower:
+            return "Desacordo"
+        
+        # Se for muito longo, pega as primeiras palavras
+        palavras = status_limpo.split()
+        if len(palavras) > 3:
+            return ' '.join(palavras[:3]) + "..."
+        
+        # Se ainda for longo, corta
+        if len(status_limpo) > 20:
+            return status_limpo[:20] + "..."
+        
+        return status_limpo
 
     # ----- Carregar Estado Atual -----
     store = _leads_status_load()
@@ -2324,7 +2364,7 @@ with tab_leads_status:
         **Regras:**
         *   A **Data Base** é extraída da **coluna B**.
         *   Os **Status** são extraídos da **coluna Q** (obrigatório ter 17+ colunas).
-        *   **Indicações Válidas (≤14 dias)**: Calculado se o arquivo tiver 13+ colunas (coluna M).
+        *   **Indicações Válidas (≤14 dias)**: Calculado usando a coluna DATA_HORA_CADASTRO.
         """)
         up_status_files = st.file_uploader(
             "Selecione os arquivos (XLSX/CSV). O histórico é ACUMULADO.",
@@ -2334,7 +2374,7 @@ with tab_leads_status:
         )
 
         if up_status_files:
-            # Processar com controle (reaproveita a função da Meta)
+            # Processar com controle
             dfs, novos_metadados, qtd_novos, qtd_substituidos = process_meta_files_with_control(
                 up_status_files,
                 LEADS_CONTROL_PATH,
@@ -2361,57 +2401,53 @@ with tab_leads_status:
 
                     day_key = data_base.strftime("%d/%m/%Y")
 
-                    # 1. Processar Status (coluna Q)
+                    # 1. Processar Status (coluna Q) - LIMPAR OS NOMES ANTES DE SALVAR
                     s = df_status.iloc[:, 16].astype("string").fillna("").str.strip()
                     s = s[s != ""]
                     if s.empty:
                         st.warning(f"{meta['name']}: coluna Q vazia (nenhum status).")
                         status_counts = {}
                     else:
-                        status_counts = s.value_counts().to_dict()
+                        # Aplica limpeza nos status antes de contar
+                        s_limpo = s.apply(limpar_nome_status)
+                        status_counts = s_limpo.value_counts().to_dict()
                         status_counts = {str(k): int(v) for k, v in status_counts.items()}
 
-                    # 2. Calcular Indicações Válidas (regra dos 14 dias)
+                    # 2. Calcular Indicações Válidas (agora funcionando!)
                     validas = _calcular_validas_14d(df_status, data_base)
 
                     # 3. Atualizar Store
                     if day_key not in store_clean:
                         store_clean[day_key] = {}
 
-                    # Se já existir um payload para o dia, atualiza/mescla os status
                     payload_existente = store_clean.get(day_key, {})
                     if isinstance(payload_existente, dict):
-                        # Mescla os novos status com os antigos (substitui se houver conflito)
                         payload_existente.update(status_counts)
                         store_clean[day_key] = payload_existente
                     else:
                         store_clean[day_key] = status_counts
 
-                    # Salvar o valor de válidas em uma chave separada
+                    # Salvar válidas
                     if not isinstance(store_clean[day_key], dict):
                         store_clean[day_key] = {}
                     store_clean[day_key]['_validas_14d'] = validas
 
-                # Salvar tudo de volta no storage
                 _leads_status_save(store_clean)
                 st.success("✅ Histórico atualizado com sucesso!")
                 st.rerun()
 
     # ----- Exibição do Painel -----
-    # Recarrega a store limpa para exibição
     store = _leads_status_load()
     store_clean = {k: v for k, v in store.items() if not k.startswith("_")}
 
     if not store_clean:
         st.info("Ainda não há histórico. Importe o(s) arquivo(s) para começar.")
     else:
-        # --- Preparar DataFrame para análise ---
         rows = []
         for dkey, payload in store_clean.items():
             if not isinstance(payload, dict):
                 continue
-            # CORREÇÃO 1: Usar .get() em vez de .pop() para não remover a chave
-            validas = payload.get('_validas_14d', 0) if isinstance(payload, dict) else 0
+            validas = payload.get('_validas_14d', 0)
             for status, qtd in payload.items():
                 if status == '_validas_14d':
                     continue
@@ -2429,7 +2465,7 @@ with tab_leads_status:
             dfh["_date"] = pd.to_datetime(dfh["Data"], format="%d/%m/%Y", errors="coerce")
             dfh = dfh.dropna(subset=["_date"])
 
-            # --- Métricas do Topo ---
+            # Métricas
             st.markdown("### 📊 Resumo Geral")
             col_metric1, col_metric2 = st.columns(2)
             col_metric3, col_metric4 = st.columns(2)
@@ -2450,7 +2486,7 @@ with tab_leads_status:
 
             st.divider()
 
-            # --- Filtro por Mês ---
+            # Filtro por mês
             dfh["Mes"] = dfh["_date"].dt.to_period("M").astype(str)
             meses = sorted(dfh["Mes"].unique(), reverse=True)
             meses_lbl = [f"{m.split('-')[1]}/{m.split('-')[0]}" for m in meses]
@@ -2464,13 +2500,13 @@ with tab_leads_status:
             )
             mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
 
-            # --- Tabela Comparativa Diária (com Δ) ---
+            # Tabela comparativa
             df_mes = dfh[dfh["Mes"] == mes_sel].copy()
 
             if not df_mes.empty:
                 st.markdown("### 📈 Comparativo Diário (Δ vs dia anterior)")
 
-                # Pivot para ter uma linha por dia, colunas por status
+                # Pivot
                 pivot = df_mes.pivot_table(
                     index="_date",
                     columns="Status",
@@ -2479,56 +2515,45 @@ with tab_leads_status:
                     fill_value=0
                 ).astype(int)
 
-                # CORREÇÃO 3: Aplicar encurtamento inteligente aos nomes das colunas
+                # APLICAR ENCURTAMENTO NOS NOMES DAS COLUNAS
                 pivot.columns = [encurtar_status(col) for col in pivot.columns]
 
-                # Ordenar cronologicamente para calcular Δ
                 pivot = pivot.sort_index(ascending=True)
                 
-                # Calcular Δ para cada status
                 for col in pivot.columns:
                     pivot[f"Δ {col}"] = pivot[col].diff().fillna(0)
 
-                # Adicionar coluna de Total e Δ Total
                 pivot["Total"] = pivot[[c for c in pivot.columns if not str(c).startswith("Δ ")]].sum(axis=1)
                 pivot["Δ Total"] = pivot["Total"].diff().fillna(0)
 
-                # Adicionar coluna de Indicações Válidas (pegar do dfh)
                 validas_por_dia = df_mes.groupby("_date")["Indicações Válidas (≤14d)"].first().to_dict()
                 pivot["Indicações Válidas"] = pivot.index.map(validas_por_dia).fillna(0)
                 pivot["Δ Indicações Válidas"] = pivot["Indicações Válidas"].diff().fillna(0)
 
-                # Reordenar para exibição (decrescente)
                 pivot = pivot.sort_index(ascending=False)
 
-                # Reset index para mostrar a data
                 view = pivot.reset_index()
                 view["Data Base"] = view["_date"].dt.strftime("%d/%m/%Y")
                 
-                # Identificar colunas para exibição
                 status_cols = [c for c in view.columns if not c.startswith("Δ ") and c not in ["_date", "Data Base", "Total", "Indicações Válidas"]]
                 delta_cols = [f"Δ {c}" for c in status_cols if f"Δ {c}" in view.columns]
                 
-                # Ordem das colunas
                 col_order = ["Data Base", "Total", "Δ Total"] + status_cols + delta_cols + ["Indicações Válidas", "Δ Indicações Válidas"]
                 view = view[[c for c in col_order if c in view.columns]]
 
-                # Aplicar formatação numérica com br_int (apenas para exibição)
+                # Formatação
                 view_display = view.copy()
                 numeric_cols = [c for c in view_display.columns if c != "Data Base"]
                 for col in numeric_cols:
                     view_display[col] = view_display[col].apply(br_int)
 
-                # CORREÇÃO 2: Aplicar cores nos valores Δ
+                # Cores
                 def color_delta(val):
-                    """Aplica cor baseada no valor (positivo/negativo)"""
                     try:
-                        # Converte de volta para número (remove os pontos da formatação)
                         if isinstance(val, str):
                             num = int(val.replace('.', ''))
                         else:
                             num = int(val)
-                            
                         if num > 0:
                             return 'color: #0a7d2a; font-weight: 900;'
                         elif num < 0:
@@ -2537,19 +2562,14 @@ with tab_leads_status:
                         pass
                     return ''
 
-                # Aplicar estilo
                 styled = view_display.style
-
-                # Aplicar cores nas colunas Δ
                 delta_cols_display = [col for col in view_display.columns if col.startswith('Δ ')]
                 if delta_cols_display:
                     styled = styled.applymap(color_delta, subset=delta_cols_display)
 
-                # Destacar Total em negrito
                 if 'Total' in view_display.columns:
                     styled = styled.applymap(lambda x: 'font-weight: 900;', subset=['Total'])
 
-                # Configurar tabela
                 styled = styled.set_table_styles([
                     {"selector": "th", "props": [
                         ("background-color", "#f3f6fb"),
@@ -2569,7 +2589,7 @@ with tab_leads_status:
 
                 st.dataframe(styled, use_container_width=True, hide_index=True)
 
-    # ----- Botão de Reset (FORA do Expander, no final da aba) -----
+    # Botão de Reset
     st.divider()
     col_reset1, col_reset2, col_reset3 = st.columns([1, 2, 1])
     with col_reset2:
