@@ -2264,6 +2264,55 @@ with tab_leads_status:
         validas = df_filtrado[(df_filtrado['_diferenca_dias'] <= 14) & (df_filtrado['_diferenca_dias'] >= 0)]
         return len(validas)
 
+    # ----- Função para encurtar status com regras de negócio -----
+    def encurtar_status(status: str) -> str:
+        """
+        Aplica regras de negócio para encurtar nomes de status
+        """
+        if not isinstance(status, str):
+            return str(status)
+        
+        status_lower = status.lower().strip()
+        
+        # Regras específicas de negócio
+        if "ainda nao iniciou a abertura de conta" in status_lower:
+            return "Ainda nao..."
+        
+        if "analise de credito" in status_lower or "análise de crédito" in status_lower:
+            return "Em análise"
+        
+        if "aprovada aguardando assinatura" in status_lower:
+            return "Aprovada"
+        
+        if "documentacao pendente" in status_lower or "documentação pendente" in status_lower:
+            return "Doc pendente"
+        
+        if "desistente" in status_lower:
+            return "Desistente"
+        
+        if "reprovado" in status_lower or "negado" in status_lower:
+            return "Reprovado"
+        
+        if "ativo" in status_lower or "ativa" in status_lower:
+            return "Ativo"
+        
+        if "cancelado" in status_lower:
+            return "Cancelado"
+        
+        # Fallback: encurtamento genérico se não achou regra
+        palavras = status.split()
+        if len(palavras) > 2:
+            # Pega primeiras letras de cada palavra
+            sigla = ''.join([p[0].upper() for p in palavras if p and p[0].isalpha()])
+            if len(sigla) <= 5:
+                return sigla
+        
+        # Último recurso: corta em 15 chars
+        if len(status) > 15:
+            return status[:15] + "…"
+        
+        return status
+
     # ----- Carregar Estado Atual -----
     store = _leads_status_load()
     # Remove metadados de controle da exibição
@@ -2338,7 +2387,7 @@ with tab_leads_status:
                     else:
                         store_clean[day_key] = status_counts
 
-                    # Salvar o valor de válidas em uma chave separada (ex: "_validas_14d")
+                    # Salvar o valor de válidas em uma chave separada
                     if not isinstance(store_clean[day_key], dict):
                         store_clean[day_key] = {}
                     store_clean[day_key]['_validas_14d'] = validas
@@ -2361,7 +2410,8 @@ with tab_leads_status:
         for dkey, payload in store_clean.items():
             if not isinstance(payload, dict):
                 continue
-            validas = payload.pop('_validas_14d', 0) if isinstance(payload, dict) else 0
+            # CORREÇÃO 1: Usar .get() em vez de .pop() para não remover a chave
+            validas = payload.get('_validas_14d', 0) if isinstance(payload, dict) else 0
             for status, qtd in payload.items():
                 if status == '_validas_14d':
                     continue
@@ -2379,7 +2429,7 @@ with tab_leads_status:
             dfh["_date"] = pd.to_datetime(dfh["Data"], format="%d/%m/%Y", errors="coerce")
             dfh = dfh.dropna(subset=["_date"])
 
-            # --- Métricas do Topo (Layout de 2 colunas) ---
+            # --- Métricas do Topo ---
             st.markdown("### 📊 Resumo Geral")
             col_metric1, col_metric2 = st.columns(2)
             col_metric3, col_metric4 = st.columns(2)
@@ -2429,6 +2479,9 @@ with tab_leads_status:
                     fill_value=0
                 ).astype(int)
 
+                # CORREÇÃO 3: Aplicar encurtamento inteligente aos nomes das colunas
+                pivot.columns = [encurtar_status(col) for col in pivot.columns]
+
                 # Ordenar cronologicamente para calcular Δ
                 pivot = pivot.sort_index(ascending=True)
                 
@@ -2452,7 +2505,7 @@ with tab_leads_status:
                 view = pivot.reset_index()
                 view["Data Base"] = view["_date"].dt.strftime("%d/%m/%Y")
                 
-                # Selecionar colunas para exibição
+                # Identificar colunas para exibição
                 status_cols = [c for c in view.columns if not c.startswith("Δ ") and c not in ["_date", "Data Base", "Total", "Indicações Válidas"]]
                 delta_cols = [f"Δ {c}" for c in status_cols if f"Δ {c}" in view.columns]
                 
@@ -2466,31 +2519,35 @@ with tab_leads_status:
                 for col in numeric_cols:
                     view_display[col] = view_display[col].apply(br_int)
 
-                # Aplicar estilo condicional
-                def highlight_delta(val, col_name):
-                    """Retorna estilo CSS baseado no valor da coluna Δ"""
-                    if pd.isna(val) or not isinstance(val, (int, float)):
-                        return ""
-                    if col_name.startswith("Δ "):
-                        if val > 0:
-                            return "color: #0a7d2a; font-weight: 900;"
-                        elif val < 0:
-                            return "color: #b00020; font-weight: 900;"
-                    return ""
+                # CORREÇÃO 2: Aplicar cores nos valores Δ
+                def color_delta(val):
+                    """Aplica cor baseada no valor (positivo/negativo)"""
+                    try:
+                        # Converte de volta para número (remove os pontos da formatação)
+                        if isinstance(val, str):
+                            num = int(val.replace('.', ''))
+                        else:
+                            num = int(val)
+                            
+                        if num > 0:
+                            return 'color: #0a7d2a; font-weight: 900;'
+                        elif num < 0:
+                            return 'color: #b00020; font-weight: 900;'
+                    except:
+                        pass
+                    return ''
 
-                # Aplicar estilo célula por célula
+                # Aplicar estilo
                 styled = view_display.style
-                
-                # Destacar totais em negrito
-                styled = styled.applymap(lambda x: "font-weight: 900;", subset=["Total"])
-                
-                # Aplicar cores nas colunas de Δ
-                for col in view_display.columns:
-                    if col.startswith("Δ "):
-                        styled = styled.applymap(
-                            lambda x, col=col: highlight_delta(x, col), 
-                            subset=[col]
-                        )
+
+                # Aplicar cores nas colunas Δ
+                delta_cols_display = [col for col in view_display.columns if col.startswith('Δ ')]
+                if delta_cols_display:
+                    styled = styled.applymap(color_delta, subset=delta_cols_display)
+
+                # Destacar Total em negrito
+                if 'Total' in view_display.columns:
+                    styled = styled.applymap(lambda x: 'font-weight: 900;', subset=['Total'])
 
                 # Configurar tabela
                 styled = styled.set_table_styles([
@@ -2518,12 +2575,3 @@ with tab_leads_status:
     with col_reset2:
         if st.button("🧹 Resetar somente Leads – Status Diário", use_container_width=True, type="secondary"):
             _leads_status_reset_only()
-
-
-# Observação única no final (não duplicada)
-st.markdown("---")
-st.caption(
-    "Obs.: para 'Baixar analítico do dia' com linhas, precisaríamos guardar o "
-    "arquivo cru (muito pesado). Aqui o histórico é consolidado (e persistente) "
-    "por dia/status/mês e por grupo."
-)
