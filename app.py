@@ -2368,7 +2368,7 @@ with tab_leads_status:
         for dkey, payload in store_clean.items():
             if not isinstance(payload, dict):
                 continue
-            validas = payload.pop('_validas_14d', 0) if isinstance(payload, dict) else 0
+            validas = payload.get('_validas_14d', 0) if isinstance(payload, dict) else 0
             for status, qtd in payload.items():
                 if status == '_validas_14d':
                     continue
