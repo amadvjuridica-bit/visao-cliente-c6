@@ -1,3 +1,8 @@
+# =========================
+# app.py — PARTE 1/2
+# (Cole esta parte no app.py, e depois cole a PARTE 2 logo abaixo)
+# =========================
+
 import os
 import io
 import json
@@ -1176,6 +1181,240 @@ with tab_painel:
     else:
         st.dataframe(df_cmp, use_container_width=True, hide_index=True)
 
+    # =========================================================
+    # ✅ RELATÓRIOS (diário) — (igual ao antigo, com 4 abas)
+    # - Usa o df_c6 importado do dia (Visão Cliente)
+    # =========================================================
+    st.subheader("Relatórios (diário)")
+
+    if df_c6 is None or df_c6.empty:
+        st.info("Importe a planilha C6 (Visão Cliente) do dia para ver os relatórios diários.")
+    else:
+        # Garantias mínimas (sem quebrar se vier faltando algo)
+        _df = df_c6.copy()
+
+        if COL_ABERTURA not in _df.columns:
+            _df[COL_ABERTURA] = pd.NA
+        if COL_FUNDACAO not in _df.columns:
+            _df[COL_FUNDACAO] = pd.NA
+        if COL_PIX not in _df.columns:
+            _df[COL_PIX] = ""
+        if COL_STATUS not in _df.columns:
+            _df[COL_STATUS] = ""
+        if COL_BR not in _df.columns:
+            _df[COL_BR] = ""
+        if COL_CASHIN_MTD not in _df.columns:
+            _df[COL_CASHIN_MTD] = 0.0
+        if COL_SALDO not in _df.columns:
+            _df[COL_SALDO] = 0.0
+        if COL_CRIT not in _df.columns:
+            _df[COL_CRIT] = ""
+        if COL_BY not in _df.columns:
+            _df[COL_BY] = ""
+
+        _df[COL_ABERTURA] = to_date_series(_df[COL_ABERTURA])
+        _df[COL_FUNDACAO] = to_date_series(_df[COL_FUNDACAO])
+        _df[COL_BR] = normalize_str(_df[COL_BR]).str.upper()
+        _df[COL_STATUS] = normalize_str(_df[COL_STATUS])
+        _df[COL_CASHIN_MTD] = pd.to_numeric(_df[COL_CASHIN_MTD], errors="coerce").fillna(0.0)
+        _df[COL_SALDO] = pd.to_numeric(_df[COL_SALDO], errors="coerce").fillna(0.0)
+
+        # dia do relatório (DATA_BASE preferencial) e mês ref (do arquivo)
+        _rep_day = detect_report_day_from_df(_df)
+        _rep_month = detect_report_month_from_df(_df)
+        _rep_month_lbl = fmt_month(_rep_month) if _rep_month else ""
+
+        if _rep_day:
+            st.caption(f"📌 Arquivo do dia: {fmt_date(_rep_day)}  |  Mês do relatório: {_rep_month_lbl}")
+        else:
+            st.caption(f"📌 Mês do relatório: {_rep_month_lbl}")
+
+        tab_ab, tab_fd, tab_px, tab_qv = st.tabs([
+            "Aberturas",
+            "Fundações (por dia)",
+            "Pix + Status",
+            "Qualificação + BR + Valores",
+        ])
+
+        # ----------------------------
+        # 1) ABERTURAS
+        # ----------------------------
+        with tab_ab:
+            dfa = _df[_df[COL_ABERTURA].notna()].copy()
+            if dfa.empty:
+                st.info("Sem DT_CONTA_CRIADA no arquivo do dia.")
+            else:
+                # filtro por mês (baseado no próprio DT_CONTA_CRIADA)
+                dfa["_mes"] = pd.to_datetime(dfa[COL_ABERTURA], errors="coerce").dt.to_period("M").astype(str)
+                meses = sorted([m for m in dfa["_mes"].dropna().unique()], reverse=False)
+
+                if not meses:
+                    st.info("Não consegui identificar mês pelas aberturas.")
+                else:
+                    meses_lbl = [f"{m.split('-')[1]}/{m.split('-')[0]}" for m in meses]
+                    # default = último mês existente
+                    mes_sel_lbl = st.selectbox("Selecione o mês (Aberturas)", meses_lbl, index=len(meses_lbl) - 1, key="rep_ab_mes")
+                    mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
+
+                    base = dfa[dfa["_mes"] == mes_sel].copy()
+
+                    grp = (
+                        base.groupby(COL_ABERTURA)
+                        .size()
+                        .reset_index(name="Aberturas")
+                        .sort_values(COL_ABERTURA, ascending=False)  # mais recente -> mais antigo
+                    )
+                    total_mes = int(grp["Aberturas"].sum())
+
+                    c1, c2 = st.columns(2)
+                    c1.metric("Total de aberturas (mês selecionado)", br_int(total_mes))
+                    c2.metric("Dias com abertura", br_int(int(grp.shape[0])))
+
+                    view = grp.copy()
+                    view["Data"] = view[COL_ABERTURA].apply(fmt_date)
+                    view["Aberturas"] = view["Aberturas"].apply(br_int)
+                    view = view[["Data", "Aberturas"]]
+                    st.dataframe(view, use_container_width=True, hide_index=True)
+
+        # ----------------------------
+        # 2) FUNDAÇÕES (POR DIA)
+        # ----------------------------
+        with tab_fd:
+            dfa = _df[_df[COL_ABERTURA].notna()].copy()
+            if dfa.empty:
+                st.info("Sem DT_CONTA_CRIADA no arquivo do dia.")
+            else:
+                # dias disponíveis (do próprio arquivo)
+                dias = sorted([d for d in dfa[COL_ABERTURA].dropna().unique()], reverse=True)
+                dias_lbl = [fmt_date(d) for d in dias]
+
+                if not dias:
+                    st.info("Sem dias válidos de abertura.")
+                else:
+                    dia_sel_lbl = st.selectbox("Selecione o dia de abertura", dias_lbl, index=0, key="rep_fd_dia")
+                    dia_sel = dias[dias_lbl.index(dia_sel_lbl)]
+
+                    base = dfa[dfa[COL_ABERTURA] == dia_sel].copy()
+
+                    # month/year de fundação (DT_FUNDACAO_EMPRESA)
+                    fund = base[base[COL_FUNDACAO].notna()].copy()
+                    if fund.empty:
+                        st.info("Sem DT_FUNDACAO_EMPRESA preenchida para esse dia.")
+                    else:
+                        fund["_fund_my"] = fund[COL_FUNDACAO].apply(lambda x: f"{x.month:02d}/{x.year}" if isinstance(x, dt.date) else "")
+                        fund["_fund_my"] = fund["_fund_my"].replace("", pd.NA)
+
+                        tbl = (
+                            fund.groupby("_fund_my")
+                            .size()
+                            .reset_index(name="Qtd")
+                            .dropna(subset=["_fund_my"])
+                        )
+
+                        if tbl.empty:
+                            st.info("Não consegui montar mês/ano de fundação.")
+                        else:
+                            # ordenar mais recente -> mais antigo pelo ano/mês
+                            def _my_key(s):
+                                try:
+                                    mm, yy = str(s).split("/")
+                                    return int(yy) * 100 + int(mm)
+                                except Exception:
+                                    return 0
+
+                            tbl = tbl.sort_values("_fund_my", key=lambda col: col.map(_my_key), ascending=False).reset_index(drop=True)
+
+                            c1, c2 = st.columns(2)
+                            c1.metric("Aberturas no dia", br_int(int(len(base))))
+                            c2.metric("Com fundação preenchida", br_int(int(len(fund))))
+
+                            view = tbl.rename(columns={"_fund_my": "Mês/Ano fundação", "Qtd": "Quantidade"}).copy()
+                            view["Quantidade"] = view["Quantidade"].apply(br_int)
+                            st.dataframe(view, use_container_width=True, hide_index=True)
+
+        # ----------------------------
+        # 3) PIX + STATUS
+        # ----------------------------
+        with tab_px:
+            # PIX
+            s = normalize_str(_df.get(COL_PIX, pd.Series([""] * len(_df)))).str.upper()
+            s = s.str.replace("'", "", regex=False)
+            has_pix = ~s.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
+
+            pix_com = int(has_pix.sum())
+            pix_sem = int((~has_pix).sum())
+
+            # STATUS
+            stt = normalize_str(_df.get(COL_STATUS, pd.Series([""] * len(_df))))
+            stt = stt.replace("", "SEM_STATUS")
+
+            stt_tbl = (
+                stt.value_counts()
+                .rename_axis("Status")
+                .reset_index(name="Quantidade")
+            )
+
+            # DOMICÍLIO C6 (se tiver a coluna)
+            domicilio_c6 = 0
+            if COL_DOMICILIO in _df.columns:
+                domicilio_c6 = int(_df[COL_DOMICILIO].apply(contains_c6).sum())
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Registros no arquivo", br_int(int(len(_df))))
+            c2.metric("PIX (com)", br_int(pix_com))
+            c3.metric("PIX (sem)", br_int(pix_sem))
+            c4.metric("Domicílio C6", br_int(domicilio_c6))
+
+            view = stt_tbl.copy()
+            view["Quantidade"] = view["Quantidade"].apply(br_int)
+            st.dataframe(view, use_container_width=True, hide_index=True)
+
+        # ----------------------------
+        # 4) QUALIFICAÇÃO + BR + VALORES
+        # ----------------------------
+        with tab_qv:
+            dqq = _df.copy()
+            dqq["_nivel"] = parse_level(dqq)
+            dqq["_qual"] = dqq["_nivel"] >= 1
+
+            qual_total = int(dqq["_qual"].sum())
+
+            # BR (M0/M1/M2)
+            br_s = normalize_str(dqq.get(COL_BR, pd.Series([""] * len(dqq)))).str.upper()
+            m0 = int((dqq["_qual"] & (br_s == "M0")).sum())
+            m1 = int((dqq["_qual"] & (br_s == "M1")).sum())
+            m2 = int((dqq["_qual"] & (br_s == "M2")).sum())
+
+            cashin_total = float(dqq[COL_CASHIN_MTD].sum())
+            saldo_total = float(dqq[COL_SALDO].sum())
+
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Qualificadas (arquivo)", br_int(qual_total))
+            c2.metric("Qualificadas M0/M1/M2", f"{br_int(m0)} / {br_int(m1)} / {br_int(m2)}")
+            c3.metric("Saldo total (VL_CASH_IN_MTD)", br_money(cashin_total))
+            c4.metric("Saldo médio total (VL_SALDO_MEDIO_MENSALIZADO)", br_money(saldo_total))
+
+            st.markdown("### Quebra por BR e Nível (qualificadas)")
+            qbase = dqq[dqq["_qual"]].copy()
+            if qbase.empty:
+                st.info("Nenhuma qualificadas no arquivo (nível >= 1).")
+            else:
+                qbase["_br"] = normalize_str(qbase.get(COL_BR, pd.Series([""] * len(qbase)))).str.upper().replace("", "SEM_BR")
+                qtbl = (
+                    qbase.groupby(["_br", "_nivel"])
+                    .size()
+                    .reset_index(name="Qtd")
+                    .sort_values(["_br", "_nivel"], ascending=[True, True])
+                )
+                view = qtbl.rename(columns={"_br": "BR", "_nivel": "Nível", "Qtd": "Quantidade"}).copy()
+                view["Quantidade"] = view["Quantidade"].apply(br_int)
+                st.dataframe(view, use_container_width=True, hide_index=True)
+
+            st.markdown("### Base do mês (A receber no mês)")
+            saved_resumo = safe_json_load(HIST_RESUMO_MENSAL, default={}) or {}
+            base_receber = float(saved_resumo.get(_rep_month_lbl, {}).get("receber_mes", 0.0)) if _rep_month_lbl else 0.0
+            st.metric("A receber (mês)", br_money(base_receber))
+
     st.divider()
 
     st.subheader("Resumo executivo (mês)")
@@ -1345,6 +1584,15 @@ with tab_painel:
         c4.metric("A receber", br_money(float(last["A receber no mês"])))
 
 
+# =========================
+# CONTINUA NA PARTE 2/2
+# (Cole a PARTE 2 logo abaixo desta linha)
+# =========================
+# =========================
+# app.py — PARTE 2/2
+# (Cole esta parte LOGO ABAIXO da PARTE 1 no mesmo app.py)
+# =========================
+
 # =========================================================
 # =====================  TAB 2  ===========================
 # ================ 💬 Campanhas Meta =======================
@@ -1510,8 +1758,6 @@ with tab_meta:
         ✅ AJUSTE ÚNICO: o "Sintético mensal por status" deve somar o mês inteiro,
         não ficar só com o último arquivo/dia.
 
-        Como os arquivos podem vir "por dia", o merge mensal por (Mes|status) NÃO pode
-        ser drop_duplicates(keep='last'). Em vez disso:
         - Mantemos o histórico diário por chave (Mes|Data|status) (um por dia)
         - Recalculamos o mensal SEMPRE como soma do diário do mês.
         """
@@ -1533,10 +1779,8 @@ with tab_meta:
         status_set |= set(df["message_status"].dropna().unique().tolist())
         campaign_set |= set(df["broadcast_description"].dropna().unique().tolist())
 
-        # Novo diário do(s) arquivo(s) importado(s)
         new_daily = df.groupby(["Mes", "Data", "message_status"]).size().reset_index(name="qty")
 
-        # Merge diário (substituir por chave Mes|Data|status)
         if old_daily.empty:
             merged_daily = new_daily.copy()
         else:
@@ -1549,7 +1793,6 @@ with tab_meta:
             merged_daily = merged_daily.drop_duplicates(subset=["_k"], keep="last").drop(columns=["_k"])
             merged_daily = merged_daily.sort_values(["Mes", "Data", "message_status"]).reset_index(drop=True)
 
-        # ✅ RECOMPUTE MENSAL A PARTIR DO DIÁRIO (SOMA DO MÊS INTEIRO)
         merged_monthly = (
             merged_daily
             .groupby(["Mes", "message_status"], as_index=False)["qty"]
@@ -1558,7 +1801,6 @@ with tab_meta:
             .reset_index(drop=True)
         )
 
-        # Calcular totais globais
         global_total = int(merged_monthly["qty"].sum()) if not merged_monthly.empty else 0
         global_enviados = int(
             merged_monthly[merged_monthly["message_status"].isin(["sent", "delivered", "read"])]["qty"].sum()
@@ -1567,7 +1809,6 @@ with tab_meta:
         status_unicos = int(len(status_set))
         campanhas = int(len(campaign_set))
 
-        # Atualizar lista de arquivos (robusto)
         files = _normalize_files_meta_list(existing_summary.get("files", []))
         for meta in (novos_metadados or []):
             if not isinstance(meta, dict):
@@ -1802,9 +2043,6 @@ with tab_meta:
 
     # =======================================================
     # ✅ CONTROLE SEM BLOQUEIO (PERMITE REIMPORTAR O MESMO ARQUIVO)
-    # - Mesmo nome + mesmo hash: NÃO BLOQUEIA (reprocessa)
-    # - Mesmo nome + hash diferente: substitui (mantém 1 por nome)
-    # - Nome novo: adiciona
     # =======================================================
     def process_files_with_control_no_block(
         uploaded_files,
@@ -2255,7 +2493,6 @@ with tab_leads_status:
                     "imported_at": imported_at,
                 })
 
-                # ✅ marcar último processado (último arquivo do loop)
                 last_processed_day = day_key_iso
                 last_processed_at = imported_at
 
@@ -2264,7 +2501,6 @@ with tab_leads_status:
             control["files"] = files_meta[-1000:]
             control["updated_at"] = dt.datetime.now().isoformat()
 
-            # ✅ salva qual foi o último arquivo processado
             if last_processed_day:
                 control["last_processed"] = {
                     "day": last_processed_day,
@@ -2272,12 +2508,10 @@ with tab_leads_status:
                 }
 
             safe_json_save(LEADS_CONTROL_PATH, control)
-
             _leads_status_save(store)
 
             st.success(f"✅ {processados} arquivo(s) processado(s). (erros: {erros})")
 
-            # ✅ FIX refresh: “limpa” uploader e força rerun visível
             st.session_state["leads_upload_seq"] += 1
             st.rerun()
 
@@ -2312,10 +2546,6 @@ with tab_leads_status:
             dfh["_date"] = pd.to_datetime(dfh["Data"], format="%d/%m/%Y", errors="coerce")
             dfh = dfh.dropna(subset=["_date"])
 
-            # ============================
-            # ✅ Resumo Geral (AJUSTADO)
-            # Total de Leads e Válidas = do ÚLTIMO arquivo processado
-            # ============================
             st.markdown("### 📊 Resumo Geral")
             col_metric1, col_metric2 = st.columns(2)
             col_metric3, col_metric4 = st.columns(2)
@@ -2323,12 +2553,10 @@ with tab_leads_status:
             dias_unicos = int(dfh["Data"].nunique())
             status_unicos = int(dfh["Status"].nunique())
 
-            # ✅ pega o último arquivo processado
             last_info = control.get("last_processed", {}) or {}
             last_day = last_info.get("day")
 
             if not last_day:
-                # fallback: maior dia ISO no store
                 try:
                     last_day = max([k for k in store.keys() if isinstance(k, str)])
                 except Exception:
@@ -2352,7 +2580,6 @@ with tab_leads_status:
 
             st.divider()
 
-            # Filtro por mês
             dfh["Mes"] = dfh["_date"].dt.to_period("M").astype(str)
             meses = sorted(dfh["Mes"].unique(), reverse=True)
             meses_lbl = [f"{m.split('-')[1]}/{m.split('-')[0]}" for m in meses]
@@ -2366,7 +2593,6 @@ with tab_leads_status:
             )
             mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
 
-            # Tabela comparativa
             df_mes = dfh[dfh["Mes"] == mes_sel].copy()
 
             if not df_mes.empty:
