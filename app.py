@@ -224,15 +224,11 @@ def contains_c6(x) -> bool:
 
 
 # =========================================================
-# ✅ NOVO: FIRESTORE-SAFE (mínimo necessário, sem mexer no resto)
+# ✅ EXTRA: helpers mínimos (Leads) — sem mexer no resto
 # =========================================================
-_FORBIDDEN = r"[./\*\[\]/]"  # inclui "/" explicitamente
+_FORBIDDEN = r"[./\*\[\]/]"
 
 def firestore_safe_key(s: str, max_len: int = 120) -> str:
-    """
-    Firestore não aceita '.' '/' '*' '[' ']'
-    Sanitiza para virar chave de dict (map) segura.
-    """
     if s is None:
         s = ""
     s = str(s).strip()
@@ -248,11 +244,9 @@ def firestore_safe_key(s: str, max_len: int = 120) -> str:
     return s
 
 def day_key_store_iso(d: dt.date) -> str:
-    # ✅ sem "/" para Firestore
     return d.strftime("%Y-%m-%d")
 
 def day_key_display_any(k: str) -> str:
-    # suporta ISO e dd/mm/aaaa
     if isinstance(k, str) and re.match(r"^\d{4}-\d{2}-\d{2}$", k):
         try:
             dd = dt.datetime.strptime(k, "%Y-%m-%d").date()
@@ -262,9 +256,6 @@ def day_key_display_any(k: str) -> str:
     return str(k)
 
 def make_unique_columns(cols: List[str]) -> List[str]:
-    """
-    Evita colunas duplicadas no pivot (causa a tabela sumir/erro).
-    """
     seen = {}
     out = []
     for c in cols:
@@ -280,7 +271,6 @@ def make_unique_columns(cols: List[str]) -> List[str]:
 
 # =========================================================
 # CONTROLE DE ARQUIVOS (GENÉRICO) - USADO NO LEADS STATUS
-# (mantido, mas no Leads vamos parar de ignorar por hash)
 # =========================================================
 def get_leads_control() -> dict:
     """Retorna controle de arquivos para Leads"""
@@ -298,11 +288,17 @@ def process_meta_files_with_control(
     process_func,
 ) -> Tuple[List, List, int, int]:
     """
-    (mantido por compatibilidade, mas não vamos mais usar no Leads)
+    Processa arquivos com controle inteligente.
+
+    Regras:
+    - Mesmo nome + mesmo hash → ignora
+    - Mesmo nome + hash diferente → substitui
+    - Nome novo → adiciona
     """
     control = safe_json_load(control_path, default={})
     files_meta = control.get("files", [])
 
+    # Mapear por nome para busca rápida
     files_by_name = {f["name"]: f for f in files_meta}
 
     dfs = []
@@ -314,14 +310,18 @@ def process_meta_files_with_control(
         raw = f.getvalue()
         h = file_md5(raw)
 
+        # Verificar se já existe arquivo com este nome
         if f.name in files_by_name:
             hash_anterior = files_by_name[f.name]["hash"]
 
             if hash_anterior == h:
+                # Mesmo arquivo, ignora
                 continue
             else:
+                # Mesmo nome, hash diferente → substituir
                 qtd_substituidos += 1
         else:
+            # Arquivo novo
             qtd_novos += 1
 
         try:
@@ -332,15 +332,21 @@ def process_meta_files_with_control(
         except Exception as e:
             st.error(f"Erro ao processar {f.name}: {e}")
 
+    # Atualizar controle
     if qtd_novos > 0 or qtd_substituidos > 0:
+        # Remover arquivos que foram substituídos
         nomes_substituidos = [
             f.name for f in uploaded_files
             if f.name in files_by_name and file_md5(f.getvalue()) != files_by_name[f.name]["hash"]
         ]
 
+        # Filtrar arquivos existentes removendo os substituídos
         files_meta = [f for f in files_meta if f["name"] not in nomes_substituidos]
+
+        # Adicionar novos metadados
         files_meta.extend(novos_metadados)
 
+        # Salvar controle
         control["files"] = files_meta
         control["file_hashes"] = [f["hash"] for f in files_meta]
         control["updated_at"] = dt.datetime.now().isoformat()
@@ -533,6 +539,7 @@ def compare_daily_df() -> pd.DataFrame:
             "Leads total": int(v.get("leads_total", 0)),
             "Qualificadas total": int(v.get("qual_total", 0)),
 
+            # ✅ qualificadas por BR (M0/M1/M2)
             "Qualificadas M0": int(v.get("qual_m0", 0)),
             "Qualificadas M1": int(v.get("qual_m1", 0)),
             "Qualificadas M2": int(v.get("qual_m2", 0)),
@@ -607,6 +614,10 @@ def compare_daily_df() -> pd.DataFrame:
 # MENSAL POR CNPJ (NÍVEL MÁXIMO NO MÊS) - A PARTIR DO DIÁRIO
 # =========================================================
 def month_levels_upsert_from_daily_df(df_c6: pd.DataFrame):
+    """
+    Grava qualificação por MÊS DO RELATÓRIO (mês do arquivo),
+    não por DT_CONTA_CRIADA.
+    """
     store = safe_json_load(HIST_MONTH_LEVELS, default={})
 
     mes_rel = detect_report_month_from_df(df_c6)
@@ -813,7 +824,6 @@ def apply_theme():
     st.markdown(
         """
         <style>
-            /* Sidebar mais elegante */
             section[data-testid="stSidebar"]{
                 background: linear-gradient(180deg, #0f1b3a 0%, #1a2b4e 100%);
             }
@@ -825,8 +835,6 @@ def apply_theme():
                 border: 1px solid rgba(255,255,255,0.2);
                 color: white !important;
             }
-
-            /* Cards métricos */
             div[data-testid="stMetric"]{
                 background:#ffffff;
                 border:1px solid #e9eef7;
@@ -839,15 +847,11 @@ def apply_theme():
                 box-shadow:0 8px 20px rgba(15,27,58,0.12);
                 transform: translateY(-2px);
             }
-
-            /* Títulos */
             h1, h2, h3{
                 color: #0f1b3a;
                 font-weight: 600;
                 letter-spacing: -0.02em;
             }
-
-            /* Badges */
             .am-badge-ok{
                 display:inline-block; padding:6px 16px; border-radius:999px;
                 background:rgba(0,122,255,0.12); color:#007AFF;
@@ -858,8 +862,6 @@ def apply_theme():
                 background:rgba(255,59,48,0.12); color:#FF3B30;
                 font-weight:600; font-size:13px; border:1px solid rgba(255,59,48,0.2);
             }
-
-            /* Tabelas compactas e profissionais */
             .am-compact-table thead tr th {
                 font-size: 13px !important;
                 background: #f8fafd !important;
@@ -869,16 +871,12 @@ def apply_theme():
             .am-compact-table tbody tr td {
                 font-size: 13px !important;
             }
-
-            /* Upload area */
             .stFileUploader > div {
                 border: 2px dashed #e9eef7;
                 border-radius: 16px;
                 padding: 20px;
                 background: #ffffff;
             }
-
-            /* Divisor */
             hr {
                 margin: 2rem 0;
                 border: none;
@@ -1137,14 +1135,6 @@ with tab_painel:
     else:
         st.dataframe(df_cmp, use_container_width=True, hide_index=True)
 
-    # === (RESTO DO PAINEL C6 CONTINUA IGUAL AO SEU ARQUIVO) ===
-    # OBS: você colou o Painel C6 até o final do "Comparativo mensal de remuneração".
-    # Vou manter exatamente como estava no seu código original.
-    # ---------------------------------------------------------
-    # (Aqui entra TODO o restante do Painel C6 que você já enviou,
-    #  sem 1 linha de mudança.)
-    # ---------------------------------------------------------
-
     st.divider()
 
     st.subheader("Resumo executivo (mês)")
@@ -1364,26 +1354,31 @@ with tab_leads_status:
             return m.iloc[0]
         return max(d)
 
-    # ----- ✅ AJUSTE: Função para Calcular Indicações Válidas (Regra dos 14 Dias) -----
+    # ----- ✅ Indicações válidas (≤14d) -----
     def _calcular_validas_14d(df: pd.DataFrame, data_base: dt.date) -> int:
         colunas_cadastro = [c for c in df.columns if 'DATA_HORA_CADASTRO' in str(c).upper()]
+
         if not colunas_cadastro:
             colunas_cadastro = [c for c in df.columns if 'CADAST' in str(c).upper() and 'DATA' in str(c).upper()]
+
         if not colunas_cadastro:
             return 0
 
         nome_coluna_cadastro = colunas_cadastro[0]
+
         cad_dt = pd.to_datetime(df[nome_coluna_cadastro], errors="coerce", dayfirst=True)
+
         if cad_dt.isna().all():
             return 0
 
         base_ts = pd.Timestamp(data_base)
+
         diff_days = (base_ts - cad_dt).dt.days
 
         mask = diff_days.notna() & (diff_days >= 0) & (diff_days <= 14)
         return int(mask.sum())
 
-    # ----- Função para LIMPAR nomes dos status (remover caracteres especiais) -----
+    # ----- Nome status (Firestore-safe) -----
     def limpar_nome_status(status: str) -> str:
         if not isinstance(status, str):
             status = str(status)
@@ -1396,11 +1391,9 @@ with tab_leads_status:
         nome = nome.replace('_', ' ')
         nome = ' '.join(nome.split())
 
-        # ✅ e deixa Firestore-safe
-        nome = firestore_safe_key(nome, max_len=120)
-        return nome
+        return firestore_safe_key(nome, max_len=120)
 
-    # ----- Função para encurtar status (apenas visual) -----
+    # ----- Encurtar status (visual) -----
     def encurtar_status(status: str) -> str:
         if not isinstance(status, str):
             status = str(status)
@@ -1451,11 +1444,11 @@ with tab_leads_status:
         return status_limpo
 
     # ----- Carregar Estado Atual -----
-    store = _leads_status_load()
+    store = _leads_status_load() or {}
 
-    # ✅ Migração “sem reset”: se tinha dd/mm/aaaa como chave, converte para ISO (evita Firestore quebrar)
+    # Migração sem reset: dd/mm/aaaa -> ISO
     store_migrado = {}
-    for k, v in (store or {}).items():
+    for k, v in store.items():
         if isinstance(k, str) and re.match(r"^\d{2}/\d{2}/\d{4}$", k):
             try:
                 d = dt.datetime.strptime(k, "%d/%m/%Y").date()
@@ -1477,11 +1470,16 @@ with tab_leads_status:
         * Indicações Válidas (≤14 dias): **DATA_BASE - DATA_HORA_CADASTRO <= 14**
         """)
 
+        # ✅ FIX refresh: key dinâmica pro uploader
+        if "leads_upload_seq" not in st.session_state:
+            st.session_state["leads_upload_seq"] = 0
+        uploader_key = f"leads_status_upload_q_{st.session_state['leads_upload_seq']}"
+
         up_status_files = st.file_uploader(
             "Selecione os arquivos (XLSX/CSV). O histórico é ACUMULADO por dia (e o dia é sempre atualizado).",
             type=["xlsx", "csv"],
             accept_multiple_files=True,
-            key="leads_status_upload_q"
+            key=uploader_key
         )
 
         if up_status_files:
@@ -1490,6 +1488,9 @@ with tab_leads_status:
 
             processados = 0
             erros = 0
+
+            last_processed_day = None
+            last_processed_at = None
 
             for f in up_status_files:
                 raw = f.getvalue()
@@ -1509,10 +1510,9 @@ with tab_leads_status:
                     erros += 1
                     continue
 
-                # ✅ chave segura para Firestore
                 day_key_iso = day_key_store_iso(data_base)
 
-                # 1) Status (coluna Q) com chaves Firestore-safe
+                # Status (coluna Q)
                 s = df_status.iloc[:, 16].astype("string").fillna("").str.strip()
                 s = s[s != ""]
                 if s.empty:
@@ -1522,34 +1522,52 @@ with tab_leads_status:
                     status_counts = s_limpo.value_counts().to_dict()
                     status_counts = {str(k): int(v) for k, v in status_counts.items()}
 
-                # 2) Indicações válidas (≤14d)
+                # Indicações válidas
                 validas = _calcular_validas_14d(df_status, data_base)
 
-                # ✅ 3) UPSERT do dia (não soma, não subtrai; substitui o que veio no arquivo)
+                # ✅ UPSERT por dia (substitui o dia inteiro pelo arquivo atual)
                 payload = dict(status_counts)
                 payload["_validas_14d"] = int(validas)
                 store[day_key_iso] = payload
 
+                imported_at = dt.datetime.now().isoformat()
                 files_meta.append({
                     "name": f.name,
                     "hash": file_md5(raw),
                     "size": getattr(f, "size", None),
                     "day": day_key_iso,
-                    "imported_at": dt.datetime.now().isoformat(),
+                    "imported_at": imported_at,
                 })
+
+                # ✅ marcar último processado (último arquivo do loop)
+                last_processed_day = day_key_iso
+                last_processed_at = imported_at
 
                 processados += 1
 
             control["files"] = files_meta[-1000:]
             control["updated_at"] = dt.datetime.now().isoformat()
+
+            # ✅ salva qual foi o último arquivo processado
+            if last_processed_day:
+                control["last_processed"] = {
+                    "day": last_processed_day,
+                    "imported_at": last_processed_at,
+                }
+
             safe_json_save(LEADS_CONTROL_PATH, control)
 
             _leads_status_save(store)
+
             st.success(f"✅ {processados} arquivo(s) processado(s). (erros: {erros})")
+
+            # ✅ FIX refresh: “limpa” uploader e força rerun visível
+            st.session_state["leads_upload_seq"] += 1
             st.rerun()
 
     # ----- Exibição do Painel -----
-    store = _leads_status_load()
+    store = _leads_status_load() or {}
+    control = safe_json_load(LEADS_CONTROL_PATH, default={}) or {}
 
     if not store:
         st.info("Ainda não há histórico. Importe o(s) arquivo(s) para começar.")
@@ -1559,7 +1577,6 @@ with tab_leads_status:
             if not isinstance(payload, dict):
                 continue
             validas = int(payload.get('_validas_14d', 0) or 0)
-
             data_br = day_key_display_any(dkey)
 
             for status, qtd in payload.items():
@@ -1579,14 +1596,34 @@ with tab_leads_status:
             dfh["_date"] = pd.to_datetime(dfh["Data"], format="%d/%m/%Y", errors="coerce")
             dfh = dfh.dropna(subset=["_date"])
 
+            # ============================
+            # ✅ Resumo Geral (AJUSTADO)
+            # Total de Leads e Válidas = do ÚLTIMO arquivo processado
+            # ============================
             st.markdown("### 📊 Resumo Geral")
             col_metric1, col_metric2 = st.columns(2)
             col_metric3, col_metric4 = st.columns(2)
 
             dias_unicos = int(dfh["Data"].nunique())
             status_unicos = int(dfh["Status"].nunique())
-            total_geral = int(dfh["Quantidade"].sum())
-            total_validas = int(dfh.groupby("Data")["Indicações Válidas (≤14d)"].first().sum())
+
+            # ✅ pega o último arquivo processado
+            last_info = control.get("last_processed", {}) or {}
+            last_day = last_info.get("day")
+
+            if not last_day:
+                # fallback: maior dia ISO no store
+                try:
+                    last_day = max([k for k in store.keys() if isinstance(k, str)])
+                except Exception:
+                    last_day = None
+
+            payload_last = store.get(last_day, {}) if last_day else {}
+            if not isinstance(payload_last, dict):
+                payload_last = {}
+
+            total_geral = sum(int(v) for k, v in payload_last.items() if k != "_validas_14d")
+            total_validas = int(payload_last.get("_validas_14d", 0) or 0)
 
             with col_metric1:
                 st.metric("📅 Dias no histórico", br_int(dias_unicos))
@@ -1599,6 +1636,7 @@ with tab_leads_status:
 
             st.divider()
 
+            # Filtro por mês
             dfh["Mes"] = dfh["_date"].dt.to_period("M").astype(str)
             meses = sorted(dfh["Mes"].unique(), reverse=True)
             meses_lbl = [f"{m.split('-')[1]}/{m.split('-')[0]}" for m in meses]
@@ -1612,6 +1650,7 @@ with tab_leads_status:
             )
             mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
 
+            # Tabela comparativa
             df_mes = dfh[dfh["Mes"] == mes_sel].copy()
 
             if not df_mes.empty:
@@ -1625,21 +1664,18 @@ with tab_leads_status:
                     fill_value=0
                 ).astype(int)
 
-                # ✅ encurta para visual, mas garante colunas únicas
-                new_cols = [encurtar_status(col) for col in pivot.columns]
-                pivot.columns = make_unique_columns(new_cols)
+                pivot.columns = make_unique_columns([encurtar_status(col) for col in pivot.columns])
 
                 pivot = pivot.sort_index(ascending=True)
 
-                for col in list(pivot.columns):
+                for col in pivot.columns:
                     pivot[f"Δ {col}"] = pivot[col].diff().fillna(0)
 
-                base_cols = [c for c in pivot.columns if not str(c).startswith("Δ ")]
-                pivot["Total"] = pivot[base_cols].sum(axis=1)
+                pivot["Total"] = pivot[[c for c in pivot.columns if not str(c).startswith("Δ ")]].sum(axis=1)
                 pivot["Δ Total"] = pivot["Total"].diff().fillna(0)
 
                 validas_por_dia = df_mes.groupby("_date")["Indicações Válidas (≤14d)"].first().to_dict()
-                pivot["Indicações Válidas"] = pivot.index.map(validas_por_dia).fillna(0).astype(int)
+                pivot["Indicações Válidas"] = pivot.index.map(validas_por_dia).fillna(0)
                 pivot["Δ Indicações Válidas"] = pivot["Indicações Válidas"].diff().fillna(0)
 
                 pivot = pivot.sort_index(ascending=False)
