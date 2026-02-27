@@ -123,6 +123,12 @@ HIST_COMPARE_DAILY = os.path.join(DATA_DIR, "hist_comparativo_diario.json")   # 
 LEADS_STATUS_DAILY_PATH = os.path.join(DATA_DIR, "leads_status_daily_q.json")
 LEADS_CONTROL_PATH = os.path.join(DATA_DIR, "leads_control.json")
 
+# ✅ Campanhas Meta (persistência)
+META_SUMMARY_PATH = os.path.join(DATA_DIR, "meta_c6_summary.json")
+META_GROUPS_PATH = os.path.join(DATA_DIR, "meta_c6_groups.json")
+META_FILE_CONTROL = os.path.join(DATA_DIR, "meta_c6_files_control.json")
+META_GROUPS_CONTROL = os.path.join(DATA_DIR, "meta_c6_groups_control.json")
+
 
 # =========================================================
 # HELPERS - EXATAMENTE COMO ESTAVAM
@@ -927,6 +933,39 @@ def reset_all_data():
 
 
 # =========================================================
+# ✅ Campanhas Meta — helpers de controle/persistência
+# =========================================================
+def _normalize_files_meta_list(files) -> List[dict]:
+    out: List[dict] = []
+    if not isinstance(files, list):
+        return out
+    for f in files:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("name")
+        h = f.get("hash")
+        if not name or not h:
+            continue
+        out.append({"name": name, "hash": h, "size": f.get("size")})
+    return out
+
+def get_file_control(control_path: str) -> dict:
+    c = safe_json_load(control_path, default={}) or {}
+    if not isinstance(c, dict):
+        c = {}
+    c["files"] = _normalize_files_meta_list(c.get("files", []))
+    c["file_hashes"] = [f.get("hash") for f in c["files"] if isinstance(f, dict) and f.get("hash")]
+    return c
+
+def save_file_control(control_path: str, control: dict):
+    if not isinstance(control, dict):
+        control = {}
+    control["files"] = _normalize_files_meta_list(control.get("files", []))
+    control["file_hashes"] = [f.get("hash") for f in control["files"] if isinstance(f, dict) and f.get("hash")]
+    safe_json_save(control_path, control)
+
+
+# =========================================================
 # APP
 # =========================================================
 st.set_page_config(page_title="Assis e Mollerke · C6", layout="wide")
@@ -943,8 +982,8 @@ if st.sidebar.button("🔄 RESETAR HISTÓRICO (ZERAR TUDO)"):
 show_logo_and_title()
 st.divider()
 
-tab_painel, tab_leads_status = st.tabs(
-    ["📊 Painel C6", "📋 Leads Diários"]
+tab_painel, tab_leads_status, tab_meta = st.tabs(
+    ["📊 Painel C6", "📋 Leads Diários", "💬 Campanhas Meta"]
 )
 
 # =========================================================
@@ -1740,3 +1779,670 @@ with tab_leads_status:
     with col_reset2:
         if st.button("🧹 Resetar somente Leads – Status Diário", use_container_width=True, type="secondary"):
             _leads_status_reset_only()
+
+
+# =========================================================
+# =====================  TAB 3  ===========================
+# ================ 💬 Campanhas Meta =======================
+# =========================================================
+with tab_meta:
+
+    st.subheader("💬 Campanhas Meta")
+
+    def _norm_col(c: str) -> str:
+        c = str(c).strip().lower()
+        c = c.replace("\ufeff", "")
+        c = c.replace(" ", "_").replace("-", "_")
+        c = re.sub(r"_+", "_", c)
+        return c
+
+    def _detect_delimiter(sample_text: str) -> str:
+        candidates = [";", ",", "\t", "|"]
+        counts = {sep: sample_text.count(sep) for sep in candidates}
+        best = max(counts, key=counts.get)
+        return best if counts[best] > 0 else ","
+
+    def _read_meta_file(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
+        try:
+            name = name.lower()
+            if name.endswith(".csv"):
+                head = raw_bytes[:200_000]
+                try:
+                    sample = head.decode("utf-8-sig", errors="replace")
+                except Exception:
+                    sample = head.decode(errors="replace")
+                sep = _detect_delimiter(sample)
+                return pd.read_csv(
+                    io.BytesIO(raw_bytes),
+                    engine="python",
+                    sep=sep,
+                    on_bad_lines="skip",
+                    encoding="utf-8-sig",
+                )
+            return pd.read_excel(io.BytesIO(raw_bytes))
+        except Exception as e:
+            st.error(f"Erro ao ler arquivo: {e}")
+            return None
+
+    def _auto_rename_to_required(df: pd.DataFrame) -> pd.DataFrame:
+        norm_map = {_norm_col(c): c for c in df.columns}
+        candidates = {
+            "message_id": ["message_id", "messageid", "message id", "id_message", "id_mensagem"],
+            "message_date_time": [
+                "message_date_time", "message_datetime", "message_date", "message_time",
+                "message_date_time_utc", "message_date_time_(utc)", "datetime", "timestamp",
+                "created_time", "created_at"
+            ],
+            "broadcast_description": [
+                "broadcast_description", "broadcast_desc", "broadcast", "broadcast_name",
+                "campaign", "campaign_name", "description"
+            ],
+            "message_status": ["message_status", "status", "delivery_status", "message_delivery_status"],
+            "contact_id": ["contact_id", "contactid", "wa_id", "whatsapp_id", "recipient_id"],
+        }
+        candidates = {k: [_norm_col(x) for x in v] for k, v in candidates.items()}
+        rename = {}
+        for target, cand_list in candidates.items():
+            found = None
+            if _norm_col(target) in norm_map:
+                found = norm_map[_norm_col(target)]
+            else:
+                for cand in cand_list:
+                    if cand in norm_map:
+                        found = norm_map[cand]
+                        break
+            if found:
+                rename[found] = target
+        return df.rename(columns=rename).copy()
+
+    def _parse_datetime_br_priority(series: pd.Series) -> pd.Series:
+        s = series.astype("string").fillna("").str.strip()
+        has_slash_ratio = (s.str.contains("/", regex=False, na=False).sum() / max(len(s), 1))
+
+        if has_slash_ratio >= 0.20:
+            dt_br = pd.to_datetime(s, errors="coerce", dayfirst=True)
+            if int(dt_br.notna().sum()) >= max(1, int(0.80 * len(s))):
+                return dt_br
+            dt_us = pd.to_datetime(s, errors="coerce", dayfirst=False)
+            return dt_br if int(dt_br.notna().sum()) >= int(dt_us.notna().sum()) else dt_us
+
+        dt1 = pd.to_datetime(s, errors="coerce", dayfirst=True)
+        dt2 = pd.to_datetime(s, errors="coerce", dayfirst=False)
+        return dt1 if int(dt1.notna().sum()) >= int(dt2.notna().sum()) else dt2
+
+    def _fmt_int_pt(n: int) -> str:
+        return f"{int(n):,}".replace(",", ".")
+
+    def _month_label(period_str: str) -> str:
+        try:
+            y, m = period_str.split("-")
+            return f"{m}/{y}"
+        except Exception:
+            return period_str
+
+    def _records_firestore_safe(recs: list) -> list:
+        safe = []
+        for r in recs:
+            rr = {}
+            for k, v in (r or {}).items():
+                if isinstance(v, (dt.date, dt.datetime, pd.Timestamp)):
+                    rr[k] = pd.to_datetime(v).strftime("%Y-%m-%d")
+                    continue
+                try:
+                    if hasattr(v, "item") and callable(v.item):
+                        vv = v.item()
+                        if isinstance(vv, (int, float, str, bool)) or vv is None:
+                            rr[k] = vv
+                            continue
+                except Exception:
+                    pass
+
+                if isinstance(v, (int, float, str, bool)) or v is None:
+                    rr[k] = v
+                else:
+                    rr[k] = str(v)
+
+            safe.append(rr)
+        return safe
+
+    def _load_persisted_summary() -> dict:
+        s = safe_json_load(META_SUMMARY_PATH, default={}) or {}
+        if not isinstance(s, dict):
+            s = {}
+        s["files"] = _normalize_files_meta_list(s.get("files", []))
+        s["file_hashes"] = [f.get("hash") for f in s["files"] if isinstance(f, dict) and f.get("hash")]
+        return s
+
+    def _save_persisted_summary(summary: dict):
+        if not isinstance(summary, dict):
+            summary = {}
+        summary["files"] = _normalize_files_meta_list(summary.get("files", []))
+        summary["file_hashes"] = [f.get("hash") for f in summary["files"] if isinstance(f, dict) and f.get("hash")]
+        safe_json_save(META_SUMMARY_PATH, summary)
+
+    def _normalize_existing_tables(summary: dict) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        df_monthly = pd.DataFrame(summary.get("monthly", []))
+        df_daily = pd.DataFrame(summary.get("daily", []))
+
+        if not df_monthly.empty:
+            df_monthly["Mes"] = df_monthly["Mes"].astype(str)
+            df_monthly["message_status"] = df_monthly["message_status"].astype(str).str.lower()
+            df_monthly["qty"] = pd.to_numeric(df_monthly["qty"], errors="coerce").fillna(0).astype(int)
+
+        if not df_daily.empty:
+            df_daily["Mes"] = df_daily["Mes"].astype(str)
+            df_daily["message_status"] = df_daily["message_status"].astype(str).str.lower()
+            df_daily["qty"] = pd.to_numeric(df_daily["qty"], errors="coerce").fillna(0).astype(int)
+            df_daily["Data"] = pd.to_datetime(df_daily["Data"], errors="coerce").dt.date
+
+        return df_monthly, df_daily
+
+    def _update_summary_with_new_data(
+        existing_summary: dict,
+        new_df: pd.DataFrame,
+        novos_metadados: List[dict]
+    ) -> dict:
+        """Atualiza o summary com novos dados, substituindo quando necessário"""
+
+        if not isinstance(existing_summary, dict):
+            existing_summary = {}
+        existing_summary["files"] = _normalize_files_meta_list(existing_summary.get("files", []))
+
+        old_monthly, old_daily = _normalize_existing_tables(existing_summary)
+
+        df = new_df.copy()
+        df["message_status"] = df["message_status"].astype(str).str.strip().str.lower()
+        df["broadcast_description"] = df["broadcast_description"].astype(str)
+        df["Data"] = df["message_date_time"].dt.date
+        df["Mes"] = df["message_date_time"].dt.to_period("M").astype(str)
+
+        status_set = set(existing_summary.get("status_set", []))
+        campaign_set = set(existing_summary.get("campaign_set", []))
+        status_set |= set(df["message_status"].dropna().unique().tolist())
+        campaign_set |= set(df["broadcast_description"].dropna().unique().tolist())
+
+        new_monthly = df.groupby(["Mes", "message_status"]).size().reset_index(name="qty")
+        new_daily = df.groupby(["Mes", "Data", "message_status"]).size().reset_index(name="qty")
+
+        if old_monthly.empty:
+            merged_monthly = new_monthly.copy()
+        else:
+            merged_monthly = pd.concat([old_monthly, new_monthly], ignore_index=True)
+            merged_monthly["_k"] = merged_monthly["Mes"].astype(str) + "|" + merged_monthly["message_status"].astype(str)
+            merged_monthly = merged_monthly.drop_duplicates(subset=["_k"], keep="last").drop(columns=["_k"])
+            merged_monthly = merged_monthly.sort_values(["Mes", "message_status"]).reset_index(drop=True)
+
+        if old_daily.empty:
+            merged_daily = new_daily.copy()
+        else:
+            merged_daily = pd.concat([old_daily, new_daily], ignore_index=True)
+            merged_daily["_k"] = (
+                merged_daily["Mes"].astype(str) + "|" +
+                merged_daily["Data"].astype(str) + "|" +
+                merged_daily["message_status"].astype(str)
+            )
+            merged_daily = merged_daily.drop_duplicates(subset=["_k"], keep="last").drop(columns=["_k"])
+            merged_daily = merged_daily.sort_values(["Mes", "Data", "message_status"]).reset_index(drop=True)
+
+        global_total = int(merged_monthly["qty"].sum()) if not merged_monthly.empty else 0
+        global_enviados = int(
+            merged_monthly[merged_monthly["message_status"].isin(["sent", "delivered", "read"])]["qty"].sum()
+        ) if not merged_monthly.empty else 0
+        dias_unicos = int(merged_daily["Data"].nunique()) if not merged_daily.empty else 0
+        status_unicos = int(len(status_set))
+        campanhas = int(len(campaign_set))
+
+        files = _normalize_files_meta_list(existing_summary.get("files", []))
+        for meta in (novos_metadados or []):
+            if not isinstance(meta, dict):
+                continue
+            if not meta.get("name") or not meta.get("hash"):
+                continue
+            files = [f for f in files if f.get("name") != meta["name"]]
+            files.append({"name": meta["name"], "hash": meta["hash"], "size": meta.get("size")})
+
+        summary = {
+            "updated_at": dt.datetime.now().isoformat(),
+            "files": files,
+            "file_hashes": [f.get("hash") for f in files if isinstance(f, dict) and f.get("hash")],
+            "status_set": sorted(list(status_set)),
+            "campaign_set": sorted(list(campaign_set)),
+            "global": {
+                "total": global_total,
+                "enviados": global_enviados,
+                "dias_unicos": dias_unicos,
+                "campanhas": campanhas,
+                "status_unicos": status_unicos,
+            },
+            "monthly": _records_firestore_safe(merged_monthly.to_dict(orient="records")),
+            "daily": _records_firestore_safe(merged_daily.to_dict(orient="records")),
+        }
+
+        return summary
+
+    # =======================================================
+    # GRUPOS - REGRA SIMPLES: SUBSTRING CASE INSENSITIVE
+    # =======================================================
+    def _groups_definitions() -> Dict[str, List[str]]:
+        return {
+            "VAREJO": ["BIGLOJ", "AMERIC", "VAREJO", "LINKS"],
+            "FUNDACAO": ["FUNDACAO", "FFMEDI"],
+            "EXPONENCIAL": ["EXPONENCIAL", "COPEL", "EMBASA", "BNB"],
+            "I9": ["I9"],
+            "JUNTA COMERCIAL": ["JACOM", "JUNTA"],
+            "FIEB": ["FIEB", "CAIELL", "CSENAI", "CASESI", "CACIEB", "CIEB"],
+        }
+
+    def _match_group(broadcast_desc: str, group_name: str) -> bool:
+        txt = (broadcast_desc or "").strip().upper()
+        if not txt:
+            return False
+        keys = _groups_definitions().get(group_name, [])
+        for k in keys:
+            if k.upper() in txt:
+                return True
+        return False
+
+    def _load_groups_store() -> dict:
+        store = safe_json_load(META_GROUPS_PATH, default={}) or {}
+        if not isinstance(store, dict):
+            store = {}
+        if "groups" not in store or not isinstance(store.get("groups"), dict):
+            store["groups"] = {}
+        store["file_hashes"] = [h for h in (store.get("file_hashes") or []) if isinstance(h, str) and h.strip()]
+        store["files"] = _normalize_files_meta_list(store.get("files", []))
+        return store
+
+    def _save_groups_store(store: dict):
+        if not isinstance(store, dict):
+            store = {}
+        if "groups" not in store or not isinstance(store.get("groups"), dict):
+            store["groups"] = {}
+        store["files"] = _normalize_files_meta_list(store.get("files", []))
+        store["file_hashes"] = [f.get("hash") for f in store["files"] if isinstance(f, dict) and f.get("hash")]
+        safe_json_save(META_GROUPS_PATH, store)
+
+    def _compute_group_aggregates_from_raw_df(df5: pd.DataFrame) -> Dict[str, Dict[str, pd.DataFrame]]:
+        out: Dict[str, Dict[str, pd.DataFrame]] = {}
+        if df5.empty:
+            return out
+
+        df = df5.copy()
+        df["message_status"] = df["message_status"].astype(str).str.strip().str.lower()
+        df["broadcast_description"] = df["broadcast_description"].astype(str)
+        df["Data"] = df["message_date_time"].dt.date
+        df["Mes"] = df["message_date_time"].dt.to_period("M").astype(str)
+
+        for gname in _groups_definitions().keys():
+            mask = df["broadcast_description"].apply(lambda x: _match_group(x, gname))
+            dfg = df[mask].copy()
+            if dfg.empty:
+                out[gname] = {
+                    "monthly": pd.DataFrame(columns=["Mes", "message_status", "qty"]),
+                    "daily": pd.DataFrame(columns=["Mes", "Data", "message_status", "qty"])
+                }
+                continue
+
+            m = dfg.groupby(["Mes", "message_status"]).size().reset_index(name="qty")
+            d = dfg.groupby(["Mes", "Data", "message_status"]).size().reset_index(name="qty")
+            out[gname] = {"monthly": m, "daily": d}
+
+        return out
+
+    def _update_group_store_with_new_data(
+        groups_store: dict,
+        new_df: pd.DataFrame,
+        novos_metadados: List[dict]
+    ) -> dict:
+        if not isinstance(groups_store, dict):
+            groups_store = {}
+        if "groups" not in groups_store or not isinstance(groups_store.get("groups"), dict):
+            groups_store["groups"] = {}
+
+        aggs = _compute_group_aggregates_from_raw_df(new_df)
+
+        for gname in _groups_definitions().keys():
+            parts = aggs.get(gname, {})
+            new_daily = pd.DataFrame(parts.get("daily", []))
+            if new_daily.empty:
+                continue
+
+            old = groups_store.get("groups", {}).get(gname, {})
+            old_daily = pd.DataFrame(old.get("daily", []))
+
+            if not old_daily.empty:
+                old_daily["Mes"] = old_daily["Mes"].astype(str)
+                old_daily["message_status"] = old_daily["message_status"].astype(str).str.lower()
+                old_daily["qty"] = pd.to_numeric(old_daily["qty"], errors="coerce").fillna(0).astype(int)
+                old_daily["Data"] = pd.to_datetime(old_daily["Data"], errors="coerce").dt.date
+
+            new_daily = new_daily.copy()
+            new_daily["Mes"] = new_daily["Mes"].astype(str)
+            new_daily["message_status"] = new_daily["message_status"].astype(str).str.lower()
+            new_daily["qty"] = pd.to_numeric(new_daily["qty"], errors="coerce").fillna(0).astype(int)
+            new_daily["Data"] = pd.to_datetime(new_daily["Data"], errors="coerce").dt.date
+
+            merged_daily = (
+                pd.concat([old_daily, new_daily], ignore_index=True)
+                if not old_daily.empty else new_daily.copy()
+            )
+            merged_daily["_k"] = (
+                merged_daily["Mes"].astype(str) + "|" +
+                merged_daily["Data"].astype(str) + "|" +
+                merged_daily["message_status"].astype(str)
+            )
+            merged_daily = merged_daily.drop_duplicates(subset=["_k"], keep="last").drop(columns=["_k"])
+
+            merged_monthly = merged_daily.groupby(["Mes", "message_status"], as_index=False)["qty"].sum()
+
+            groups_store["groups"][gname] = {
+                "daily": _records_firestore_safe(merged_daily.to_dict(orient="records")),
+                "monthly": _records_firestore_safe(merged_monthly.to_dict(orient="records")),
+                "updated_at": dt.datetime.now().isoformat(),
+            }
+
+        files = _normalize_files_meta_list(groups_store.get("files", []))
+        for meta in (novos_metadados or []):
+            if not isinstance(meta, dict):
+                continue
+            if not meta.get("name") or not meta.get("hash"):
+                continue
+            files = [f for f in files if f.get("name") != meta["name"]]
+            files.append({"name": meta["name"], "hash": meta["hash"], "size": meta.get("size")})
+
+        groups_store["files"] = files
+        groups_store["file_hashes"] = [f.get("hash") for f in files if isinstance(f, dict) and f.get("hash")]
+        groups_store["updated_at"] = dt.datetime.now().isoformat()
+
+        return groups_store
+
+    def _render_monthly_daily_tables(df_monthly: pd.DataFrame, df_daily: pd.DataFrame, key_prefix: str):
+        if df_monthly.empty or df_daily.empty:
+            st.info("Sem dados consolidados para este filtro.")
+            return
+
+        df_monthly = df_monthly.copy()
+        df_daily = df_daily.copy()
+
+        df_monthly["Mes"] = df_monthly["Mes"].astype(str)
+        df_monthly["message_status"] = df_monthly["message_status"].astype(str).str.lower()
+        df_monthly["qty"] = pd.to_numeric(df_monthly["qty"], errors="coerce").fillna(0).astype(int)
+
+        df_daily["Mes"] = df_daily["Mes"].astype(str)
+        df_daily["message_status"] = df_daily["message_status"].astype(str).str.lower()
+        df_daily["qty"] = pd.to_numeric(df_daily["qty"], errors="coerce").fillna(0).astype(int)
+        df_daily["Data"] = pd.to_datetime(df_daily["Data"], errors="coerce").dt.date
+
+        meses = sorted(df_monthly["Mes"].unique())
+        meses_lbl = [_month_label(m) for m in meses]
+
+        st.markdown("### Filtros")
+        mes_sel_lbl = st.selectbox(
+            "Selecione o mês",
+            meses_lbl,
+            index=len(meses_lbl) - 1,
+            key=f"{key_prefix}__mes_sel"
+        )
+        mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
+
+        st.markdown("### Sintético mensal por status (mês selecionado)")
+        mdf = df_monthly[df_monthly["Mes"] == mes_sel].copy().sort_values("qty", ascending=False)
+        enviados_mes = int(mdf[mdf["message_status"].isin(["sent", "delivered", "read"])]["qty"].sum())
+
+        a1, a2 = st.columns(2)
+        a1.metric("Total no mês", _fmt_int_pt(int(mdf["qty"].sum())))
+        a2.metric("Enviados no mês (sent+delivered+read)", _fmt_int_pt(enviados_mes))
+
+        view_m = mdf.rename(columns={"message_status": "Status", "qty": "Quantidade"}).copy()
+        view_m["Quantidade"] = view_m["Quantidade"].apply(_fmt_int_pt)
+        st.dataframe(view_m, use_container_width=True, hide_index=True)
+
+        st.markdown("### Totais por dia (dentro do mês selecionado)")
+        ddf = df_daily[df_daily["Mes"] == mes_sel].copy()
+        if ddf.empty:
+            st.info("Sem dados diários para este mês.")
+        else:
+            pivot = (
+                ddf.pivot_table(index="Data", columns="message_status", values="qty", aggfunc="sum")
+                .fillna(0)
+                .astype(int)
+                .sort_index(ascending=False)
+            )
+            pivot["total_dia"] = pivot.sum(axis=1).astype(int)
+            pivot["enviados_dia"] = (pivot.get("sent", 0) + pivot.get("delivered", 0) + pivot.get("read", 0)).astype(int)
+
+            view_d = pivot.copy()
+            for col in view_d.columns:
+                view_d[col] = view_d[col].apply(_fmt_int_pt)
+
+            view_d.index = [d.strftime("%d/%m/%Y") if isinstance(d, dt.date) else str(d) for d in view_d.index]
+            view_d = view_d.reset_index().rename(columns={"index": "Data"})
+
+            status_cols = [c for c in view_d.columns if c not in ["Data", "total_dia", "enviados_dia"]]
+            col_order = ["Data"] + status_cols + ["total_dia", "enviados_dia"]
+            view_d = view_d[[c for c in col_order if c in view_d.columns]]
+
+            st.dataframe(view_d, use_container_width=True, hide_index=True)
+
+    # =======================================================
+    # ✅ CONTROLE SEM BLOQUEIO (PERMITE REIMPORTAR O MESMO ARQUIVO)
+    # - Mesmo nome + mesmo hash: NÃO BLOQUEIA (reprocessa)
+    # - Mesmo nome + hash diferente: substitui (mantém 1 por nome)
+    # - Nome novo: adiciona
+    # =======================================================
+    def process_files_with_control_no_block(
+        uploaded_files,
+        control_path: str,
+        process_func,
+        tipo: str = "meta"
+    ) -> Tuple[List[pd.DataFrame], List[dict], int, int, int]:
+        """
+        Retorna: (dfs_processados, metadados, qtd_novos, qtd_substituidos, qtd_reimportados_mesmo)
+        """
+        control = get_file_control(control_path)
+        files_meta = _normalize_files_meta_list(control.get("files", []))
+        files_by_name = {
+            f["name"]: f for f in files_meta
+            if isinstance(f, dict) and f.get("name") and f.get("hash")
+        }
+
+        dfs: List[pd.DataFrame] = []
+        novos_metadados: List[dict] = []
+
+        qtd_novos = 0
+        qtd_substituidos = 0
+        qtd_reimportados_mesmo = 0
+
+        for f in uploaded_files:
+            raw = f.getvalue()
+            h = file_md5(raw)
+
+            if f.name in files_by_name:
+                hash_anterior = files_by_name[f.name]["hash"]
+                if hash_anterior == h:
+                    qtd_reimportados_mesmo += 1
+                else:
+                    qtd_substituidos += 1
+            else:
+                qtd_novos += 1
+
+            try:
+                df = process_func(f.name, raw)
+                if df is not None and not df.empty:
+                    dfs.append(df)
+                    novos_metadados.append({"name": f.name, "hash": h, "size": f.size})
+            except Exception as e:
+                st.error(f"Erro ao processar {f.name}: {e}")
+
+        # Atualizar controle: mantém 1 entrada por nome (última versão)
+        if novos_metadados:
+            for meta in novos_metadados:
+                files_meta = [x for x in files_meta if x.get("name") != meta["name"]]
+                files_meta.append(meta)
+
+            control["files"] = files_meta
+            control["file_hashes"] = [x.get("hash") for x in files_meta if isinstance(x, dict) and x.get("hash")]
+            control["updated_at"] = dt.datetime.now().isoformat()
+            save_file_control(control_path, control)
+
+        return dfs, novos_metadados, qtd_novos, qtd_substituidos, qtd_reimportados_mesmo
+
+    # =======================================================
+    # IMPORTAÇÃO PRINCIPAL META
+    # =======================================================
+    if "meta_c6_summary" not in st.session_state:
+        st.session_state["meta_c6_summary"] = _load_persisted_summary()
+
+    with st.expander("Importar arquivos da Meta (CSV ou XLSX)", expanded=True):
+        meta_files = st.file_uploader(
+            "Envie um ou mais arquivos",
+            type=["csv", "xlsx"],
+            accept_multiple_files=True,
+            key="meta_c6_upload"
+        )
+
+    if meta_files:
+        dfs, novos_metadados, qtd_novos, qtd_substituidos, qtd_mesmo = process_files_with_control_no_block(
+            meta_files,
+            META_FILE_CONTROL,
+            lambda name, raw: _read_meta_file(name, raw),
+            "meta"
+        )
+
+        if qtd_substituidos > 0:
+            st.warning(f"⚠️ {qtd_substituidos} arquivo(s) foram reimportados com dados diferentes (substituindo versão anterior).")
+        if qtd_mesmo > 0:
+            st.info(f"🔁 {qtd_mesmo} arquivo(s) reimportado(s) (mesmo conteúdo) — reprocessado(s) sem bloqueio.")
+        if qtd_novos > 0:
+            st.info(f"📁 {qtd_novos} novo(s) arquivo(s) adicionados.")
+
+        if dfs:
+            df_raw = pd.concat(dfs, ignore_index=True)
+            df = _auto_rename_to_required(df_raw)
+
+            required_cols = ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
+            missing = [c for c in required_cols if c not in df.columns]
+            if missing:
+                st.error(f"Colunas obrigatórias ausentes: {missing}")
+            else:
+                df = df[required_cols].copy()
+                df["broadcast_description"] = df["broadcast_description"].astype(str)
+
+                df = df[df["broadcast_description"].str.lower().str.contains("c6", na=False)]
+
+                df["message_date_time"] = _parse_datetime_br_priority(df["message_date_time"])
+                df = df.dropna(subset=["message_date_time"])
+
+                if df.empty:
+                    st.warning("Nenhum registro com 'c6' encontrado.")
+                else:
+                    existing = _load_persisted_summary()
+                    novo_summary = _update_summary_with_new_data(existing, df, novos_metadados)
+                    _save_persisted_summary(novo_summary)
+                    st.session_state["meta_c6_summary"] = novo_summary
+
+                    st.success(
+                        f"✅ Importação concluída: {qtd_novos} novo(s), {qtd_substituidos} substituído(s), {qtd_mesmo} reimportado(s) (mesmo conteúdo)."
+                    )
+        else:
+            st.warning("Nenhum arquivo gerou dados (todos vazios/ilegíveis).")
+
+    summary = st.session_state.get("meta_c6_summary") or _load_persisted_summary()
+    st.session_state["meta_c6_summary"] = summary
+
+    if not summary:
+        st.info("Importe um ou mais arquivos para gerar os relatórios.")
+    else:
+        g = summary.get("global", {})
+        total = int(g.get("total", 0))
+        enviados = int(g.get("enviados", 0))
+        dias_unicos = int(g.get("dias_unicos", 0))
+        campanhas = int(g.get("campanhas", 0))
+        status_unicos = int(g.get("status_unicos", 0))
+
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Registros (C6)", _fmt_int_pt(total))
+        c2.metric("Enviados (sent+delivered+read)", _fmt_int_pt(enviados))
+        c3.metric("Dias únicos", _fmt_int_pt(dias_unicos))
+        c4.metric("Campanhas (contendo C6)", _fmt_int_pt(campanhas))
+        c5.metric("Status únicos", _fmt_int_pt(status_unicos))
+
+        df_monthly = pd.DataFrame(summary.get("monthly", []))
+        df_daily = pd.DataFrame(summary.get("daily", []))
+
+        if not df_monthly.empty and not df_daily.empty:
+            _render_monthly_daily_tables(df_monthly, df_daily, "meta_global")
+
+        # =======================================================
+        # GRUPOS - COM CONTROLE SEM BLOQUEIO
+        # =======================================================
+        st.divider()
+        with st.expander("Carteira — clique para abrir", expanded=False):
+            st.caption("Baseado em broadcast_description. Regra: se a palavra aparecer em qualquer lugar do texto, contabiliza.")
+            st.markdown("**Exemplos:** 'matheusameric' → VAREJO, 'i9hoje' → I9, 'fundacaox' → FUNDACAO")
+
+            grp_files = st.file_uploader(
+                "Enviar arquivos para preencher os grupos",
+                type=["csv", "xlsx"],
+                accept_multiple_files=True,
+                key="meta_groups_upload"
+            )
+
+            grp_names = list(_groups_definitions().keys())
+            grp_sel = st.selectbox("Grupo", grp_names, index=0, key="meta_groups_sel")
+
+            if st.button("Processar", key="meta_groups_process_btn"):
+                if not grp_files:
+                    st.warning("Envie pelo menos 1 arquivo.")
+                else:
+                    dfs, novos_metadados, qtd_novos, qtd_substituidos, qtd_mesmo = process_files_with_control_no_block(
+                        grp_files,
+                        META_GROUPS_CONTROL,
+                        lambda name, raw: _read_meta_file(name, raw),
+                        "groups"
+                    )
+
+                    if qtd_substituidos > 0:
+                        st.warning(f"⚠️ {qtd_substituidos} arquivo(s) substituídos por versões mais recentes.")
+                    if qtd_mesmo > 0:
+                        st.info(f"🔁 {qtd_mesmo} arquivo(s) reimportado(s) (mesmo conteúdo) — reprocessado(s) sem bloqueio.")
+
+                    if dfs:
+                        df_all = pd.concat(dfs, ignore_index=True)
+
+                        df_all = _auto_rename_to_required(df_all)
+                        required_cols = ["message_id", "message_date_time", "broadcast_description", "message_status", "contact_id"]
+                        missing = [c for c in required_cols if c not in df_all.columns]
+
+                        if not missing:
+                            df_all = df_all[required_cols].copy()
+                            df_all["broadcast_description"] = df_all["broadcast_description"].astype(str)
+                            df_all["message_date_time"] = _parse_datetime_br_priority(df_all["message_date_time"])
+                            df_all = df_all.dropna(subset=["message_date_time"])
+
+                            if not df_all.empty:
+                                groups_store = _load_groups_store()
+                                groups_store = _update_group_store_with_new_data(groups_store, df_all, novos_metadados)
+                                _save_groups_store(groups_store)
+
+                                st.success(
+                                    f"✅ Grupos atualizados: {qtd_novos} novo(s), {qtd_substituidos} substituído(s), {qtd_mesmo} reimportado(s) (mesmo conteúdo)."
+                                )
+                            else:
+                                st.warning("Nenhum dado válido após processamento.")
+                        else:
+                            st.error(f"Colunas obrigatórias ausentes: {missing}")
+                    else:
+                        st.warning("Nenhum dado para processar (arquivos vazios/ilegíveis).")
+
+            groups_store = _load_groups_store()
+            gmap = groups_store.get("groups", {})
+            grp_data = gmap.get(grp_sel, {})
+            dfm_g = pd.DataFrame(grp_data.get("monthly", []))
+            dfd_g = pd.DataFrame(grp_data.get("daily", []))
+
+            st.markdown(f"## {grp_sel}")
+            if dfm_g.empty or dfd_g.empty:
+                st.info("Ainda não há dados nesse grupo. Envie arquivos e clique em **Processar**.")
+            else:
+                _render_monthly_daily_tables(dfm_g, dfd_g, f"meta_group__{grp_sel.replace(' ', '_').lower()}")
