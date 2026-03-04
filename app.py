@@ -1181,13 +1181,11 @@ with tab_painel:
         st.dataframe(df_cmp, use_container_width=True, hide_index=True)
 
     # =========================================================
-    # ✅ AJUSTE (SÓ AQUI): Conversão DIÁRIA com % (azul/vermelho)
-    # + seleção por "Mês 2 ... Mês 6" (mês relativo)
+    # ✅ AJUSTE (SÓ AQUI): regra ORIGINAL de mês (01/2026, 02/2026, 03/2026...)
+    # + pintar a COLUNA % inteira (sem _pct aparecendo)
     # Regra: Abertas ÷ Cadastradas (no dia). Meta = 20%.
     # - Azul se >= 20%
     # - Vermelho se < 20%
-    # - Seleção: Mês 2..6 = meses anteriores ao mês mais recente do histórico
-    # (SEM MEXER EM MAIS NADA)
     # =========================================================
     st.divider()
     st.subheader("Conversão diária (Leads indicadas × Contas abertas)")
@@ -1208,90 +1206,59 @@ with tab_painel:
         )
         base_conv["Mes_ref"] = base_conv["Data"].map(month_first)
 
-        # Lista de meses disponíveis (ordenado crescente)
         meses_disp = sorted([m for m in base_conv["Mes_ref"].dropna().unique()])
         if not meses_disp:
             st.info("Ainda não há meses suficientes no histórico para conversão.")
         else:
-            # "Mês 1" = mais recente (não mostramos), "Mês 2..6" = anteriores
-            meses_disp_sorted = sorted(meses_disp)
-            idx_mais_recente = len(meses_disp_sorted) - 1
+            meses_lbl = [fmt_month(m) for m in meses_disp]
+            mes_sel_lbl = st.selectbox(
+                "Selecione o mês",
+                meses_lbl,
+                index=len(meses_lbl) - 1,
+                key="conv_mes_sel"
+            )
+            mes_escolhido = meses_disp[meses_lbl.index(mes_sel_lbl)]
 
-            opcoes = []
-            mapa_opcao_para_mes = {}
+            mes_df = base_conv[base_conv["Mes_ref"] == mes_escolhido].copy()
 
-            for k in range(2, 7):
-                idx = idx_mais_recente - (k - 1)
-                if idx >= 0:
-                    op = f"Mês {k} — {fmt_month(meses_disp_sorted[idx])}"
-                    opcoes.append(op)
-                    mapa_opcao_para_mes[op] = meses_disp_sorted[idx]
+            total_cad_mes = int(mes_df["Cadastradas"].sum())
+            total_ab_mes = int(mes_df["Abertas"].sum())
+            conv_mes = (total_ab_mes / total_cad_mes) if total_cad_mes > 0 else 0.0
 
-            if not opcoes:
-                st.info("Ainda não há histórico suficiente para selecionar Mês 2 a Mês 6.")
-            else:
-                sel = st.selectbox("Selecione o mês (relativo)", opcoes, index=0, key="conv_mes_rel_sel")
-                mes_escolhido = mapa_opcao_para_mes[sel]
+            badge_mes = "am-badge-ok" if conv_mes >= ALVO_CONVERSAO else "am-badge-bad"
+            st.markdown(
+                f"<div class='{badge_mes}'>Conversão do mês selecionado ({fmt_month(mes_escolhido)}): "
+                f"{str(round(conv_mes*100,1)).replace('.',',')}%</div>",
+                unsafe_allow_html=True
+            )
 
-                mes_df = base_conv[base_conv["Mes_ref"] == mes_escolhido].copy()
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Mês selecionado", fmt_month(mes_escolhido))
+            c2.metric("Cadastradas (mês)", br_int(total_cad_mes))
+            c3.metric("Abertas (mês)", br_int(total_ab_mes))
 
-                # Métricas do mês selecionado
-                total_cad_mes = int(mes_df["Cadastradas"].sum())
-                total_ab_mes = int(mes_df["Abertas"].sum())
-                conv_mes = (total_ab_mes / total_cad_mes) if total_cad_mes > 0 else 0.0
+            view_conv = mes_df.sort_values("Data", ascending=False).reset_index(drop=True).copy()
 
-                badge_mes = "am-badge-ok" if conv_mes >= ALVO_CONVERSAO else "am-badge-bad"
-                st.markdown(
-                    f"<div class='{badge_mes}'>Conversão do mês selecionado ({fmt_month(mes_escolhido)}): "
-                    f"{str(round(conv_mes*100,1)).replace('.',',')}%</div>",
-                    unsafe_allow_html=True
-                )
+            pct_series = view_conv["% Conversão (dia)"].astype(float).copy()
 
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Mês selecionado", fmt_month(mes_escolhido))
-                c2.metric("Cadastradas (mês)", br_int(total_cad_mes))
-                c3.metric("Abertas (mês)", br_int(total_ab_mes))
+            display_df = pd.DataFrame({
+                "Data": view_conv["Data"].apply(fmt_date),
+                "Cadastradas": view_conv["Cadastradas"].apply(br_int),
+                "Abertas": view_conv["Abertas"].apply(br_int),
+                "% Conversão (dia)": pct_series.apply(lambda x: f"{str(round(float(x)*100,1)).replace('.',',')}%"),
+            })
 
-                # Tabela por dia (mais recente -> mais antigo) com % colorida
-                view_conv = mes_df.copy()
-                view_conv = view_conv.sort_values("Data", ascending=False).reset_index(drop=True)
-                view_conv["Data"] = view_conv["Data"].apply(fmt_date)
+            def _style_pct_col(col: pd.Series):
+                if col.name != "% Conversão (dia)":
+                    return [""] * len(col)
+                out = []
+                for i in range(len(col)):
+                    p = float(pct_series.iloc[i]) if i < len(pct_series) else 0.0
+                    out.append("color:#007AFF;font-weight:900;" if p >= ALVO_CONVERSAO else "color:#FF3B30;font-weight:900;")
+                return out
 
-                # Guardar numérico para estilo
-                view_conv["_pct"] = view_conv["% Conversão (dia)"].astype(float)
-
-                view_conv["Cadastradas"] = view_conv["Cadastradas"].apply(br_int)
-                view_conv["Abertas"] = view_conv["Abertas"].apply(br_int)
-                view_conv["% Conversão (dia)"] = view_conv["_pct"].apply(
-                    lambda x: f"{str(round(float(x)*100,1)).replace('.',',')}%"
-                )
-
-                df_show = view_conv[["Data", "Cadastradas", "Abertas", "% Conversão (dia)", "_pct"]].copy()
-
-                def _style_pct(row):
-                    try:
-                        p = float(row["_pct"])
-                    except Exception:
-                        p = 0.0
-                    if p >= ALVO_CONVERSAO:
-                        return ["", "", "", "color:#007AFF;font-weight:900;", ""]
-                    else:
-                        return ["", "", "", "color:#FF3B30;font-weight:900;", ""]
-
-                styled = (
-                    df_show
-                    .style
-                    .apply(_style_pct, axis=1)
-                )
-
-                # esconde coluna auxiliar _pct
-                try:
-                    styled = styled.hide(axis="columns", subset=["_pct"])
-                except Exception:
-                    # compatibilidade
-                    pass
-
-                st.dataframe(styled, use_container_width=True, hide_index=True)
+            styled = display_df.style.apply(_style_pct_col, axis=0)
+            st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # =========================================================
     # ✅ RELATÓRIOS (diário) — (igual ao antigo, com 4 abas)
