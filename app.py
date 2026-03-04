@@ -1181,11 +1181,13 @@ with tab_painel:
         st.dataframe(df_cmp, use_container_width=True, hide_index=True)
 
     # =========================================================
-    # ✅ ACRESCIMO: Conversão DIÁRIA (Indicadas/Leads x Abertas)
+    # ✅ AJUSTE (SÓ AQUI): Conversão DIÁRIA com % (azul/vermelho)
+    # + seleção por "Mês 2 ... Mês 6" (mês relativo)
     # Regra: Abertas ÷ Cadastradas (no dia). Meta = 20%.
     # - Azul se >= 20%
     # - Vermelho se < 20%
-    # (SEM MEXER NO RESTO)
+    # - Seleção: Mês 2..6 = meses anteriores ao mês mais recente do histórico
+    # (SEM MEXER EM MAIS NADA)
     # =========================================================
     st.divider()
     st.subheader("Conversão diária (Leads indicadas × Contas abertas)")
@@ -1204,39 +1206,92 @@ with tab_painel:
             lambda r: (r["Abertas"] / r["Cadastradas"]) if int(r["Cadastradas"]) > 0 else 0.0,
             axis=1
         )
+        base_conv["Mes_ref"] = base_conv["Data"].map(month_first)
 
-        # Destaque do último dia disponível
-        base_conv_sorted = base_conv.sort_values("Data", ascending=True).reset_index(drop=True)
-        last_row = base_conv_sorted.iloc[-1] if not base_conv_sorted.empty else None
+        # Lista de meses disponíveis (ordenado crescente)
+        meses_disp = sorted([m for m in base_conv["Mes_ref"].dropna().unique()])
+        if not meses_disp:
+            st.info("Ainda não há meses suficientes no histórico para conversão.")
+        else:
+            # "Mês 1" = mais recente (não mostramos), "Mês 2..6" = anteriores
+            meses_disp_sorted = sorted(meses_disp)
+            idx_mais_recente = len(meses_disp_sorted) - 1
 
-        if last_row is not None:
-            conv_last = float(last_row["% Conversão (dia)"])
-            badge = "am-badge-ok" if conv_last >= ALVO_CONVERSAO else "am-badge-bad"
-            st.markdown(
-                f"<div class='{badge}'>Conversão do último dia ({fmt_date(last_row['Data'])}): "
-                f"{str(round(conv_last*100,1)).replace('.',',')}%</div>",
-                unsafe_allow_html=True
-            )
+            opcoes = []
+            mapa_opcao_para_mes = {}
 
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Último dia", fmt_date(last_row["Data"]))
-            c2.metric("Cadastradas (dia)", br_int(int(last_row["Cadastradas"])))
-            c3.metric("Abertas (dia)", br_int(int(last_row["Abertas"])))
+            for k in range(2, 7):
+                idx = idx_mais_recente - (k - 1)
+                if idx >= 0:
+                    op = f"Mês {k} — {fmt_month(meses_disp_sorted[idx])}"
+                    opcoes.append(op)
+                    mapa_opcao_para_mes[op] = meses_disp_sorted[idx]
 
-        # Tabela por dia (mais recente -> mais antigo)
-        view_conv = base_conv.copy()
-        view_conv["Data"] = view_conv["Data"].apply(fmt_date)
-        view_conv["Cadastradas"] = view_conv["Cadastradas"].apply(br_int)
-        view_conv["Abertas"] = view_conv["Abertas"].apply(br_int)
-        view_conv["% Conversão (dia)"] = view_conv["% Conversão (dia)"].apply(
-            lambda x: f"{str(round(float(x)*100,1)).replace('.',',')}%"
-        )
+            if not opcoes:
+                st.info("Ainda não há histórico suficiente para selecionar Mês 2 a Mês 6.")
+            else:
+                sel = st.selectbox("Selecione o mês (relativo)", opcoes, index=0, key="conv_mes_rel_sel")
+                mes_escolhido = mapa_opcao_para_mes[sel]
 
-        view_conv["_sort"] = pd.to_datetime(view_conv["Data"], format="%d/%m/%Y", errors="coerce")
-        view_conv = view_conv.sort_values("_sort", ascending=False).drop(columns=["_sort"])
+                mes_df = base_conv[base_conv["Mes_ref"] == mes_escolhido].copy()
 
-        st.dataframe(view_conv[["Data", "Cadastradas", "Abertas", "% Conversão (dia)"]],
-                     use_container_width=True, hide_index=True)
+                # Métricas do mês selecionado
+                total_cad_mes = int(mes_df["Cadastradas"].sum())
+                total_ab_mes = int(mes_df["Abertas"].sum())
+                conv_mes = (total_ab_mes / total_cad_mes) if total_cad_mes > 0 else 0.0
+
+                badge_mes = "am-badge-ok" if conv_mes >= ALVO_CONVERSAO else "am-badge-bad"
+                st.markdown(
+                    f"<div class='{badge_mes}'>Conversão do mês selecionado ({fmt_month(mes_escolhido)}): "
+                    f"{str(round(conv_mes*100,1)).replace('.',',')}%</div>",
+                    unsafe_allow_html=True
+                )
+
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Mês selecionado", fmt_month(mes_escolhido))
+                c2.metric("Cadastradas (mês)", br_int(total_cad_mes))
+                c3.metric("Abertas (mês)", br_int(total_ab_mes))
+
+                # Tabela por dia (mais recente -> mais antigo) com % colorida
+                view_conv = mes_df.copy()
+                view_conv = view_conv.sort_values("Data", ascending=False).reset_index(drop=True)
+                view_conv["Data"] = view_conv["Data"].apply(fmt_date)
+
+                # Guardar numérico para estilo
+                view_conv["_pct"] = view_conv["% Conversão (dia)"].astype(float)
+
+                view_conv["Cadastradas"] = view_conv["Cadastradas"].apply(br_int)
+                view_conv["Abertas"] = view_conv["Abertas"].apply(br_int)
+                view_conv["% Conversão (dia)"] = view_conv["_pct"].apply(
+                    lambda x: f"{str(round(float(x)*100,1)).replace('.',',')}%"
+                )
+
+                df_show = view_conv[["Data", "Cadastradas", "Abertas", "% Conversão (dia)", "_pct"]].copy()
+
+                def _style_pct(row):
+                    try:
+                        p = float(row["_pct"])
+                    except Exception:
+                        p = 0.0
+                    if p >= ALVO_CONVERSAO:
+                        return ["", "", "", "color:#007AFF;font-weight:900;", ""]
+                    else:
+                        return ["", "", "", "color:#FF3B30;font-weight:900;", ""]
+
+                styled = (
+                    df_show
+                    .style
+                    .apply(_style_pct, axis=1)
+                )
+
+                # esconde coluna auxiliar _pct
+                try:
+                    styled = styled.hide(axis="columns", subset=["_pct"])
+                except Exception:
+                    # compatibilidade
+                    pass
+
+                st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # =========================================================
     # ✅ RELATÓRIOS (diário) — (igual ao antigo, com 4 abas)
@@ -1247,7 +1302,6 @@ with tab_painel:
     if df_c6 is None or df_c6.empty:
         st.info("Importe a planilha C6 (Visão Cliente) do dia para ver os relatórios diários.")
     else:
-        # Garantias mínimas (sem quebrar se vier faltando algo)
         _df = df_c6.copy()
 
         if COL_ABERTURA not in _df.columns:
@@ -1276,7 +1330,6 @@ with tab_painel:
         _df[COL_CASHIN_MTD] = pd.to_numeric(_df[COL_CASHIN_MTD], errors="coerce").fillna(0.0)
         _df[COL_SALDO] = pd.to_numeric(_df[COL_SALDO], errors="coerce").fillna(0.0)
 
-        # dia do relatório (DATA_BASE preferencial) e mês ref (do arquivo)
         _rep_day = detect_report_day_from_df(_df)
         _rep_month = detect_report_month_from_df(_df)
         _rep_month_lbl = fmt_month(_rep_month) if _rep_month else ""
@@ -1293,15 +1346,11 @@ with tab_painel:
             "Qualificação + BR + Valores",
         ])
 
-        # ----------------------------
-        # 1) ABERTURAS
-        # ----------------------------
         with tab_ab:
             dfa = _df[_df[COL_ABERTURA].notna()].copy()
             if dfa.empty:
                 st.info("Sem DT_CONTA_CRIADA no arquivo do dia.")
             else:
-                # filtro por mês (baseado no próprio DT_CONTA_CRIADA)
                 dfa["_mes"] = pd.to_datetime(dfa[COL_ABERTURA], errors="coerce").dt.to_period("M").astype(str)
                 meses = sorted([m for m in dfa["_mes"].dropna().unique()], reverse=False)
 
@@ -1309,7 +1358,6 @@ with tab_painel:
                     st.info("Não consegui identificar mês pelas aberturas.")
                 else:
                     meses_lbl = [f"{m.split('-')[1]}/{m.split('-')[0]}" for m in meses]
-                    # default = último mês existente
                     mes_sel_lbl = st.selectbox("Selecione o mês (Aberturas)", meses_lbl, index=len(meses_lbl) - 1, key="rep_ab_mes")
                     mes_sel = meses[meses_lbl.index(mes_sel_lbl)]
 
@@ -1319,7 +1367,7 @@ with tab_painel:
                         base.groupby(COL_ABERTURA)
                         .size()
                         .reset_index(name="Aberturas")
-                        .sort_values(COL_ABERTURA, ascending=False)  # mais recente -> mais antigo
+                        .sort_values(COL_ABERTURA, ascending=False)
                     )
                     total_mes = int(grp["Aberturas"].sum())
 
@@ -1333,15 +1381,11 @@ with tab_painel:
                     view = view[["Data", "Aberturas"]]
                     st.dataframe(view, use_container_width=True, hide_index=True)
 
-        # ----------------------------
-        # 2) FUNDAÇÕES (POR DIA)
-        # ----------------------------
         with tab_fd:
             dfa = _df[_df[COL_ABERTURA].notna()].copy()
             if dfa.empty:
                 st.info("Sem DT_CONTA_CRIADA no arquivo do dia.")
             else:
-                # dias disponíveis (do próprio arquivo)
                 dias = sorted([d for d in dfa[COL_ABERTURA].dropna().unique()], reverse=True)
                 dias_lbl = [fmt_date(d) for d in dias]
 
@@ -1353,7 +1397,6 @@ with tab_painel:
 
                     base = dfa[dfa[COL_ABERTURA] == dia_sel].copy()
 
-                    # month/year de fundação (DT_FUNDACAO_EMPRESA)
                     fund = base[base[COL_FUNDACAO].notna()].copy()
                     if fund.empty:
                         st.info("Sem DT_FUNDACAO_EMPRESA preenchida para esse dia.")
@@ -1371,7 +1414,6 @@ with tab_painel:
                         if tbl.empty:
                             st.info("Não consegui montar mês/ano de fundação.")
                         else:
-                            # ordenar mais recente -> mais antigo pelo ano/mês
                             def _my_key(s):
                                 try:
                                     mm, yy = str(s).split("/")
@@ -1389,11 +1431,7 @@ with tab_painel:
                             view["Quantidade"] = view["Quantidade"].apply(br_int)
                             st.dataframe(view, use_container_width=True, hide_index=True)
 
-        # ----------------------------
-        # 3) PIX + STATUS
-        # ----------------------------
         with tab_px:
-            # PIX
             s = normalize_str(_df.get(COL_PIX, pd.Series([""] * len(_df)))).str.upper()
             s = s.str.replace("'", "", regex=False)
             has_pix = ~s.isin(["", "-", "NAN", "NONE", "SEM", "SEM PIX"])
@@ -1401,7 +1439,6 @@ with tab_painel:
             pix_com = int(has_pix.sum())
             pix_sem = int((~has_pix).sum())
 
-            # STATUS
             stt = normalize_str(_df.get(COL_STATUS, pd.Series([""] * len(_df))))
             stt = stt.replace("", "SEM_STATUS")
 
@@ -1411,7 +1448,6 @@ with tab_painel:
                 .reset_index(name="Quantidade")
             )
 
-            # DOMICÍLIO C6 (se tiver a coluna)
             domicilio_c6 = 0
             if COL_DOMICILIO in _df.columns:
                 domicilio_c6 = int(_df[COL_DOMICILIO].apply(contains_c6).sum())
@@ -1426,9 +1462,6 @@ with tab_painel:
             view["Quantidade"] = view["Quantidade"].apply(br_int)
             st.dataframe(view, use_container_width=True, hide_index=True)
 
-        # ----------------------------
-        # 4) QUALIFICAÇÃO + BR + VALORES
-        # ----------------------------
         with tab_qv:
             dqq = _df.copy()
             dqq["_nivel"] = parse_level(dqq)
@@ -1436,7 +1469,6 @@ with tab_painel:
 
             qual_total = int(dqq["_qual"].sum())
 
-            # BR (M0/M1/M2)
             br_s = normalize_str(dqq.get(COL_BR, pd.Series([""] * len(dqq)))).str.upper()
             m0 = int((dqq["_qual"] & (br_s == "M0")).sum())
             m1 = int((dqq["_qual"] & (br_s == "M1")).sum())
@@ -1646,7 +1678,6 @@ with tab_painel:
 # ================ 💬 Campanhas Meta =======================
 # =========================================================
 with tab_meta:
-
     st.subheader("💬 Campanhas Meta")
 
     def _norm_col(c: str) -> str:
@@ -1802,14 +1833,6 @@ with tab_meta:
         new_df: pd.DataFrame,
         novos_metadados: List[dict]
     ) -> dict:
-        """
-        ✅ AJUSTE ÚNICO: o "Sintético mensal por status" deve somar o mês inteiro,
-        não ficar só com o último arquivo/dia.
-
-        - Mantemos o histórico diário por chave (Mes|Data|status) (um por dia)
-        - Recalculamos o mensal SEMPRE como soma do diário do mês.
-        """
-
         if not isinstance(existing_summary, dict):
             existing_summary = {}
         existing_summary["files"] = _normalize_files_meta_list(existing_summary.get("files", []))
@@ -1885,9 +1908,6 @@ with tab_meta:
 
         return summary
 
-    # =======================================================
-    # GRUPOS - REGRA SIMPLES: SUBSTRING CASE INSENSITIVE
-    # =======================================================
     def _groups_definitions() -> Dict[str, List[str]]:
         return {
             "VAREJO": ["BIGLOJ", "AMERIC", "VAREJO", "LINKS"],
@@ -2089,9 +2109,6 @@ with tab_meta:
 
             st.dataframe(view_d, use_container_width=True, hide_index=True)
 
-    # =======================================================
-    # ✅ CONTROLE SEM BLOQUEIO (PERMITE REIMPORTAR O MESMO ARQUIVO)
-    # =======================================================
     def process_files_with_control_no_block(
         uploaded_files,
         control_path: str,
@@ -2145,9 +2162,6 @@ with tab_meta:
 
         return dfs, novos_metadados, qtd_novos, qtd_substituidos, qtd_reimportados_mesmo
 
-    # =======================================================
-    # IMPORTAÇÃO PRINCIPAL META
-    # =======================================================
     if "meta_c6_summary" not in st.session_state:
         st.session_state["meta_c6_summary"] = _load_persisted_summary()
 
@@ -2231,9 +2245,6 @@ with tab_meta:
         if not df_monthly.empty and not df_daily.empty:
             _render_monthly_daily_tables(df_monthly, df_daily, "meta_global")
 
-        # =======================================================
-        # GRUPOS - COM CONTROLE SEM BLOQUEIO
-        # =======================================================
         st.divider()
         with st.expander("Carteira — clique para abrir", expanded=False):
             st.caption("Baseado em broadcast_description. Regra: se a palavra aparecer em qualquer lugar do texto, contabiliza.")
@@ -2314,7 +2325,6 @@ with tab_leads_status:
 
     st.subheader("📋 Leads Diários (Status por Data Base)")
 
-    # ----- Funções de Persistência -----
     def _leads_status_load():
         return safe_json_load(LEADS_STATUS_DAILY_PATH, default={}) or {}
 
@@ -2326,7 +2336,6 @@ with tab_leads_status:
         safe_json_delete(LEADS_CONTROL_PATH)
         st.rerun()
 
-    # ----- Funções de Processamento de Arquivo -----
     def _detect_delim_for_csv(sample_text: str) -> str:
         candidates = [";", ",", "\t", "|"]
         counts = {sep: sample_text.count(sep) for sep in candidates}
@@ -2356,7 +2365,6 @@ with tab_leads_status:
             return m.iloc[0]
         return max(d)
 
-    # ----- ✅ Indicações válidas (≤14d) -----
     def _calcular_validas_14d(df: pd.DataFrame, data_base: dt.date) -> int:
         colunas_cadastro = [c for c in df.columns if 'DATA_HORA_CADASTRO' in str(c).upper()]
 
@@ -2380,7 +2388,6 @@ with tab_leads_status:
         mask = diff_days.notna() & (diff_days >= 0) & (diff_days <= 14)
         return int(mask.sum())
 
-    # ----- Nome status (Firestore-safe) -----
     def limpar_nome_status(status: str) -> str:
         if not isinstance(status, str):
             status = str(status)
@@ -2395,7 +2402,6 @@ with tab_leads_status:
 
         return firestore_safe_key(nome, max_len=120)
 
-    # ----- Encurtar status (visual) -----
     def encurtar_status(status: str) -> str:
         if not isinstance(status, str):
             status = str(status)
@@ -2445,10 +2451,8 @@ with tab_leads_status:
 
         return status_limpo
 
-    # ----- Carregar Estado Atual -----
     store = _leads_status_load() or {}
 
-    # Migração sem reset: dd/mm/aaaa -> ISO
     store_migrado = {}
     for k, v in store.items():
         if isinstance(k, str) and re.match(r"^\d{2}/\d{2}/\d{4}$", k):
@@ -2461,7 +2465,6 @@ with tab_leads_status:
             store_migrado[k] = v
     store = store_migrado
 
-    # ----- Importação de Arquivos -----
     with st.expander("📤 Importar arquivo(s) diário(s)", expanded=True):
         st.markdown("""
         **Regras (como você pediu):**
@@ -2472,7 +2475,6 @@ with tab_leads_status:
         * Indicações Válidas (≤14 dias): **DATA_BASE - DATA_HORA_CADASTRO <= 14**
         """)
 
-        # ✅ FIX refresh: key dinâmica pro uploader
         if "leads_upload_seq" not in st.session_state:
             st.session_state["leads_upload_seq"] = 0
         uploader_key = f"leads_status_upload_q_{st.session_state['leads_upload_seq']}"
@@ -2514,7 +2516,6 @@ with tab_leads_status:
 
                 day_key_iso = day_key_store_iso(data_base)
 
-                # Status (coluna Q)
                 s = df_status.iloc[:, 16].astype("string").fillna("").str.strip()
                 s = s[s != ""]
                 if s.empty:
@@ -2524,10 +2525,8 @@ with tab_leads_status:
                     status_counts = s_limpo.value_counts().to_dict()
                     status_counts = {str(k): int(v) for k, v in status_counts.items()}
 
-                # Indicações válidas
                 validas = _calcular_validas_14d(df_status, data_base)
 
-                # ✅ UPSERT por dia (substitui o dia inteiro pelo arquivo atual)
                 payload = dict(status_counts)
                 payload["_validas_14d"] = int(validas)
                 store[day_key_iso] = payload
@@ -2563,7 +2562,6 @@ with tab_leads_status:
             st.session_state["leads_upload_seq"] += 1
             st.rerun()
 
-    # ----- Exibição do Painel -----
     store = _leads_status_load() or {}
     control = safe_json_load(LEADS_CONTROL_PATH, default={}) or {}
 
