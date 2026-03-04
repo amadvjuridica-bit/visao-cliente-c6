@@ -1,6 +1,5 @@
 # =========================
-# app.py — PARTE 1/2
-# (Cole esta parte no app.py, e depois cole a PARTE 2 logo abaixo)
+# app.py — COMPLETO
 # =========================
 
 import os
@@ -1182,6 +1181,64 @@ with tab_painel:
         st.dataframe(df_cmp, use_container_width=True, hide_index=True)
 
     # =========================================================
+    # ✅ ACRESCIMO: Conversão DIÁRIA (Indicadas/Leads x Abertas)
+    # Regra: Abertas ÷ Cadastradas (no dia). Meta = 20%.
+    # - Azul se >= 20%
+    # - Vermelho se < 20%
+    # (SEM MEXER NO RESTO)
+    # =========================================================
+    st.divider()
+    st.subheader("Conversão diária (Leads indicadas × Contas abertas)")
+
+    hist_open_day = hist_to_df(HIST_OPEN_DAILY, "Abertas")
+    hist_leads_day = hist_to_df(HIST_LEADS_DAILY, "Cadastradas")
+
+    if hist_open_day.empty and hist_leads_day.empty:
+        st.info("Importe C6 e Leads (diário) para montar a conversão diária.")
+    else:
+        base_conv = pd.merge(hist_leads_day, hist_open_day, on="Data", how="outer").fillna(0)
+        base_conv["Abertas"] = base_conv["Abertas"].astype(int)
+        base_conv["Cadastradas"] = base_conv["Cadastradas"].astype(int)
+
+        base_conv["% Conversão (dia)"] = base_conv.apply(
+            lambda r: (r["Abertas"] / r["Cadastradas"]) if int(r["Cadastradas"]) > 0 else 0.0,
+            axis=1
+        )
+
+        # Destaque do último dia disponível
+        base_conv_sorted = base_conv.sort_values("Data", ascending=True).reset_index(drop=True)
+        last_row = base_conv_sorted.iloc[-1] if not base_conv_sorted.empty else None
+
+        if last_row is not None:
+            conv_last = float(last_row["% Conversão (dia)"])
+            badge = "am-badge-ok" if conv_last >= ALVO_CONVERSAO else "am-badge-bad"
+            st.markdown(
+                f"<div class='{badge}'>Conversão do último dia ({fmt_date(last_row['Data'])}): "
+                f"{str(round(conv_last*100,1)).replace('.',',')}%</div>",
+                unsafe_allow_html=True
+            )
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Último dia", fmt_date(last_row["Data"]))
+            c2.metric("Cadastradas (dia)", br_int(int(last_row["Cadastradas"])))
+            c3.metric("Abertas (dia)", br_int(int(last_row["Abertas"])))
+
+        # Tabela por dia (mais recente -> mais antigo)
+        view_conv = base_conv.copy()
+        view_conv["Data"] = view_conv["Data"].apply(fmt_date)
+        view_conv["Cadastradas"] = view_conv["Cadastradas"].apply(br_int)
+        view_conv["Abertas"] = view_conv["Abertas"].apply(br_int)
+        view_conv["% Conversão (dia)"] = view_conv["% Conversão (dia)"].apply(
+            lambda x: f"{str(round(float(x)*100,1)).replace('.',',')}%"
+        )
+
+        view_conv["_sort"] = pd.to_datetime(view_conv["Data"], format="%d/%m/%Y", errors="coerce")
+        view_conv = view_conv.sort_values("_sort", ascending=False).drop(columns=["_sort"])
+
+        st.dataframe(view_conv[["Data", "Cadastradas", "Abertas", "% Conversão (dia)"]],
+                     use_container_width=True, hide_index=True)
+
+    # =========================================================
     # ✅ RELATÓRIOS (diário) — (igual ao antigo, com 4 abas)
     # - Usa o df_c6 importado do dia (Visão Cliente)
     # =========================================================
@@ -1583,15 +1640,6 @@ with tab_painel:
         c3.metric("Receita cheia", br_money(float(last["Deveria receber (cheio)"])))
         c4.metric("A receber", br_money(float(last["A receber no mês"])))
 
-
-# =========================
-# CONTINUA NA PARTE 2/2
-# (Cole a PARTE 2 logo abaixo desta linha)
-# =========================
-# =========================
-# app.py — PARTE 2/2
-# (Cole esta parte LOGO ABAIXO da PARTE 1 no mesmo app.py)
-# =========================
 
 # =========================================================
 # =====================  TAB 2  ===========================
