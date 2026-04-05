@@ -971,7 +971,6 @@ def reset_all_data():
         safe_json_delete(p)
 
 
-
 # =========================================================
 # C6 OPERAÇÃO — NOVO MÓDULO
 # =========================================================
@@ -1487,8 +1486,8 @@ if st.sidebar.button("🔄 RESETAR HISTÓRICO (ZERAR TUDO)"):
 show_logo_and_title()
 st.divider()
 
-tab_painel, tab_c6_operacao, tab_meta, tab_leads_status = st.tabs(
-    ["📊 Painel C6", "🏦 C6 Operação", "💬 Campanhas Meta", "📋 Leads Diários"]
+tab_painel, tab_meta, tab_leads_status, tab_c6_operacao = st.tabs(
+    ["📊 Painel C6", "💬 Campanhas Meta", "📋 Leads Diários", "🏦 C6 Operação"]
 )
 
 # =========================================================
@@ -2138,6 +2137,15 @@ with tab_painel:
         c3.metric("Receita cheia", br_money(float(last["Deveria receber (cheio)"])))
         c4.metric("A receber", br_money(float(last["A receber no mês"])))
 
+
+
+
+# =========================================================
+# =====================  TAB 4  ===========================
+# ================== 🏦 C6 OPERAÇÃO =======================
+# =========================================================
+with tab_c6_operacao:
+    _render_c6_operacao_tab()
 
 # =========================================================
 # =====================  TAB 2  ===========================
