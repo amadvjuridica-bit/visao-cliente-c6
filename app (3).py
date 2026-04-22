@@ -244,6 +244,8 @@ def safe_json_delete(path: str):
 
 
 def local_json_load(path: str, default):
+    if "firebase" in st.secrets:
+        return safe_json_load(path, default)
     if os.path.exists(path):
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -259,13 +261,43 @@ def local_json_load(path: str, default):
 
 
 def local_json_save(path: str, obj):
+    if "firebase" in st.secrets:
+        safe_json_save(path, obj)
+        return
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
 
 
 def local_json_delete(path: str):
+    if "firebase" in st.secrets:
+        safe_json_delete(path)
+        return
     if os.path.exists(path):
         os.remove(path)
+
+
+def _df_to_store_payload(df: pd.DataFrame) -> dict:
+    try:
+        return json.loads(df.to_json(orient="split", date_format="iso", force_ascii=False))
+    except Exception:
+        safe_df = df.copy()
+        for col in safe_df.columns:
+            safe_df[col] = safe_df[col].astype("string")
+        return json.loads(safe_df.to_json(orient="split", force_ascii=False))
+
+
+def _df_from_store_payload(payload) -> Optional[pd.DataFrame]:
+    if not isinstance(payload, dict):
+        return None
+    try:
+        return pd.read_json(io.StringIO(json.dumps(payload, ensure_ascii=False)), orient="split")
+    except Exception:
+        try:
+            cols = payload.get("columns") or []
+            data = payload.get("data") or []
+            return pd.DataFrame(data, columns=cols)
+        except Exception:
+            return None
 
 
 def file_md5(b: bytes) -> str:
@@ -357,8 +389,27 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
         cache_path = C6_DAILY_LCT_CACHE
     else:
         cache_path = C6_DAILY_LEADS_CACHE
-    with open(cache_path, "wb") as f:
-        f.write(raw_bytes)
+    if "firebase" in st.secrets:
+        try:
+            if kind_key == "lct":
+                df_cache = _read_lct_file_any(file_name, raw_bytes)
+            elif str(file_name or "").lower().endswith(".csv"):
+                sample = raw_bytes[:200_000].decode("utf-8-sig", errors="replace")
+                candidates = [";", ",", "\t", "|"]
+                counts = {sep: sample.count(sep) for sep in candidates}
+                sep = max(counts, key=counts.get) if counts else ","
+                if counts.get(sep, 0) <= 0:
+                    sep = ","
+                df_cache = pd.read_csv(io.BytesIO(raw_bytes), sep=sep, engine="python", on_bad_lines="skip", encoding="utf-8-sig")
+            else:
+                df_cache = read_excel_any(raw_bytes)
+            if df_cache is not None:
+                safe_json_save(cache_path, _df_to_store_payload(df_cache))
+        except Exception:
+            pass
+    else:
+        with open(cache_path, "wb") as f:
+            f.write(raw_bytes)
     meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
     meta[kind_key] = {
         "name": str(file_name or "").strip(),
@@ -375,6 +426,14 @@ def _load_daily_import_cache(kind: str):
         cache_path = C6_DAILY_LCT_CACHE
     else:
         cache_path = C6_DAILY_LEADS_CACHE
+    if "firebase" in st.secrets:
+        payload = safe_json_load(cache_path, default=None)
+        if payload:
+            df = _df_from_store_payload(payload)
+            meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
+            info = meta.get(kind_key) or {}
+            return df, str(info.get("name") or ""), "Importação diária (cache nuvem)"
+        return None, "", ""
     if not os.path.exists(cache_path):
         return None, "", ""
     try:
@@ -400,8 +459,17 @@ def _load_daily_import_cache(kind: str):
 
 
 def _save_ops_import_cache(file_name: str, raw_bytes: bytes):
-    with open(C6_OPS_CACHE, "wb") as f:
-        f.write(raw_bytes)
+    if "firebase" in st.secrets:
+        try:
+            fake_upload = type("UploadedCache", (), {"getvalue": lambda self: raw_bytes, "name": str(file_name or "c6_operacao_cache.csv")})()
+            df_cache = _read_ops_file(fake_upload)
+            if df_cache is not None:
+                safe_json_save(C6_OPS_CACHE, _df_to_store_payload(df_cache))
+        except Exception:
+            pass
+    else:
+        with open(C6_OPS_CACHE, "wb") as f:
+            f.write(raw_bytes)
     local_json_save(C6_OPS_CACHE_META, {
         "name": str(file_name or "").strip(),
         "cached_at": dt.datetime.now().isoformat(),
@@ -409,13 +477,18 @@ def _save_ops_import_cache(file_name: str, raw_bytes: bytes):
 
 
 def _load_ops_import_cache():
+    meta = local_json_load(C6_OPS_CACHE_META, default={}) or {}
+    if "firebase" in st.secrets:
+        payload = safe_json_load(C6_OPS_CACHE, default=None)
+        if payload:
+            return _df_from_store_payload(payload), str(meta.get("name") or "")
+        return None, ""
     if not os.path.exists(C6_OPS_CACHE):
         return None, ""
     try:
         with open(C6_OPS_CACHE, "rb") as f:
             raw = f.read()
-        df = _read_ops_file(type("CachedUpload", (), {"getvalue": lambda self: raw, "name": str((local_json_load(C6_OPS_CACHE_META, default={}) or {}).get("name") or "c6_operacao_cache.csv")})())
-        meta = local_json_load(C6_OPS_CACHE_META, default={}) or {}
+        df = _read_ops_file(type("CachedUpload", (), {"getvalue": lambda self: raw, "name": str(meta.get("name") or "c6_operacao_cache.csv")})())
         return df, str(meta.get("name") or "")
     except Exception:
         return None, ""
@@ -597,6 +670,14 @@ def _load_daily_import_cache(kind: str):
         cache_path = C6_DAILY_LCT_CACHE
     else:
         cache_path = C6_DAILY_LEADS_CACHE
+    if "firebase" in st.secrets:
+        payload = safe_json_load(cache_path, default=None)
+        if payload:
+            df = _df_from_store_payload(payload)
+            meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
+            info = meta.get(kind_key) or {}
+            return df, str(info.get("name") or ""), "Importação diária (cache nuvem)"
+        return None, "", ""
     if not os.path.exists(cache_path):
         return None, "", ""
     try:
