@@ -1,0 +1,50 @@
+{
+  "columns": [
+    "Mês",
+    "Qualificadas",
+    "Acelerador",
+    "Cash In",
+    "Spending",
+    "C6 Pay",
+    "Credenciamento C6 Pay",
+    "PIX CNPJ",
+    "Wallet",
+    "Deveria receber (cheio)",
+    "Já pago (referência)",
+    "A receber no mês"
+  ],
+  "index": [
+    0,
+    1
+  ],
+  "data": [
+    [
+      "04/2026",
+      637,
+      1.0,
+      574,
+      40,
+      23,
+      24,
+      0,
+      0,
+      316900.0,
+      151190.0,
+      165710.0
+    ],
+    [
+      "05/2026",
+      199,
+      1.0,
+      185,
+      8,
+      6,
+      4,
+      0,
+      5,
+      83950.0,
+      52745.0,
+      31205.0
+    ]
+  ]
+}

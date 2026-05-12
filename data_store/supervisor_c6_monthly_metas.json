@@ -1,0 +1,40 @@
+{
+  "04/2026": {
+    "contas_abertas_meta": 835,
+    "contas_abertas_premio": 400.0,
+    "contas_qualificadas_faixas": [
+      {
+        "meta": 1000,
+        "premio": 1400.0
+      },
+      {
+        "meta": 900,
+        "premio": 540.0
+      },
+      {
+        "meta": 800,
+        "premio": 500.0
+      },
+      {
+        "meta": 700,
+        "premio": 400.0
+      }
+    ],
+    "instalacao_c6pay_meta": 95,
+    "instalacao_c6pay_premio": 360.0,
+    "c6pay_ativada_meta": 55,
+    "c6pay_ativada_premio": 700.0,
+    "pix_cnpj_meta": 0.65,
+    "pix_cnpj_premio": 400.0,
+    "domicilio_qualificado_meta": 30,
+    "domicilio_qualificado_premio": 600.0,
+    "spending_qualificado_meta": 60,
+    "spending_qualificado_premio": 600.0,
+    "wallet_meta": 0.6,
+    "wallet_premio": 300.0,
+    "ativacao_cartao_meta": 0.2,
+    "ativacao_cartao_premio": 400.0,
+    "nivel4_meta": 300,
+    "nivel4_premio": 400.0
+  }
+}

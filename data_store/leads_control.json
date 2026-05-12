@@ -1,0 +1,632 @@
+{
+  "files": [
+    {
+      "name": "AnaliticoLeads0501Eq.Amcob.xlsx",
+      "hash": "5a71929f147c5cac5d3404a89e5c5c42",
+      "day": "2025-12-31",
+      "imported_at": "2026-04-22T10:44:09.603868",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads0401Eq.Amcob.xlsx",
+      "hash": "60f2099fc69e87e25e3bd0f521d19a9c",
+      "day": "2026-01-04",
+      "imported_at": "2026-04-22T10:44:11.992727",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads0601Eq.Amcob.xlsx",
+      "hash": "b8259c2bc8474e56f0c73cd5e1580042",
+      "day": "2026-01-06",
+      "imported_at": "2026-04-22T10:44:14.425626",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 07-01 Eq. Amcob.xlsx",
+      "hash": "9ea3c1c45080a733794cf62520b8c987",
+      "day": "2026-01-07",
+      "imported_at": "2026-04-22T10:44:17.820962",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads0801Eq.Amcob.xlsx",
+      "hash": "d611f3b9d0dc0c61ac6ce313b079dc49",
+      "day": "2026-01-08",
+      "imported_at": "2026-04-22T10:44:20.754491",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads1101Eq.Amcob.xlsx",
+      "hash": "1cdc570aa5da399489818007af678e66",
+      "day": "2026-01-10",
+      "imported_at": "2026-04-22T10:44:24.384947",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads1201Eq.Amcob.xlsx",
+      "hash": "8c4cbb17a8caf0fde16aa0f251c9b047",
+      "day": "2026-01-12",
+      "imported_at": "2026-04-22T10:44:28.427018",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads1301Eq.Amcob.xlsx",
+      "hash": "fcf806c3558956e02e455328cfaaa699",
+      "day": "2026-01-13",
+      "imported_at": "2026-04-22T10:44:32.156942",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads1401Eq.Amcob.xlsx",
+      "hash": "817bded5dc867adb6cf214afabb4f6c3",
+      "day": "2026-01-14",
+      "imported_at": "2026-04-22T10:44:36.095712",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads1501Eq.Amcob.xlsx",
+      "hash": "889464fb9abeab47ea0b7a6f8b86f034",
+      "day": "2026-01-15",
+      "imported_at": "2026-04-22T10:44:40.078600",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads1701Eq.Amcob.xlsx",
+      "hash": "e68e52bb0bb9c0590714bac0e5907cee",
+      "day": "2026-01-17",
+      "imported_at": "2026-04-22T10:44:44.764401",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads1801Eq.Amcob.xlsx",
+      "hash": "692985d9bc4e31a82e552c10851d1d73",
+      "day": "2026-01-18",
+      "imported_at": "2026-04-22T10:44:49.370657",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads1901Eq.Amcob.xlsx",
+      "hash": "684e7daa132b85f9b9144a8bf7614fb3",
+      "day": "2026-01-19",
+      "imported_at": "2026-04-22T10:44:54.300614",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads2001Eq.Amcob.xlsx",
+      "hash": "b4ecd0e44eae2ba024750285e27f672a",
+      "day": "2026-01-20",
+      "imported_at": "2026-04-22T10:44:59.542873",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads2101Eq.Amcob.xlsx",
+      "hash": "8b3ac362fe04c8d0b62cce0d8c886d86",
+      "day": "2026-01-21",
+      "imported_at": "2026-04-22T10:45:04.404832",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads2201Eq.Amcob.xlsx",
+      "hash": "219230c1765f6a4c56509601d7e094b9",
+      "day": "2026-01-22",
+      "imported_at": "2026-04-22T10:45:09.516547",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnalíticoLeads2401Eq.Amcob.xlsx",
+      "hash": "bab73cbaf80c803e2529ead7bb79c34f",
+      "day": "2026-01-24",
+      "imported_at": "2026-04-22T10:45:15.339635",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads2501Eq.Amcob.xlsx",
+      "hash": "d42b5d324294feebb4ea0779cc5ef0d0",
+      "day": "2026-01-25",
+      "imported_at": "2026-04-22T10:45:21.470220",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads2601Eq.Amcob.xlsx",
+      "hash": "2aa09ec0ce3f267ba0f6c05c132814fa",
+      "day": "2026-01-26",
+      "imported_at": "2026-04-22T10:45:27.923991",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads2701Eq.Amcob.xlsx",
+      "hash": "cff12aefc326425e90907e8676d12ea4",
+      "day": "2026-01-27",
+      "imported_at": "2026-04-22T10:45:34.706695",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads2801Eq.Amcob.xlsx",
+      "hash": "8b6acede41be157cc0aaf981abdfff7f",
+      "day": "2026-01-28",
+      "imported_at": "2026-04-22T10:45:41.408948",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads2901q.Amcob.xlsx",
+      "hash": "ea1b37b5828e538c70a199b8e8cb5b36",
+      "day": "2026-01-29",
+      "imported_at": "2026-04-22T10:45:49.776760",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads3101Eq.Amcob.xlsx",
+      "hash": "9c4468b61947c7d498bab380deb23902",
+      "day": "2026-02-01",
+      "imported_at": "2026-04-22T10:45:56.757428",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads0202Eq.Amcob.xlsx",
+      "hash": "a6594275ccb2b1df12f0b6df3aa53da9",
+      "day": "2026-02-02",
+      "imported_at": "2026-04-22T11:05:31.484578",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads0302Eq.Amcob.xlsx",
+      "hash": "257445d1417301effe68187861e5d16f",
+      "day": "2026-02-03",
+      "imported_at": "2026-04-22T11:05:38.262469",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads0402Eq.Amcob.xlsx",
+      "hash": "dc01075e6d47b344fdeb6a64e42ba7f5",
+      "day": "2026-02-04",
+      "imported_at": "2026-04-22T11:05:44.753655",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "AnaliticoLeads0502Eq.Amcob.xlsx",
+      "hash": "31110536a60de956287fdab4a91d07f9",
+      "day": "2026-02-05",
+      "imported_at": "2026-04-22T11:05:52.043850",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 08-02 Eq. Amcob.xlsx",
+      "hash": "3b2a60a1dfaafd5fc46379f9b459941d",
+      "day": "2026-02-08",
+      "imported_at": "2026-04-22T11:05:59.026691",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 09-02 Eq. Amcob.xlsx",
+      "hash": "3b09137bc33f4ecb0316b7a7797649ba",
+      "day": "2026-02-09",
+      "imported_at": "2026-04-22T11:06:06.607831",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 10-02 Eq. Amcob.xlsx",
+      "hash": "9bf9648aea339d99992e7173b82618c8",
+      "day": "2026-02-10",
+      "imported_at": "2026-04-22T11:06:14.593570",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 11-02 Eq. Amcob.xlsx",
+      "hash": "a4eb99c70e4347dda05a6d57524ef10f",
+      "day": "2026-02-11",
+      "imported_at": "2026-04-22T11:06:22.071383",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 12-02 Eq. Amcob.xlsx",
+      "hash": "ad6b875c01927a7b86c4d75f7e5ef4d6",
+      "day": "2026-02-12",
+      "imported_at": "2026-04-22T11:06:30.460639",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 15-02 Eq. Amcob.xlsx",
+      "hash": "ea2cde332935d7e0e69a77a8c8b437b3",
+      "day": "2026-02-15",
+      "imported_at": "2026-04-22T11:06:38.373670",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 16-02 Eq. Amcob.xlsx",
+      "hash": "35acf0c24e9c927749e96b6d23b97618",
+      "day": "2026-02-17",
+      "imported_at": "2026-04-22T11:06:47.039212",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 17-02 Eq. Amcob.xlsx",
+      "hash": "e537fdf9ef5f186c7209e9d284207e37",
+      "day": "2026-02-17",
+      "imported_at": "2026-04-22T11:06:54.961903",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 18-02 Eq. Amcob.xlsx",
+      "hash": "d7dfce769b58c6de7378e30fe0d2e4b2",
+      "day": "2026-02-18",
+      "imported_at": "2026-04-22T11:07:03.003756",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 19-02 Eq. Amcob.xlsx",
+      "hash": "fe073df62565b7f4fde813ed5495976c",
+      "day": "2026-02-19",
+      "imported_at": "2026-04-22T11:07:11.934135",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 21-02 Eq. Amcob.xlsx",
+      "hash": "b5989a7ee59c21444fdb219e72aca597",
+      "day": "2026-02-21",
+      "imported_at": "2026-04-22T11:07:20.157741",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 22-02 Eq. Amcob.xlsx",
+      "hash": "b2308470fae45d196ab95eb00274c519",
+      "day": "2026-02-22",
+      "imported_at": "2026-04-22T11:07:28.630298",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 23-02 Eq. Amcob.xlsx",
+      "hash": "dceb7c3460331c8053efb3dedb86be0c",
+      "day": "2026-02-23",
+      "imported_at": "2026-04-22T11:07:38.249181",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 24-02 Eq. Amcob.xlsx",
+      "hash": "98b63589a88f72efc2c5d482f514645e",
+      "day": "2026-02-24",
+      "imported_at": "2026-04-22T11:07:46.988367",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 25-02 Eq. Amcob.xlsx",
+      "hash": "6a0c12d067d4ec5ba75e0c8e1c113410",
+      "day": "2026-02-25",
+      "imported_at": "2026-04-22T11:07:56.731829",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 26-02 Eq. Amcob.xlsx",
+      "hash": "a312481485c295fc2f2eeba724d4ef8b",
+      "day": "2026-02-26",
+      "imported_at": "2026-04-22T11:08:06.240318",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 28_02 Eq. Amcob.xlsx",
+      "hash": "4f41113433a532507ae16adf5687ea7e",
+      "day": "2026-02-28",
+      "imported_at": "2026-04-22T11:08:15.509851",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 04-03 Eq. Amcob.xlsx",
+      "hash": "f6fc3caf8e04206d21788a20fc89b3e7",
+      "day": "1970-01-01",
+      "imported_at": "2026-04-22T11:23:17.561500",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 01-03 Eq. Amcob.xlsx",
+      "hash": "78a3df4826f126e6f8da7704b2d565aa",
+      "day": "2026-03-01",
+      "imported_at": "2026-04-22T11:23:27.498688",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 03-03 Eq. Amcob.xlsx",
+      "hash": "7e4b5399ab3b348a77fab7d4bf02da37",
+      "day": "2026-03-03",
+      "imported_at": "2026-04-22T11:23:37.332348",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 05-03 Eq. Amcob.xlsx",
+      "hash": "a5cbee8d1d2f77f6ef2124d87c19fdd5",
+      "day": "2026-03-05",
+      "imported_at": "2026-04-22T11:23:47.078734",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 08-03 Eq. Amcob.xlsx",
+      "hash": "8a9ca613c416b3253b7eaf5550c3dff9",
+      "day": "2026-03-08",
+      "imported_at": "2026-04-22T11:23:57.320268",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 09-03 Eq. Amcob.xlsx",
+      "hash": "cf24ea73c2a9b6a49b6b59e78e1cb91c",
+      "day": "2026-03-09",
+      "imported_at": "2026-04-22T11:24:07.314195",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 10-03 Eq. Amcob.xlsx",
+      "hash": "3ab8819818a02d015b711440d4b0bd18",
+      "day": "2026-03-10",
+      "imported_at": "2026-04-22T11:24:17.742666",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 11-03 Eq. Amcob.xlsx",
+      "hash": "cabd1b618e4698f25853709645d60d76",
+      "day": "2026-03-11",
+      "imported_at": "2026-04-22T11:24:27.794957",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 12-03 Eq. Amcob.xlsx",
+      "hash": "c6d6ddf91a586461b84d482394cf2872",
+      "day": "2026-03-12",
+      "imported_at": "2026-04-22T11:24:38.166904",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 14-03 Eq. Amcob.xlsx",
+      "hash": "a6ea24dfbe00ddd2f62c74951d26e8f7",
+      "day": "2026-03-14",
+      "imported_at": "2026-04-22T11:24:49.100107",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 16-03 Eq. Amcob.xlsx",
+      "hash": "15d3c3c5c10a7a2a7a093a5731656884",
+      "day": "2026-03-16",
+      "imported_at": "2026-04-22T11:24:59.584108",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 17-03 Eq. Amcob.xlsx",
+      "hash": "f290ac4159eb34e101c469db97052e19",
+      "day": "2026-03-17",
+      "imported_at": "2026-04-22T11:25:11.047410",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 19-03 Eq. Amcob.xlsx",
+      "hash": "ddc0f367fa7fd795c305609f11011bc3",
+      "day": "2026-03-19",
+      "imported_at": "2026-04-22T11:25:21.767640",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 22-03 Eq. Amcob.xlsx",
+      "hash": "6543631320484d52870abbf48bc50448",
+      "day": "2026-03-22",
+      "imported_at": "2026-04-22T11:25:32.894443",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 23-03 Eq. Amcob.xlsx",
+      "hash": "20deb6af40bec4b439e4ff5586db920d",
+      "day": "2026-03-23",
+      "imported_at": "2026-04-22T11:25:44.662793",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 24-03 Eq. Amcob.xlsx",
+      "hash": "b66b0b58992d097bf7574ff17d0624e8",
+      "day": "2026-03-24",
+      "imported_at": "2026-04-22T11:25:55.890857",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 25-03 Eq. Amcob.xlsx",
+      "hash": "792590bbec1482fae6a7e4b281caf77a",
+      "day": "2026-03-25",
+      "imported_at": "2026-04-22T11:26:07.744476",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 26-03 Eq. Amcob.xlsx",
+      "hash": "0ca181fbf3c5d6c787540e1e1b2ea3ec",
+      "day": "2026-03-26",
+      "imported_at": "2026-04-22T11:26:18.880515",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 28-03 Eq. Amcob.xlsx",
+      "hash": "9c7bc1c98c9b5edbc046441caa30a289",
+      "day": "2026-03-28",
+      "imported_at": "2026-04-22T11:26:29.750768",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 29-03 Eq. Amcob.xlsx",
+      "hash": "36ee99c1836c349cff90ee85868899a2",
+      "day": "2026-03-29",
+      "imported_at": "2026-04-22T11:26:41.079876",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 30-03 Eq. Amcob.xlsx",
+      "hash": "113adef154872ae67e55f339ab6dbf48",
+      "day": "2026-03-30",
+      "imported_at": "2026-04-22T11:26:53.180121",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads 31-03 Eq. Amcob.xlsx",
+      "hash": "7c96c057698275b06d1b2a48729abf3b",
+      "day": "2026-03-31",
+      "imported_at": "2026-04-22T11:27:04.743768",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_16042026.xlsx",
+      "hash": "c6a9024ccfb6e4b29647a59d49904ac6",
+      "day": "1970-01-01",
+      "imported_at": "2026-04-22T11:31:41.650113",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_14042026.xlsx",
+      "hash": "ce378d398df37092418f0c0c1e855dba",
+      "day": "2026-04-14",
+      "imported_at": "2026-04-22T11:31:52.529166",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_15042026.xlsx",
+      "hash": "4d54a565904cf034f4c66f5f1d2d9fdc",
+      "day": "2026-04-15",
+      "imported_at": "2026-04-22T11:32:03.434121",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_17042026.xlsx",
+      "hash": "225aa27992dcf50060a60daa6fefa58d",
+      "day": "2026-04-17",
+      "imported_at": "2026-04-22T11:32:14.218331",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_19042026.xlsx",
+      "hash": "28822aebdf4137cba9d85f5e85fbec85",
+      "day": "2026-04-19",
+      "imported_at": "2026-04-22T11:32:25.470119",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_20042026.xlsx",
+      "hash": "28db97a4dfffe4d4392132ea9b4b8be0",
+      "day": "2026-04-20",
+      "imported_at": "2026-04-22T11:32:36.461182",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_21042026.xlsx",
+      "hash": "c3c26cad099ebec271e4b11493956fa8",
+      "day": "2026-04-21",
+      "imported_at": "2026-04-22T12:03:48.153521",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_22042026.xlsx",
+      "hash": "6dc7594fe69c84b450f3d1931feffd5b",
+      "day": "2026-04-22",
+      "imported_at": "2026-04-23T09:04:50.692347",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_23042026.xlsx",
+      "hash": "92317c9cbf46dfc87bb2668e08c0eae7",
+      "day": "2026-04-23",
+      "imported_at": "2026-04-24T08:49:57.160596",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_25042026.xlsx",
+      "hash": "2626e51a3afad34367852ae40df506c8",
+      "day": "2026-04-25",
+      "imported_at": "2026-04-26T16:40:52.803726",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_26042026.xlsx",
+      "hash": "4c50f3699bca5f24d8a7ad87569e0e1a",
+      "day": "2026-04-26",
+      "imported_at": "2026-04-27T09:09:05.129995",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_27042026.xlsx",
+      "hash": "8cc07b8a10447a470ac0cecac976610d",
+      "day": "2026-04-27",
+      "imported_at": "2026-04-28T09:00:18.760638",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_28042026.xlsx",
+      "hash": "4fe23309b57f4b2fe907073606e883da",
+      "day": "2026-04-28",
+      "imported_at": "2026-04-29T09:21:20.440409",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_29042026.xlsx",
+      "hash": "00a582265e2e2b6d0cf50afd441491db",
+      "day": "2026-04-29",
+      "imported_at": "2026-04-30T09:28:44.135802",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_30042026.xlsx",
+      "hash": "f8e9107b864efe241115c6c9fe283e1b",
+      "day": "2026-04-30",
+      "imported_at": "2026-05-01T10:37:47.214127",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_01052026.xlsx",
+      "hash": "5df32a8484fb239dbc16ce15764c3945",
+      "day": "2026-05-01",
+      "imported_at": "2026-05-04T08:12:39.346729",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_03052026.xlsx",
+      "hash": "a1f1d8fc8b72820e04a4a266803b7f27",
+      "day": "2026-05-03",
+      "imported_at": "2026-05-04T08:13:01.278766",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_04052026.xlsx",
+      "hash": "392963923502a0edc3bf5ecc688fe521",
+      "day": "2026-05-04",
+      "imported_at": "2026-05-05T11:56:34.377614",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_05052026.xlsx",
+      "hash": "5569963597074d6c9171430c99734299",
+      "day": "2026-05-05",
+      "imported_at": "2026-05-06T09:34:53.294966",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_06052026.xlsx",
+      "hash": "05b49498a842ab77872b5345be94bb40",
+      "day": "2026-05-06",
+      "imported_at": "2026-05-07T15:14:13.290012",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_07052026.xlsx",
+      "hash": "c118d370f0711c13ad79ec3e7f4c7c61",
+      "day": "2026-05-07",
+      "imported_at": "2026-05-08T08:12:48.939302",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_08052026.xlsx",
+      "hash": "7fcdf0ab5ca77b789ee04f82d90fc80d",
+      "day": "2026-05-08",
+      "imported_at": "2026-05-09T08:25:45.719043",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_10052026.xlsx",
+      "hash": "1d2027bcba4ba6ca3eb39e0eac933e7c",
+      "day": "2026-05-10",
+      "imported_at": "2026-05-11T22:30:54.070715",
+      "origin": "importacao_diaria"
+    }
+  ],
+  "updated_at": "2026-05-11T22:30:54.070715",
+  "last_processed": {
+    "day": "2026-05-10",
+    "imported_at": "2026-05-11T22:30:54.070715"
+  }
+}

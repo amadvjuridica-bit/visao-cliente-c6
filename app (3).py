@@ -300,6 +300,40 @@ def local_json_delete(path: str):
         os.remove(path)
 
 
+def _bootstrap_cloud_from_bundled_data():
+    """Atualiza a base Firestore do app publicado com os JSONs versionados no deploy."""
+    if "firebase" not in st.secrets:
+        return
+    seed_path = os.path.join(DATA_DIR, "cloud_seed_version.json")
+    if not os.path.exists(seed_path):
+        return
+    try:
+        with open(seed_path, "r", encoding="utf-8") as f:
+            seed = json.load(f)
+    except Exception:
+        return
+    version = str(seed.get("version") or "").strip()
+    if not version:
+        return
+    current = _fs_load_payload("cloud_seed_version.json", default={}) or {}
+    if str(current.get("version") or "") == version:
+        return
+    for name in seed.get("files", []):
+        name = os.path.basename(str(name or ""))
+        if not name.endswith(".json") or name.startswith("cloud_seed_version"):
+            continue
+        path = os.path.join(DATA_DIR, name)
+        if not os.path.exists(path):
+            continue
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
+            _fs_save_payload(name, payload)
+        except Exception:
+            continue
+    _fs_save_payload("cloud_seed_version.json", seed)
+
+
 def _df_to_store_payload(df: pd.DataFrame) -> dict:
     try:
         return json.loads(df.to_json(orient="split", date_format="iso", force_ascii=False))
@@ -7616,6 +7650,7 @@ apply_theme()
 if not login_gate():
     st.stop()
 
+_bootstrap_cloud_from_bundled_data()
 show_logo_and_title()
 st.divider()
 user_role = st.session_state.get("user_role", "admin")

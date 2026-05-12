@@ -1,0 +1,92 @@
+{
+  "categorias": {
+    "clt": {
+      "label": "Funcionários CLT",
+      "act_indicacao": 0.0,
+      "semana": [
+        {
+          "min": 1,
+          "max": 3,
+          "valor": 2.5
+        },
+        {
+          "min": 4,
+          "max": 5,
+          "valor": 5.0
+        },
+        {
+          "min": 6,
+          "max": 999,
+          "valor": 7.0
+        }
+      ],
+      "sabado": [
+        {
+          "min": 1,
+          "max": 2,
+          "valor": 5.0
+        },
+        {
+          "min": 3,
+          "max": 4,
+          "valor": 10.0
+        },
+        {
+          "min": 5,
+          "max": 999,
+          "valor": 15.0
+        }
+      ]
+    },
+    "estagiario": {
+      "label": "Estagiários",
+      "act_indicacao": 0.0,
+      "semana": [
+        {
+          "min": 1,
+          "max": 3,
+          "valor": 2.5
+        },
+        {
+          "min": 4,
+          "max": 5,
+          "valor": 5.0
+        },
+        {
+          "min": 6,
+          "max": 999,
+          "valor": 7.0
+        }
+      ],
+      "sabado": [
+        {
+          "min": 1,
+          "max": 2,
+          "valor": 5.0
+        },
+        {
+          "min": 3,
+          "max": 4,
+          "valor": 10.0
+        },
+        {
+          "min": 5,
+          "max": 999,
+          "valor": 15.0
+        }
+      ]
+    }
+  },
+  "operadores": {
+    "CAMILA HOSANA ROJAS ARAUJO": "estagiario",
+    "CARLOS AUGUSTO BRITTES DOS SAN": "clt",
+    "DANIEL DEL OLMO ALVES": "estagiario",
+    "HELLEN CRISTYNE DE SOUSA SANTO": "estagiario",
+    "ISABELA FERREIRA": "estagiario",
+    "ISADORA VARGAS RIBEIRO": "estagiario",
+    "LIVIA ALVES GRANJA": "estagiario",
+    "LUIZ EDUARDO": "estagiario",
+    "LUIZ EDUARDO CAPOVILLA": "clt",
+    "SUPORTE XPRISMA": "clt"
+  }
+}

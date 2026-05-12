@@ -1,0 +1,42 @@
+{
+  "01/2026": {
+    "saldo_total": 21425736.53,
+    "pix_com": 1952,
+    "pix_sem": 1187,
+    "domicilio_c6": 223,
+    "qualificadas_arquivo": 635,
+    "arquivo_c6": "AnalíticoVisãoCliente3101Eq.Amcob.xlsx"
+  },
+  "02/2026": {
+    "saldo_total": 31289757.060000002,
+    "pix_com": 2255,
+    "pix_sem": 1288,
+    "domicilio_c6": 287,
+    "qualificadas_arquivo": 866,
+    "arquivo_c6": "Analítico Visão Cliente 28-02 Eq. Amcob.xlsx"
+  },
+  "03/2026": {
+    "saldo_total": 72696658.04999998,
+    "pix_com": 1890,
+    "pix_sem": 1065,
+    "domicilio_c6": 283,
+    "qualificadas_arquivo": 868,
+    "arquivo_c6": "Analítico Visão Cliente 31-03 Eq. Amcob.xlsx"
+  },
+  "04/2026": {
+    "saldo_total": 71055523.37,
+    "pix_com": 1343,
+    "pix_sem": 593,
+    "domicilio_c6": 214,
+    "qualificadas_arquivo": 677,
+    "arquivo_c6": "Analítico Visão Cliente_30042026.xlsx"
+  },
+  "05/2026": {
+    "saldo_total": 3621062.9,
+    "pix_com": 762,
+    "pix_sem": 357,
+    "domicilio_c6": 124,
+    "qualificadas_arquivo": 224,
+    "arquivo_c6": "Analítico Visão Cliente_10052026.xlsx"
+  }
+}
