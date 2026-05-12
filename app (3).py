@@ -7830,7 +7830,10 @@ if "Painel C6 Empresas" in tabs_map:
 
     st.divider()
 
-    if df_c6 is None or df_c6.empty:
+    _daily_upload = bool((up_c6 and len(up_c6) > 0) or (up_leads and len(up_leads) > 0))
+    _monthly_upload = bool(up_monthly and len(up_monthly) > 0)
+
+    if _daily_upload and (df_c6 is None or df_c6.empty):
         df_c6_cache, _, _ = _load_daily_import_cache("visao")
         if df_c6_cache is not None and not df_c6_cache.empty:
             df_c6 = df_c6_cache.copy()
@@ -7845,7 +7848,7 @@ if "Painel C6 Empresas" in tabs_map:
                 }
                 local_json_save(C6_DAILY_IMPORT_META, meta_tmp)
 
-    if df_leads is None or df_leads.empty:
+    if _daily_upload and (df_leads is None or df_leads.empty):
         df_leads_cache, _, _ = _load_daily_import_cache("leads")
         if df_leads_cache is not None and not df_leads_cache.empty:
             df_leads = df_leads_cache.copy()
@@ -7872,15 +7875,14 @@ if "Painel C6 Empresas" in tabs_map:
             "Nessa situação, o comparativo diário não grava contas abertas zeradas por falta de Visão Cliente do mesmo dia."
         )
 
-    _cmp_pending = _refresh_compare_pending_from_daily_c6(df_c6, _cmp_pending)
-    _cmp_pending = _refresh_compare_pending_from_daily_leads(df_leads, _cmp_pending)
+    if _daily_upload:
+        _cmp_pending = _refresh_compare_pending_from_daily_c6(df_c6, _cmp_pending)
+        _cmp_pending = _refresh_compare_pending_from_daily_leads(df_leads, _cmp_pending)
 
     saved_resumo = safe_json_load(HIST_RESUMO_MENSAL, default={})
     _panel_sig_now = _panel_c6_refresh_signature()
     _panel_refresh_meta = local_json_load(PANEL_C6_REFRESH_META, default={}) or {}
     _panel_sig_last = str(_panel_refresh_meta.get("signature", "") or "")
-    _daily_upload = bool((up_c6 and len(up_c6) > 0) or (up_leads and len(up_leads) > 0))
-    _monthly_upload = bool(up_monthly and len(up_monthly) > 0)
     _cached_incremental_df = _load_panel_c6_cached_df(PANEL_C6_INCREMENTAL_CACHE)
     _cached_cartilha_nova_df = _load_panel_c6_cached_df(PANEL_C6_CARTILHA_NOVA_CACHE)
     _needs_full_panel_refresh = bool(_monthly_upload or ((_panel_sig_now != _panel_sig_last) and not _daily_upload and (_cached_incremental_df.empty or _cached_cartilha_nova_df.empty)))
