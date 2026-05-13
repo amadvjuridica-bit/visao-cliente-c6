@@ -8086,6 +8086,22 @@ if "Painel C6 Empresas" in tabs_map:
     else:
         _cached_incremental_df = _load_panel_c6_cached_df(PANEL_C6_INCREMENTAL_CACHE)
         _cached_cartilha_nova_df = _load_panel_c6_cached_df(PANEL_C6_CARTILHA_NOVA_CACHE)
+    if not _daily_upload and not _monthly_upload:
+        _remun_meta = safe_json_load(PANEL_C6_REFRESH_META, default={}) or {}
+        _last_remun_key = str(_remun_meta.get("last_remun_refresh_key", "") or "")
+        _import_meta_for_remun = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
+        _visao_meta_for_remun = _import_meta_for_remun.get("visao", {}) or {}
+        _remun_key_now = str(_visao_meta_for_remun.get("cached_at") or _visao_meta_for_remun.get("name") or "")
+        if _remun_key_now and _remun_key_now != _last_remun_key:
+            df_c6_cache, _, _ = _load_daily_import_cache("visao")
+            if df_c6_cache is not None and not df_c6_cache.empty:
+                _mes_rel_remun = detect_report_month_from_df(df_c6_cache)
+                if _mes_rel_remun:
+                    _refresh_current_month_remuneration_from_rows(fmt_month(_mes_rel_remun), _visao_month_rows_from_df(df_c6_cache))
+                    _cached_incremental_df = _load_panel_c6_cached_df(PANEL_C6_INCREMENTAL_CACHE)
+                    _cached_cartilha_nova_df = _load_panel_c6_cached_df(PANEL_C6_CARTILHA_NOVA_CACHE)
+                    _remun_meta["last_remun_refresh_key"] = _remun_key_now
+                    safe_json_save(PANEL_C6_REFRESH_META, _remun_meta)
     _needs_full_panel_refresh = bool(_monthly_upload or ((_panel_sig_now != _panel_sig_last) and not _daily_upload and (_cached_incremental_df.empty or _cached_cartilha_nova_df.empty)))
     if _needs_full_panel_refresh:
         _panel_cartilha_nova_df = recompute_cartilha_nova()
