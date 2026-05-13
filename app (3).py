@@ -964,6 +964,24 @@ def _save_panel_c6_cached_df(path: str, df: pd.DataFrame):
         pass
 
 
+def _patch_panel_cache_row(path: str, month_key: str, row: list):
+    payload = local_json_load(path, default={}) or {}
+    data = payload.get("data", []) if isinstance(payload, dict) else []
+    if not isinstance(data, list):
+        data = []
+    updated = False
+    for existing in data:
+        if existing and str(existing[0]) == str(month_key):
+            existing[:] = row
+            updated = True
+            break
+    if not updated:
+        data.append(row)
+    payload["data"] = data
+    payload["index"] = list(range(len(data)))
+    local_json_save(path, payload)
+
+
 @st.cache_data(show_spinner=False)
 def _read_excel_path_cached(path: str, mtime_ns: int, size: int) -> pd.DataFrame:
     return pd.read_excel(path, engine="openpyxl")
@@ -5507,6 +5525,136 @@ def _visao_month_openings_count(mkey: str) -> int:
     return total
 
 
+def _refresh_current_month_remuneration_from_rows(mkey: str, month_rows: Dict[str, dict]):
+    valid_rows = [(str(cnpj), row) for cnpj, row in (month_rows or {}).items() if _c6_visao_row_eligible_pj(row)]
+
+    old_paid_before = _old_paid_max_before(mkey)
+    old_levels = {cnpj: int(_supervisor_level(row)) for cnpj, row in valid_rows if int(_supervisor_level(row)) >= 1}
+    qtd_old = len(old_levels)
+    faixa_nome, precos = faixa_por_qtd(qtd_old) if mkey != "12/2025" else (FAIXAS[-1][1], FAIXAS[-1][2])
+    lvl_counts = {1: 0, 2: 0, 3: 0, 4: 0}
+    old_cheio = 0.0
+    old_receber = 0.0
+    for cnpj, row in valid_rows:
+        nivel = int(_supervisor_level(row))
+        if nivel < 1:
+            continue
+        if nivel in lvl_counts:
+            lvl_counts[nivel] += 1
+        bank_old = _old_bank_cartilha_values(row)
+        if bank_old is not None:
+            cheio, _, receber = bank_old
+        else:
+            cheio = float(precos.get(nivel, 0.0))
+            ja_pago = _old_prior_paid_value(old_paid_before, cnpj, mkey)
+            receber = max(0.0, cheio - ja_pago)
+        old_cheio += cheio
+        old_receber += receber
+    old_summary = {
+        "faixa": faixa_nome,
+        "qualificadas": qtd_old,
+        "n1": lvl_counts[1],
+        "n2": lvl_counts[2],
+        "n3": lvl_counts[3],
+        "n4": lvl_counts[4],
+        "deveria_receber": old_cheio,
+        "ja_pago_ref": max(0.0, old_cheio - old_receber),
+        "receber_mes": old_receber,
+    }
+    old_store = safe_json_load(HIST_RESUMO_MENSAL, default={}) or {}
+    old_store[mkey] = old_summary
+    safe_json_save(HIST_RESUMO_MENSAL, old_store)
+    _patch_panel_cache_row(PANEL_C6_INCREMENTAL_CACHE, mkey, [
+        mkey, faixa_nome, qtd_old, lvl_counts[1], lvl_counts[2], lvl_counts[3], lvl_counts[4],
+        old_summary["deveria_receber"], old_summary["ja_pago_ref"], old_summary["receber_mes"],
+    ])
+
+    use_bank_values = _nova_month_uses_bank_values(valid_rows)
+    qtd_new = 0
+    tmp = {}
+    fator_pref = float(_nova_cartilha_fator_por_qualificadas(0))
+    for cnpj, row in valid_rows:
+        bank_vals = _nova_bank_cartilha_values(row) if use_bank_values else None
+        if bank_vals is not None:
+            best0 = bank_vals[0]
+        else:
+            best0 = max(
+                _nova_cashin_amount(float(row.get("cash_in_valor", 0.0) or 0.0), fator_pref),
+                _nova_spending_amount(float(row.get("spending_total_mtd", 0.0) or 0.0), fator_pref),
+                _nova_tpv_amount(_nova_tpv_for_cartilha(row), fator_pref),
+            )
+        if best0 > 0:
+            qtd_new += 1
+        tmp[cnpj] = row
+
+    fator_mes = float(_nova_cartilha_fator_por_qualificadas(qtd_new))
+    paid_max: Dict[str, dict] = dict(_nova_cartilha_paid_max_start([mkey]))
+    detail_counts = {"cash_in": 0, "spending": 0, "c6pay": 0, "pix_cnpj": 0, "wallet": 0}
+    new_cheio = 0.0
+    new_receber = 0.0
+    c6pay_credenciados = 0
+    for cnpj, row in tmp.items():
+        cash_amt = _nova_cashin_amount(float(row.get("cash_in_valor", 0.0) or 0.0), fator_mes)
+        spending_amt = _nova_spending_amount(float(row.get("spending_total_mtd", 0.0) or 0.0), fator_mes)
+        tpv_amt = _nova_tpv_amount(_nova_tpv_for_cartilha(row), fator_mes)
+        best_amt = max(cash_amt, spending_amt, tpv_amt)
+        bank_vals = _nova_bank_cartilha_values(row) if use_bank_values else None
+        if bank_vals is not None:
+            best_amt, bank_receive = bank_vals
+        else:
+            bank_receive = None
+        if best_amt > 0:
+            if best_amt == tpv_amt:
+                detail_counts["c6pay"] += 1
+            elif best_amt == spending_amt:
+                detail_counts["spending"] += 1
+            else:
+                detail_counts["cash_in"] += 1
+        cnpjx = _normalize_cnpj_text(cnpj)
+        prev = _nova_prior_paid_value(paid_max, cnpjx, mkey)
+        diff = max(0.0, best_amt - prev) if bank_receive is None else max(0.0, bank_receive)
+        pix_bonus = 0.0
+        if bank_receive is None and mkey == "06/2026" and best_amt > 0 and _pix_has_cnpj(row.get("chaves_pix_forte", "")):
+            pix_bonus = 15.0
+        best_total = best_amt + pix_bonus
+        diff_total = diff + pix_bonus
+        new_cheio += best_total
+        new_receber += diff_total
+        _nova_paid_update(paid_max, cnpjx, mkey, diff_total)
+        if pix_bonus > 0:
+            detail_counts["pix_cnpj"] += 1
+        dt_abertura = _parse_br_date_text(row.get("dt_conta_criada"))
+        dt_install = _parse_br_date_text(row.get("dt_install_maq"))
+        if dt_abertura and dt_install and fmt_month(dt_abertura) == mkey:
+            c6pay_credenciados += 1
+        dt_entrega = _parse_br_date_text(row.get("dt_entrega_cartao"))
+        if dt_entrega and fmt_month(dt_entrega) == mkey and _truthy_flag(row.get("wallet")):
+            detail_counts["wallet"] += 1
+
+    new_summary = {
+        "qualificadas": qtd_new,
+        "acelerador": fator_mes,
+        "cash_in": detail_counts["cash_in"],
+        "spending": detail_counts["spending"],
+        "c6pay": detail_counts["c6pay"],
+        "c6pay_credenciamento": c6pay_credenciados,
+        "pix_cnpj": detail_counts["pix_cnpj"],
+        "wallet": detail_counts["wallet"],
+        "deveria_receber": new_cheio,
+        "ja_pago_ref": max(0.0, new_cheio - new_receber),
+        "receber_mes": new_receber,
+    }
+    new_store = safe_json_load(HIST_NOVA_RESUMO_MENSAL, default={}) or {}
+    new_store[mkey] = new_summary
+    safe_json_save(HIST_NOVA_RESUMO_MENSAL, new_store)
+    safe_json_save(HIST_NOVA_PAGO_POR_CNPJ, paid_max)
+    _patch_panel_cache_row(PANEL_C6_CARTILHA_NOVA_CACHE, mkey, [
+        mkey, qtd_new, fator_mes, detail_counts["cash_in"], detail_counts["spending"],
+        detail_counts["c6pay"], c6pay_credenciados, detail_counts["pix_cnpj"], detail_counts["wallet"],
+        new_summary["deveria_receber"], new_summary["ja_pago_ref"], new_summary["receber_mes"],
+    ])
+
+
 def _visao_df_openings_count(df_visao: pd.DataFrame, report_month: Optional[dt.date] = None) -> int:
     if df_visao is None or df_visao.empty or COL_ABERTURA not in df_visao.columns:
         return 0
@@ -7746,6 +7894,11 @@ if "Painel C6 Empresas" in tabs_map:
             df_c6[COL_CRIT] = normalize_str(df_c6[COL_CRIT])
 
             _persist_visao_month_snapshot(df_c6)
+            if mes_rel:
+                try:
+                    _refresh_current_month_remuneration_from_rows(fmt_month(mes_rel), _visao_month_rows_from_df(df_c6))
+                except Exception as exc:
+                    st.warning(f"Não foi possível recalcular a remuneração do mês importado agora: {exc}")
             _persist_visao_funil_track(df_c6)
             persist_supervisor_c6_daily(df_c6)
 
