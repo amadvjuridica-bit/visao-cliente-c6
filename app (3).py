@@ -8081,13 +8081,9 @@ if "Painel C6 Empresas" in tabs_map:
     _panel_sig_now = _panel_c6_refresh_signature()
     _panel_refresh_meta = local_json_load(PANEL_C6_REFRESH_META, default={}) or {}
     _panel_sig_last = str(_panel_refresh_meta.get("signature", "") or "")
-    if _cloud_fast_open() and not _daily_upload and not _monthly_upload:
-        _cached_incremental_df = pd.DataFrame()
-        _cached_cartilha_nova_df = pd.DataFrame()
-    else:
-        _cached_incremental_df = _load_panel_c6_cached_df(PANEL_C6_INCREMENTAL_CACHE)
-        _cached_cartilha_nova_df = _load_panel_c6_cached_df(PANEL_C6_CARTILHA_NOVA_CACHE)
-    if not _daily_upload and not _monthly_upload:
+    _cached_incremental_df = _load_panel_c6_cached_df(PANEL_C6_INCREMENTAL_CACHE)
+    _cached_cartilha_nova_df = _load_panel_c6_cached_df(PANEL_C6_CARTILHA_NOVA_CACHE)
+    if not _cloud_fast_open() and not _daily_upload and not _monthly_upload:
         _remun_meta = safe_json_load(PANEL_C6_REFRESH_META, default={}) or {}
         _last_remun_key = str(_remun_meta.get("last_remun_refresh_key", "") or "")
         _import_meta_for_remun = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
