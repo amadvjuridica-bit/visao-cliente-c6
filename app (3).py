@@ -1085,7 +1085,7 @@ def _save_ops_import_cache(file_name: str, raw_bytes: bytes):
         try:
             fake_upload = type("UploadedCache", (), {"getvalue": lambda self: raw_bytes, "name": str(file_name or "c6_operacao_cache.csv")})()
             df_cache = _read_ops_file(fake_upload)
-            if df_cache is not None:
+            if df_cache is not None and not df_cache.empty:
                 safe_json_save(C6_OPS_CACHE, _df_to_store_payload(df_cache))
         except Exception:
             pass
@@ -6429,6 +6429,34 @@ def _normalize_status_key(v) -> str:
 def _read_ops_file(uploaded_file) -> pd.DataFrame:
     raw = uploaded_file.getvalue()
     name = uploaded_file.name.lower()
+
+    def _fix_shifted_resumo_operadores(df: pd.DataFrame) -> pd.DataFrame:
+        cols = [str(c) for c in df.columns]
+        if not {"Nome", "CPF / CNPJ", "Agente"}.issubset(set(cols)):
+            return df
+        first_vals = df["Nome"].dropna().astype(str).head(20)
+        if first_vals.empty or first_vals.str.replace(r"\D+", "", regex=True).str.len().lt(11).all():
+            return df
+        fixed = pd.DataFrame(index=df.index)
+        fixed["Nome"] = ""
+        fixed["Cód"] = df["Cód"] if "Cód" in df.columns else ""
+        fixed["CPF / CNPJ"] = df["Nome"]
+        fixed["Agente Flag"] = ""
+        fixed["Agente"] = df["CPF / CNPJ"]
+        fixed["Ação"] = df["Agente"]
+        fixed["Data"] = df["Unnamed: 4"] if "Unnamed: 4" in df.columns else ""
+        fixed["Hora"] = df["Ação"] if "Ação" in df.columns else ""
+        fixed["Histórico"] = df["Data"] if "Data" in df.columns else ""
+        fixed["Fila"] = df["Hora"] if "Hora" in df.columns else ""
+        fixed["Fone Discado"] = df["Histórico"] if "Histórico" in df.columns else ""
+        fixed["Credor"] = df["Fone Discado"] if "Fone Discado" in df.columns else ""
+        fixed["Atraso"] = df["Credor"] if "Credor" in df.columns else ""
+        fixed["Valor"] = df["Atraso"] if "Atraso" in df.columns else ""
+        fixed["Inclusão"] = df["Valor"] if "Valor" in df.columns else ""
+        fixed["CDEC"] = df["Inclusão"] if "Inclusão" in df.columns else ""
+        fixed["Fase"] = df["Fase"] if "Fase" in df.columns else ""
+        return fixed
+
     if name.endswith(".csv"):
         try:
             text = raw.decode("utf-8-sig", errors="replace")
@@ -6449,7 +6477,7 @@ def _read_ops_file(uploaded_file) -> pd.DataFrame:
                         elif len(parts) > 17:
                             parts = parts[:16] + [";".join(parts[16:])]
                         rows.append(parts)
-                    return pd.DataFrame(rows, columns=fixed_cols, dtype=str)
+                    return _fix_shifted_resumo_operadores(pd.DataFrame(rows, columns=fixed_cols, dtype=str))
         except Exception:
             pass
         last_err = None
@@ -6458,11 +6486,11 @@ def _read_ops_file(uploaded_file) -> pd.DataFrame:
                 try:
                     df = pd.read_csv(io.BytesIO(raw), sep=sep, dtype=str, encoding=enc)
                     if len(df.columns) > 1:
-                        return df
+                        return _fix_shifted_resumo_operadores(df)
                 except Exception as e:
                     last_err = e
         raise last_err
-    return pd.read_excel(io.BytesIO(raw), dtype=str, engine="openpyxl")
+    return _fix_shifted_resumo_operadores(pd.read_excel(io.BytesIO(raw), dtype=str, engine="openpyxl"))
 
 def _days_between(start_ts, end_ts) -> Optional[int]:
     if pd.isna(start_ts) or pd.isna(end_ts):
@@ -7663,10 +7691,14 @@ def _render_c6_operacao_tab(view_only: bool = False, operator_filter: str = ""):
     up_visao = None
     if up_ops:
         raw_ops_bytes = up_ops.getvalue()
-        st.session_state["c6_operacao_ops_df"] = _read_ops_file(up_ops)
-        st.session_state["c6_operacao_ops_df__name"] = up_ops.name
-        st.session_state["c6_operacao_ops_df__ts"] = dt.datetime.now().timestamp()
-        _save_ops_import_cache(up_ops.name, raw_ops_bytes)
+        df_ops_upload = _read_ops_file(up_ops)
+        if df_ops_upload is not None and not df_ops_upload.empty:
+            st.session_state["c6_operacao_ops_df"] = df_ops_upload
+            st.session_state["c6_operacao_ops_df__name"] = up_ops.name
+            st.session_state["c6_operacao_ops_df__ts"] = dt.datetime.now().timestamp()
+            _save_ops_import_cache(up_ops.name, raw_ops_bytes)
+        else:
+            st.warning("Arquivo de operadores veio vazio ou não foi reconhecido; mantive o último cache válido.")
 
     def _pick_latest_session_df(options):
         best_df = None
