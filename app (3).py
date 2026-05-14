@@ -207,7 +207,7 @@ C6_OPS_CACHE_META = os.path.join(DATA_DIR, "c6_operacao_ops_cache_meta.json")
 PANEL_C6_REFRESH_META = os.path.join(DATA_DIR, "panel_c6_refresh_meta.json")
 PANEL_C6_INCREMENTAL_CACHE = os.path.join(DATA_DIR, "panel_c6_incremental_cache.json")
 PANEL_C6_CARTILHA_NOVA_CACHE = os.path.join(DATA_DIR, "panel_c6_cartilha_nova_cache.json")
-REMUN_ENGINE_VERSION = "2026-05-13-remun-winner-memory-v5"
+REMUN_ENGINE_VERSION = "2026-05-13-remun-winner-memory-v6"
 
 PIX_VALID_VALUES = {
     "CNPJ",
@@ -2687,6 +2687,8 @@ def _nova_paid_ref_for_month(month_key: str) -> Dict[str, float]:
 
 
 def _new_cartilha_full_amount_from_row(row: dict) -> float:
+    if str((row or {}).get("mes_ref_comiss", "") or "").strip().upper() not in {"M0", "M1", "M2"}:
+        return 0.0
     fator = float(_nova_cartilha_fator_por_qualificadas(0))
     return max(
         _nova_cashin_amount(float((row or {}).get("cash_in_valor", 0.0) or 0.0), fator),
@@ -2743,8 +2745,11 @@ def _nova_prior_paid_value(paid_max: dict, cnpj: str, current_month: str) -> flo
     """Abate o valor já pago pela cartilha vencedora dos meses anteriores."""
     nk = _normalize_cnpj_text(cnpj)
     winner_prev = _winner_paid_before_month(current_month)
+    ref_month = _nova_paid_ref_for_month(current_month)
     if nk in winner_prev:
-        return float(winner_prev.get(nk, 0.0) or 0.0)
+        return max(float(winner_prev.get(nk, 0.0) or 0.0), float(ref_month.get(nk, 0.0) or 0.0))
+    if nk in ref_month:
+        return float(ref_month.get(nk, 0.0) or 0.0)
     nova_prev = _nova_paid_value(paid_max, nk, current_month)
     old_prev = 0.0
     try:
@@ -2772,8 +2777,11 @@ def _old_prior_paid_value(old_paid_before: dict, cnpj: str, current_month: str) 
     """Abate o valor já pago pela cartilha vencedora dos meses anteriores."""
     nk = _normalize_cnpj_text(cnpj)
     winner_prev = _winner_paid_before_month(current_month)
+    ref_month = _old_paid_ref_for_month(current_month)
     if nk in winner_prev:
-        return float(winner_prev.get(nk, 0.0) or 0.0)
+        return max(float(winner_prev.get(nk, 0.0) or 0.0), float(ref_month.get(nk, 0.0) or 0.0))
+    if nk in ref_month:
+        return float(ref_month.get(nk, 0.0) or 0.0)
     old_prev = 0.0
     try:
         old_prev = float((old_paid_before or {}).get(nk, 0.0) or 0.0)
@@ -2870,6 +2878,8 @@ def _nova_tpv_for_stage(row: dict) -> float:
 
 
 def _nova_tpv_for_cartilha(row: dict) -> float:
+    if str((row or {}).get("mes_ref_comiss", "") or "").strip().upper() not in {"M0", "M1", "M2"}:
+        return 0.0
     return float(row.get("tpv_m0_valor", row.get("tpv_m0", 0.0)) or 0.0)
 
 
