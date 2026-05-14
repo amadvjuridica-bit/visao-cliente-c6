@@ -207,7 +207,7 @@ C6_OPS_CACHE_META = os.path.join(DATA_DIR, "c6_operacao_ops_cache_meta.json")
 PANEL_C6_REFRESH_META = os.path.join(DATA_DIR, "panel_c6_refresh_meta.json")
 PANEL_C6_INCREMENTAL_CACHE = os.path.join(DATA_DIR, "panel_c6_incremental_cache.json")
 PANEL_C6_CARTILHA_NOVA_CACHE = os.path.join(DATA_DIR, "panel_c6_cartilha_nova_cache.json")
-REMUN_ENGINE_VERSION = "2026-05-13-remun-full-paid-history-v3"
+REMUN_ENGINE_VERSION = "2026-05-13-remun-paid-ref-and-full-history-v4"
 
 PIX_VALID_VALUES = {
     "CNPJ",
@@ -2687,8 +2687,11 @@ def _nova_paid_ref_for_month(month_key: str) -> Dict[str, float]:
 
 
 def _nova_prior_paid_value(paid_max: dict, cnpj: str, current_month: str) -> float:
-    """Abate o maior valor cheio já alcançado antes, calculado pelo histórico do app."""
+    """Abate o já pago real quando recuperado do banco; senão usa o histórico calculado."""
     nk = _normalize_cnpj_text(cnpj)
+    ref_month = _nova_paid_ref_for_month(current_month)
+    if nk in ref_month:
+        return float(ref_month.get(nk, 0.0) or 0.0)
     nova_prev = _nova_paid_value(paid_max, nk, current_month)
     old_prev = 0.0
     try:
@@ -2713,8 +2716,11 @@ def _old_paid_ref_for_month(month_key: str) -> Dict[str, float]:
 
 
 def _old_prior_paid_value(old_paid_before: dict, cnpj: str, current_month: str) -> float:
-    """Abate o maior valor cheio já alcançado antes, calculado pelo histórico do app."""
+    """Abate o já pago real quando recuperado do banco; senão usa o histórico calculado."""
     nk = _normalize_cnpj_text(cnpj)
+    ref_month = _old_paid_ref_for_month(current_month)
+    if nk in ref_month:
+        return float(ref_month.get(nk, 0.0) or 0.0)
     old_prev = 0.0
     try:
         old_prev = float((old_paid_before or {}).get(nk, 0.0) or 0.0)
