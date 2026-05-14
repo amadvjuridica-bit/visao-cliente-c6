@@ -207,6 +207,7 @@ C6_OPS_CACHE_META = os.path.join(DATA_DIR, "c6_operacao_ops_cache_meta.json")
 PANEL_C6_REFRESH_META = os.path.join(DATA_DIR, "panel_c6_refresh_meta.json")
 PANEL_C6_INCREMENTAL_CACHE = os.path.join(DATA_DIR, "panel_c6_incremental_cache.json")
 PANEL_C6_CARTILHA_NOVA_CACHE = os.path.join(DATA_DIR, "panel_c6_cartilha_nova_cache.json")
+REMUN_ENGINE_VERSION = "2026-05-13-remun-upload-recalc-v2"
 
 PIX_VALID_VALUES = {
     "CNPJ",
@@ -941,7 +942,7 @@ def _panel_c6_refresh_signature() -> str:
         "visao_files": _temp_import_state("visao"),
         "leads_files": _temp_import_state("leads"),
         # Bump quando mudar lógica da cartilha nova / painel (invalida cache em disco).
-        "_cartilha_nova_engine": "2026-05-bank-old-new-authoritative",
+        "_cartilha_nova_engine": REMUN_ENGINE_VERSION,
     }
     try:
         return json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
@@ -8091,7 +8092,7 @@ if "Painel C6 Empresas" in tabs_map:
         _last_remun_key = str(_remun_meta.get("last_remun_refresh_key", "") or "")
         _import_meta_for_remun = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
         _visao_meta_for_remun = _import_meta_for_remun.get("visao", {}) or {}
-        _remun_key_now = str(_visao_meta_for_remun.get("cached_at") or _visao_meta_for_remun.get("name") or "")
+        _remun_key_now = f"{REMUN_ENGINE_VERSION}|{str(_visao_meta_for_remun.get('cached_at') or _visao_meta_for_remun.get('name') or '')}"
         if _remun_key_now and _remun_key_now != _last_remun_key:
             df_c6_cache, _, _ = _load_daily_import_cache("visao")
             if df_c6_cache is not None and not df_c6_cache.empty:
