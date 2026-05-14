@@ -5423,6 +5423,14 @@ def _operator_pdf_view(report_key: str, df: pd.DataFrame) -> pd.DataFrame:
             ("eficiencia_%", "Eficiência %"),
             ("comissao_total", "Comissão"),
         ]
+    elif key == "act_conversao":
+        cols = [
+            ("operador", "Operador"),
+            ("clientes_act", "Clientes ACT"),
+            ("clientes_abriram_conta", "Abriram conta"),
+            ("clientes_abriram_14d", "Abertas 14d"),
+            ("conversao_%", "Conversão %"),
+        ]
     elif key == "oco":
         cols = [
             ("operador", "Operador"),
@@ -7316,10 +7324,28 @@ def _process_c6_operacao(df_ops_raw: pd.DataFrame, df_leads_raw: pd.DataFrame, d
     act_rep["dias_ate_abertura"] = act_rep.apply(lambda r: _days_between(r.get("data_hora_cadastro"), r.get("dt_conta_criada")), axis=1)
     act_rep["mes_ref"] = act_rep["data_hora_cadastro"].dt.strftime("%Y-%m").fillna("")
     act_rep = act_rep[act_rep["operador"].fillna("").astype(str).str.strip().ne("")].copy()
-    act_rep = act_rep[["operador", "tipo_operador", "categoria_operador", "operador_ativo", "operador_relatorio", "nome_cliente", "cnpj", "data_acao", "data_hora_cadastro", "dt_conta_criada", "dia_comissao", "mes_ref_comissao", "dt_fundacao_empresa", "faixa_idade_empresa", "dias_ate_abertura", "abriu_apos_indicacao", "janela_14d", "qtd_aberturas_dia_operador", "motivo_remuneracao", "valor_unitario", "valor_indicacao", "valor_bonus", "valor_total", "mes_ref"]].sort_values(["operador", "data_acao", "nome_cliente"], na_position="last")
+    act_cols = [
+        "operador", "tipo_operador", "categoria_operador", "operador_ativo", "operador_relatorio",
+        "nome_cliente", "cnpj", "status_abertura_conta", "status_final", "pendencias",
+        "data_acao", "data_hora_cadastro", "dt_conta_criada", "dia_comissao", "mes_ref_comissao",
+        "dt_fundacao_empresa", "faixa_idade_empresa", "dias_ate_abertura", "abriu_apos_indicacao",
+        "janela_14d", "qtd_aberturas_dia_operador", "motivo_remuneracao", "valor_unitario",
+        "valor_indicacao", "valor_bonus", "valor_total", "mes_ref"
+    ]
+    for col in ["status_abertura_conta", "status_final", "pendencias"]:
+        if col not in act_rep.columns:
+            act_rep[col] = ""
+    act_rep = act_rep[act_cols].sort_values(["operador", "data_acao", "nome_cliente"], na_position="last")
     act_oper_base = act_rep[act_rep["operador_ativo"]].copy()
     act_oper = act_oper_base.groupby(["operador", "tipo_operador"], dropna=False).agg(clientes_indicados=("cnpj", "nunique"), contas_abertas=("abriu_apos_indicacao", "sum"), abertas_14d=("janela_14d", "sum"), comissao_total=("valor_total", "sum"), aparece_email=("operador_relatorio", "max")).reset_index()
     act_oper["eficiencia_%"] = (act_oper["contas_abertas"] / act_oper["clientes_indicados"].replace(0, pd.NA) * 100).fillna(0).round(2)
+    act_conversao_operadores = act_oper.rename(columns={
+        "clientes_indicados": "clientes_act",
+        "contas_abertas": "clientes_abriram_conta",
+        "abertas_14d": "clientes_abriram_14d",
+        "eficiencia_%": "conversao_%"
+    })[["operador", "tipo_operador", "clientes_act", "clientes_abriram_conta", "clientes_abriram_14d", "conversao_%", "comissao_total", "aparece_email"]].copy()
+    act_conversao_operadores = act_conversao_operadores.sort_values(["conversao_%", "clientes_abriram_conta", "clientes_act"], ascending=[False, False, False])
     act_daily_base = act_rep[act_rep["operador_ativo"] & act_rep["dia_comissao"].notna()].copy()
     act_diario = act_daily_base.groupby(["dia_comissao", "operador", "tipo_operador"], dropna=False).agg(clientes_indicados=("cnpj", "nunique"), contas_abertas=("abriu_apos_indicacao", "sum"), abertas_14d=("janela_14d", "sum"), comissao_total=("valor_total", "sum"), aparece_email=("operador_relatorio", "max")).reset_index()
     if not act_diario.empty:
@@ -7491,7 +7517,7 @@ def _process_c6_operacao(df_ops_raw: pd.DataFrame, df_leads_raw: pd.DataFrame, d
             omc_maxpay[row["cnpj"]] = {"max_paid": float(max(float(row["valor_ja_pago"]), float(row["valor_teorico"]))), "month": row["mes_base"], "operador": row.get("operador", "")}
         _save_c6_ops_history(imports_log, pix_track, omc_maxpay)
 
-    return {"act_report": act_rep, "act_operadores": act_oper.sort_values(["comissao_total", "abertas_14d"], ascending=False), "act_diario": act_diario, "act_diario_atual": act_diario_atual, "act_mensal": act_mensal, "act_faixa": act_faixa, "oab_report": oab_screen, "oab_operadores": oab_oper.sort_values(["comissao_total", "contas_validas"], ascending=False), "bko_alerta": bko_alerta, "bko_summary": bko_sum, "bko_status_summary": bko_status_summary, "omc_report": omc_screen, "omc_operadores": omc_oper.sort_values(["valor_real_total", "qualificados"], ascending=False), "resumo": resumo}
+    return {"act_report": act_rep, "act_operadores": act_oper.sort_values(["comissao_total", "abertas_14d"], ascending=False), "act_conversao_operadores": act_conversao_operadores, "act_diario": act_diario, "act_diario_atual": act_diario_atual, "act_mensal": act_mensal, "act_faixa": act_faixa, "oab_report": oab_screen, "oab_operadores": oab_oper.sort_values(["comissao_total", "contas_validas"], ascending=False), "bko_alerta": bko_alerta, "bko_summary": bko_sum, "bko_status_summary": bko_status_summary, "omc_report": omc_screen, "omc_operadores": omc_oper.sort_values(["valor_real_total", "qualificados"], ascending=False), "resumo": resumo}
 
 
 def _latest_c6_operacao_result_for_reports() -> dict:
@@ -7540,14 +7566,14 @@ def _format_report_df(df: pd.DataFrame) -> pd.DataFrame:
         "clientes_trabalhados", "contas_validas", "indicados_mes_base", "clientes_base",
         "qualificados", "nivel4", "M0_qualificados", "M1_qualificados", "M2_qualificados",
         "dias_ate_abertura", "dias_uteis_bko", "qtd_qual_op_mes", "quantidade", "qtd_contas_dia_operador",
-        "qtd_aberturas_dia_operador"
+        "qtd_aberturas_dia_operador", "clientes_act", "clientes_abriram_conta", "clientes_abriram_14d"
     ]
     money_like = [
         "comissao_total", "valor_indicacao", "valor_bonus", "valor_total",
         "valor_unitario", "valor_teorico", "valor_ja_pago", "valor_real_agora",
         "valor_teorico_total", "valor_real_total"
     ]
-    pct_like = ["eficiencia_%", "taxa_abertura_%", "eficiencia_vs_indicados_%", "eficiencia_qualificacao_%"]
+    pct_like = ["eficiencia_%", "taxa_abertura_%", "eficiencia_vs_indicados_%", "eficiencia_qualificacao_%", "conversao_%"]
 
     for col in out.columns:
         if col in int_like:
@@ -7565,7 +7591,7 @@ def _filter_c6_result_for_operator(result: dict, operator_filter: str) -> dict:
     if not filt:
         return result
     out = dict(result)
-    for k in ["act_report", "act_operadores", "act_diario", "act_diario_atual", "act_mensal", "oab_report", "oab_operadores", "omc_report", "omc_operadores", "bko_alerta"]:
+    for k in ["act_report", "act_operadores", "act_conversao_operadores", "act_diario", "act_diario_atual", "act_mensal", "oab_report", "oab_operadores", "omc_report", "omc_operadores", "bko_alerta"]:
         df = out.get(k)
         if isinstance(df, pd.DataFrame) and not df.empty and "operador" in df.columns:
             tmp = df.copy()
@@ -7810,6 +7836,20 @@ def _render_c6_operacao_tab(view_only: bool = False, operator_filter: str = ""):
             st.info("Nenhum histórico mensal ACT encontrado.")
         st.markdown("#### Ranking acumulado ACT")
         render_downloadable_table(_format_report_df(result["act_operadores"]), "c6_act_oper", "c6_act_operadores", raw_df=result["act_operadores"])
+        st.markdown("#### Conversão ACT por operador")
+        act_conv = result.get("act_conversao_operadores", pd.DataFrame())
+        if isinstance(act_conv, pd.DataFrame) and not act_conv.empty:
+            render_downloadable_table(_format_report_df(act_conv), "c6_act_conversao_oper", "c6_act_conversao_operadores", raw_df=act_conv)
+            if _downloads_enabled():
+                st.download_button(
+                    "Baixar PDF - Conversão ACT por operador",
+                    data=_report_pdf_bytes("Conversão ACT por operador - C6 Empresas", dia_ref or mes_ref_atual, _operator_pdf_view("act_conversao", act_conv)),
+                    file_name=f"conversao_act_operadores_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
+                    mime="application/pdf",
+                    use_container_width=True,
+                )
+        else:
+            st.info("Nenhum dado de conversão ACT encontrado.")
         if not operator_filter:
             st.markdown("#### Qual perfil abre mais conta?")
             render_downloadable_table(_format_report_df(result["act_faixa"]), "c6_act_faixa", "c6_act_faixa", raw_df=result["act_faixa"])
@@ -7875,7 +7915,7 @@ def _render_c6_operacao_tab(view_only: bool = False, operator_filter: str = ""):
         st.markdown("#### Analítico OQL")
         render_downloadable_table(_format_report_df(result["omc_report"]), "c6_oql_report", "c6_oql_analitico", raw_df=result["omc_report"])
     if _downloads_enabled():
-        excel_bytes = _to_excel_bytes({"Resumo": result["resumo"], "ACT_Operadores": result["act_operadores"], "ACT_Analitico": result["act_report"], "OCO_Operadores": result["oab_operadores"], "OCO_BKO": result["bko_alerta"], "OCO_Analitico": result["oab_report"], "OQL_Operadores": result["omc_operadores"], "OQL_Analitico": result["omc_report"]})
+        excel_bytes = _to_excel_bytes({"Resumo": result["resumo"], "ACT_Operadores": result["act_operadores"], "ACT_Conversao": result.get("act_conversao_operadores", pd.DataFrame()), "ACT_Analitico": result["act_report"], "OCO_Operadores": result["oab_operadores"], "OCO_BKO": result["bko_alerta"], "OCO_Analitico": result["oab_report"], "OQL_Operadores": result["omc_operadores"], "OQL_Analitico": result["omc_report"]})
         st.download_button("Baixar pacote completo da C6 Operação", data=excel_bytes, file_name=f"c6_operacao_{dt.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
     else:
         st.caption("Pacote completo disponível ao ativar Preparar downloads.")
@@ -9309,7 +9349,9 @@ if "Meta Supervisor C6" in tabs_map:
             if c6_last:
                 act_email_oper = _filter_act_email_rows(c6_last.get("act_operadores", pd.DataFrame()))
                 act_email_report = _filter_act_email_rows(c6_last.get("act_report", pd.DataFrame()))
+                act_email_conv = _filter_act_email_rows(c6_last.get("act_conversao_operadores", pd.DataFrame()))
                 act_df = _operator_pdf_view("act", act_email_oper)
+                act_conv_df = _operator_pdf_view("act_conversao", act_email_conv)
                 oco_df = _operator_pdf_view("oco", c6_last.get("oab_operadores", pd.DataFrame()))
                 oql_df = _operator_pdf_view("oql", c6_last.get("omc_operadores", pd.DataFrame()))
                 report_options.extend([
@@ -9329,7 +9371,25 @@ if "Meta Supervisor C6" in tabs_map:
                         "filename": f"operadores_act_{report_day.replace('/', '-') or 'atual'}.xlsx",
                         "maintype": "application",
                         "subtype": "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        "data": _to_excel_bytes({"ACT_Operadores": act_email_oper, "ACT_Analitico": act_email_report}),
+                        "data": _to_excel_bytes({"ACT_Operadores": act_email_oper, "ACT_Conversao": act_email_conv, "ACT_Analitico": act_email_report}),
+                    },
+                    {
+                        "key": "act_conversao_pdf",
+                        "group": "C6 Operação",
+                        "label": "Conversão ACT por operador (PDF)",
+                        "filename": f"conversao_act_operadores_{report_day.replace('/', '-') or 'atual'}.pdf",
+                        "maintype": "application",
+                        "subtype": "pdf",
+                        "data": _report_pdf_bytes("Conversão ACT por operador - C6 Empresas", report_day, act_conv_df),
+                    },
+                    {
+                        "key": "act_conversao_excel",
+                        "group": "C6 Operação",
+                        "label": "Conversão ACT por operador (Excel)",
+                        "filename": f"conversao_act_operadores_{report_day.replace('/', '-') or 'atual'}.xlsx",
+                        "maintype": "application",
+                        "subtype": "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "data": _to_excel_bytes({"ACT_Conversao": act_email_conv}),
                     },
                     {
                         "key": "act_analitico_excel",
