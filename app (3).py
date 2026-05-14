@@ -207,7 +207,7 @@ C6_OPS_CACHE_META = os.path.join(DATA_DIR, "c6_operacao_ops_cache_meta.json")
 PANEL_C6_REFRESH_META = os.path.join(DATA_DIR, "panel_c6_refresh_meta.json")
 PANEL_C6_INCREMENTAL_CACHE = os.path.join(DATA_DIR, "panel_c6_incremental_cache.json")
 PANEL_C6_CARTILHA_NOVA_CACHE = os.path.join(DATA_DIR, "panel_c6_cartilha_nova_cache.json")
-REMUN_ENGINE_VERSION = "2026-05-13-remun-paid-ref-and-full-history-v4"
+REMUN_ENGINE_VERSION = "2026-05-13-remun-winner-memory-v5"
 
 PIX_VALID_VALUES = {
     "CNPJ",
@@ -2686,12 +2686,65 @@ def _nova_paid_ref_for_month(month_key: str) -> Dict[str, float]:
         return {}
 
 
+def _new_cartilha_full_amount_from_row(row: dict) -> float:
+    fator = float(_nova_cartilha_fator_por_qualificadas(0))
+    return max(
+        _nova_cashin_amount(float((row or {}).get("cash_in_valor", 0.0) or 0.0), fator),
+        _nova_spending_amount(float((row or {}).get("spending_total_mtd", 0.0) or 0.0), fator),
+        _nova_tpv_amount(_nova_tpv_for_cartilha(row or {}), fator),
+    )
+
+
+def _old_cartilha_full_by_month(mkey: str) -> Dict[str, float]:
+    levels = _visao_month_old_rule_levels(mkey)
+    if not levels:
+        return {}
+    _, precos = faixa_por_qtd(len(levels)) if mkey != "12/2025" else (FAIXAS[-1][1], FAIXAS[-1][2])
+    return {
+        _normalize_cnpj_text(cnpj): float(precos.get(int(lvl), 0.0))
+        for cnpj, lvl in levels.items()
+        if _normalize_cnpj_text(cnpj) and int(lvl) >= 1
+    }
+
+
+def _new_cartilha_full_by_month(mkey: str) -> Dict[str, float]:
+    out: Dict[str, float] = {}
+    for cnpj, row in _visao_month_valid_rows(mkey).items():
+        full = _new_cartilha_full_amount_from_row(row)
+        if full > 0:
+            out[_normalize_cnpj_text(cnpj)] = float(full)
+    return out
+
+
+@lru_cache(maxsize=24)
+def _winner_paid_before_month(current_month: str) -> Dict[str, float]:
+    """Memória única: o banco paga a maior cartilha em abr/mai/jun e esse valor vira já pago por CNPJ."""
+    paid: Dict[str, float] = {}
+    if month_key_str(current_month) > month_key_str("04/2026"):
+        paid.update(_old_paid_max_before("04/2026") or {})
+
+    for mkey in sorted(CARTILHA_NOVA_MESES, key=month_key_str):
+        if month_key_str(mkey) >= month_key_str(current_month):
+            break
+
+        old_full = _old_cartilha_full_by_month(mkey)
+        new_full = _new_cartilha_full_by_month(mkey)
+        old_receive = sum(max(0.0, float(v) - float(paid.get(k, 0.0))) for k, v in old_full.items())
+        new_receive = sum(max(0.0, float(v) - float(paid.get(k, 0.0))) for k, v in new_full.items())
+        winner_full = new_full if new_receive >= old_receive else old_full
+
+        for cnpj, full in winner_full.items():
+            if full > 0:
+                paid[cnpj] = max(float(paid.get(cnpj, 0.0)), float(full))
+    return paid
+
+
 def _nova_prior_paid_value(paid_max: dict, cnpj: str, current_month: str) -> float:
-    """Abate o já pago real quando recuperado do banco; senão usa o histórico calculado."""
+    """Abate o valor já pago pela cartilha vencedora dos meses anteriores."""
     nk = _normalize_cnpj_text(cnpj)
-    ref_month = _nova_paid_ref_for_month(current_month)
-    if nk in ref_month:
-        return float(ref_month.get(nk, 0.0) or 0.0)
+    winner_prev = _winner_paid_before_month(current_month)
+    if nk in winner_prev:
+        return float(winner_prev.get(nk, 0.0) or 0.0)
     nova_prev = _nova_paid_value(paid_max, nk, current_month)
     old_prev = 0.0
     try:
@@ -2716,11 +2769,11 @@ def _old_paid_ref_for_month(month_key: str) -> Dict[str, float]:
 
 
 def _old_prior_paid_value(old_paid_before: dict, cnpj: str, current_month: str) -> float:
-    """Abate o já pago real quando recuperado do banco; senão usa o histórico calculado."""
+    """Abate o valor já pago pela cartilha vencedora dos meses anteriores."""
     nk = _normalize_cnpj_text(cnpj)
-    ref_month = _old_paid_ref_for_month(current_month)
-    if nk in ref_month:
-        return float(ref_month.get(nk, 0.0) or 0.0)
+    winner_prev = _winner_paid_before_month(current_month)
+    if nk in winner_prev:
+        return float(winner_prev.get(nk, 0.0) or 0.0)
     old_prev = 0.0
     try:
         old_prev = float((old_paid_before or {}).get(nk, 0.0) or 0.0)
