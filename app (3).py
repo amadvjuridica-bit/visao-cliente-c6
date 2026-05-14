@@ -7957,6 +7957,7 @@ if "Painel C6 Empresas" in tabs_map:
             df_c6[COL_BR] = normalize_str(df_c6[COL_BR]).str.upper()
             df_c6[COL_CRIT] = normalize_str(df_c6[COL_CRIT])
 
+            mes_rel = detect_report_month_from_df(df_c6)
             _persist_visao_month_snapshot(df_c6)
             if mes_rel:
                 try:
@@ -7980,7 +7981,6 @@ if "Painel C6 Empresas" in tabs_map:
 
             month_levels_upsert_from_daily_df(df_c6)
 
-            mes_rel = detect_report_month_from_df(df_c6)
             if mes_rel and mes_rel >= dt.date(2026, 1, 1):
                 mkey = fmt_month(mes_rel)
 
