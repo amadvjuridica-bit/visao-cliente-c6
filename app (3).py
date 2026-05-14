@@ -207,7 +207,7 @@ C6_OPS_CACHE_META = os.path.join(DATA_DIR, "c6_operacao_ops_cache_meta.json")
 PANEL_C6_REFRESH_META = os.path.join(DATA_DIR, "panel_c6_refresh_meta.json")
 PANEL_C6_INCREMENTAL_CACHE = os.path.join(DATA_DIR, "panel_c6_incremental_cache.json")
 PANEL_C6_CARTILHA_NOVA_CACHE = os.path.join(DATA_DIR, "panel_c6_cartilha_nova_cache.json")
-REMUN_ENGINE_VERSION = "2026-05-13-remun-upload-recalc-v2"
+REMUN_ENGINE_VERSION = "2026-05-13-remun-full-paid-history-v3"
 
 PIX_VALID_VALUES = {
     "CNPJ",
@@ -2687,11 +2687,8 @@ def _nova_paid_ref_for_month(month_key: str) -> Dict[str, float]:
 
 
 def _nova_prior_paid_value(paid_max: dict, cnpj: str, current_month: str) -> float:
-    """Abate o que já foi pago antes, usando o maior histórico disponível (nova ou antiga)."""
+    """Abate o maior valor cheio já alcançado antes, calculado pelo histórico do app."""
     nk = _normalize_cnpj_text(cnpj)
-    ref_month = _nova_paid_ref_for_month(current_month)
-    if nk in ref_month:
-        return float(ref_month.get(nk, 0.0) or 0.0)
     nova_prev = _nova_paid_value(paid_max, nk, current_month)
     old_prev = 0.0
     try:
@@ -2716,11 +2713,8 @@ def _old_paid_ref_for_month(month_key: str) -> Dict[str, float]:
 
 
 def _old_prior_paid_value(old_paid_before: dict, cnpj: str, current_month: str) -> float:
-    """Abate o já pago da regra antiga; usa referência bancária mensal quando recuperada."""
+    """Abate o maior valor cheio já alcançado antes, calculado pelo histórico do app."""
     nk = _normalize_cnpj_text(cnpj)
-    ref_month = _old_paid_ref_for_month(current_month)
-    if nk in ref_month:
-        return float(ref_month.get(nk, 0.0) or 0.0)
     old_prev = 0.0
     try:
         old_prev = float((old_paid_before or {}).get(nk, 0.0) or 0.0)
@@ -3130,7 +3124,7 @@ def recompute_cartilha_nova() -> pd.DataFrame:
 
             total_cheio += best_amt_total
             total_receber += diff_total
-            _nova_paid_update(paid_max, cnpjx, mkey, diff_total)
+            _nova_paid_update(paid_max, cnpjx, mkey, best_amt_total)
 
             if pix_bonus > 0:
                 detail_counts["pix_cnpj"] += 1
@@ -3268,7 +3262,7 @@ def _cartilha_nova_detail_by_month(target_month: str) -> pd.DataFrame:
                 "Já pago ref novo": prev,
                 "A receber novo": diff_total,
             })
-            _nova_paid_update(paid_max, cnpjx, mkey, diff_total)
+            _nova_paid_update(paid_max, cnpjx, mkey, best_amt_total)
 
         if mkey == target_month:
             detail_df = pd.DataFrame(detail_rows)
@@ -5621,7 +5615,7 @@ def _refresh_current_month_remuneration_from_rows(mkey: str, month_rows: Dict[st
         diff_total = diff + pix_bonus
         new_cheio += best_total
         new_receber += diff_total
-        _nova_paid_update(paid_max, cnpjx, mkey, diff_total)
+        _nova_paid_update(paid_max, cnpjx, mkey, best_total)
         if pix_bonus > 0:
             detail_counts["pix_cnpj"] += 1
         dt_abertura = _parse_br_date_text(row.get("dt_conta_criada"))
