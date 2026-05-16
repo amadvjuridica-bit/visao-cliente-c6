@@ -850,5 +850,52 @@
     "Conta Aberta Oriente o cliente a fazer o primeiro acesso via APP": 6,
     "Cliente deverá fazer um novo processo de abertura de conta via APP": 1,
     "_validas_14d": 1457
+  },
+  "2026-05-11": {
+    "SEM_STATUS": 2349,
+    "Ainda nao iniciou a abertura de conta": 1792,
+    "Desacordo comercial": 152,
+    "Aguardar atuação manual BKO": 22,
+    "Orientar o cliente enviar documento societário via APP": 15,
+    "Cliente deverá fazer um novo processo de abertura de conta via APP": 1,
+    "_validas_14d": 1640
+  },
+  "2026-05-12": {
+    "SEM_STATUS": 2488,
+    "Ainda nao iniciou a abertura de conta": 1815,
+    "Desacordo comercial": 167,
+    "Orientar o cliente enviar documento societário via APP": 17,
+    "Aguardar atuação manual BKO": 17,
+    "Cliente deverá fazer um novo processo de abertura de conta via APP": 1,
+    "_validas_14d": 1711
+  },
+  "2026-05-13": {
+    "SEM_STATUS": 2554,
+    "Ainda nao iniciou a abertura de conta": 1896,
+    "Desacordo comercial": 183,
+    "Aguardar atuação manual BKO": 21,
+    "Orientar o cliente enviar documento societário via APP": 20,
+    "Conta Aberta Oriente o cliente a fazer o primeiro acesso via APP": 2,
+    "Cliente deverá fazer um novo processo de abertura de conta via APP": 2,
+    "_validas_14d": 1775
+  },
+  "2026-05-14": {
+    "SEM_STATUS": 2572,
+    "Ainda nao iniciou a abertura de conta": 1971,
+    "Desacordo comercial": 197,
+    "Aguardar atuação manual BKO": 23,
+    "Orientar o cliente enviar documento societário via APP": 20,
+    "Cliente deverá fazer um novo processo de abertura de conta via APP": 2,
+    "_validas_14d": 1815
+  },
+  "2026-05-15": {
+    "SEM_STATUS": 2670,
+    "Ainda nao iniciou a abertura de conta": 2011,
+    "Desacordo comercial": 205,
+    "Aguardar atuação manual BKO": 21,
+    "Orientar o cliente enviar documento societário via APP": 18,
+    "Cliente deverá fazer um novo processo de abertura de conta via APP": 3,
+    "Conta Aberta Oriente o cliente a fazer o primeiro acesso via APP": 1,
+    "_validas_14d": 1846
   }
 }

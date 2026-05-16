@@ -8,6 +8,7 @@ import json
 import re
 import hashlib
 import smtplib
+import subprocess
 import unicodedata
 import datetime as dt
 from functools import lru_cache
@@ -59,22 +60,80 @@ def _fs_load_payload(doc_id: str, default):
     if not snap.exists:
         return default
     data = snap.to_dict() or {}
+    if data.get("chunked"):
+        try:
+            total = int(data.get("chunks") or 0)
+            parts = []
+            chunks_ref = db.collection("app_store").document(doc_id).collection("chunks")
+            for idx in range(total):
+                chunk = chunks_ref.document(f"{idx:05d}").get()
+                if not chunk.exists:
+                    return default
+                parts.append((chunk.to_dict() or {}).get("data", ""))
+            return json.loads("".join(parts))
+        except Exception:
+            return default
     return data.get("payload", default)
 
 def _fs_save_payload(doc_id: str, obj):
     db = _get_fs_db()
     if db is None:
         return
-    db.collection("app_store").document(doc_id).set(
-        {"payload": obj, "updated_at": firestore.SERVER_TIMESTAMP},
-        merge=True
-    )
+    doc_ref = db.collection("app_store").document(doc_id)
+    try:
+        raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str)
+    except Exception:
+        raw = json.dumps(json.loads(json.dumps(obj, ensure_ascii=False, default=str)), ensure_ascii=False, separators=(",", ":"))
+    max_chars = 650_000
+    if len(raw.encode("utf-8")) <= max_chars:
+        old = doc_ref.get()
+        old_chunks = int(((old.to_dict() or {}) if old.exists else {}).get("chunks") or 0)
+        doc_ref.set({"payload": obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
+        for idx in range(old_chunks):
+            try:
+                doc_ref.collection("chunks").document(f"{idx:05d}").delete()
+            except Exception:
+                pass
+        return
+    chunks = []
+    current = []
+    current_size = 0
+    for ch in raw:
+        ch_size = len(ch.encode("utf-8"))
+        if current and current_size + ch_size > max_chars:
+            chunks.append("".join(current))
+            current = [ch]
+            current_size = ch_size
+        else:
+            current.append(ch)
+            current_size += ch_size
+    if current:
+        chunks.append("".join(current))
+    old = doc_ref.get()
+    old_chunks = int(((old.to_dict() or {}) if old.exists else {}).get("chunks") or 0)
+    doc_ref.set({"payload": None, "chunked": True, "chunks": len(chunks), "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
+    chunks_ref = doc_ref.collection("chunks")
+    for idx, part in enumerate(chunks):
+        chunks_ref.document(f"{idx:05d}").set({"data": part})
+    for idx in range(len(chunks), old_chunks):
+        try:
+            chunks_ref.document(f"{idx:05d}").delete()
+        except Exception:
+            pass
 
 def _fs_delete_doc(doc_id: str):
     db = _get_fs_db()
     if db is None:
         return
-    db.collection("app_store").document(doc_id).delete()
+    doc_ref = db.collection("app_store").document(doc_id)
+    try:
+        snap = doc_ref.get()
+        chunks = int(((snap.to_dict() or {}) if snap.exists else {}).get("chunks") or 0)
+        for idx in range(chunks):
+            doc_ref.collection("chunks").document(f"{idx:05d}").delete()
+    except Exception:
+        pass
+    doc_ref.delete()
 
 
 def _cloud_fast_open() -> bool:
@@ -319,17 +378,24 @@ def _bootstrap_cloud_from_bundled_data():
     current = _fs_load_payload("cloud_seed_version.json", default={}) or {}
     if str(current.get("version") or "") == version:
         return
-    for name in seed.get("files", []):
-        name = os.path.basename(str(name or ""))
-        if not name.endswith(".json") or name.startswith("cloud_seed_version"):
+    for entry in seed.get("files", []):
+        if isinstance(entry, dict):
+            source_name = os.path.basename(str(entry.get("source") or ""))
+            target_name = os.path.basename(str(entry.get("target") or source_name))
+        else:
+            source_name = os.path.basename(str(entry or ""))
+            target_name = source_name
+        if not source_name.endswith(".json") or source_name.startswith("cloud_seed_version"):
             continue
-        path = os.path.join(DATA_DIR, name)
+        if not target_name:
+            continue
+        path = os.path.join(DATA_DIR, source_name)
         if not os.path.exists(path):
             continue
         try:
             with open(path, "r", encoding="utf-8") as f:
                 payload = json.load(f)
-            _fs_save_payload(name, payload)
+            _fs_save_payload(target_name, payload)
         except Exception:
             continue
     _fs_save_payload("cloud_seed_version.json", seed)
@@ -1114,6 +1180,121 @@ def _load_ops_import_cache():
         return df, str(meta.get("name") or "")
     except Exception:
         return None, ""
+
+
+def _cloud_payload_source_name(target_name: str) -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", os.path.basename(str(target_name or "")))
+    return f"cloud_payload_{safe}.json"
+
+
+def _write_cloud_cache_payload(path: str, df: Optional[pd.DataFrame]) -> Optional[dict]:
+    if df is None or df.empty:
+        return None
+    source_name = _cloud_payload_source_name(os.path.basename(path))
+    source_path = os.path.join(DATA_DIR, source_name)
+    try:
+        with open(source_path, "w", encoding="utf-8") as f:
+            json.dump(_df_to_store_payload(df), f, ensure_ascii=False, separators=(",", ":"))
+        return {"source": source_name, "target": os.path.basename(path)}
+    except Exception:
+        return None
+
+
+def _prepare_cloud_seed_from_local_data() -> List:
+    seed_path = os.path.join(DATA_DIR, "cloud_seed_version.json")
+    try:
+        with open(seed_path, "r", encoding="utf-8") as f:
+            seed = json.load(f)
+        files = list(seed.get("files") or [])
+    except Exception:
+        files = []
+
+    by_key = {}
+    for entry in files:
+        key = os.path.basename(str(entry.get("target") or entry.get("source") or "")) if isinstance(entry, dict) else os.path.basename(str(entry or ""))
+        if key and not key.startswith("cloud_payload_"):
+            by_key[key] = entry
+
+    for name in os.listdir(DATA_DIR):
+        if (
+            name.endswith(".json")
+            and not name.startswith("cloud_payload_")
+            and not name.startswith("cloud_seed_version")
+            and ".corrompido_" not in name
+            and ".backup" not in name
+        ):
+            by_key.setdefault(name, name)
+
+    cache_entries = []
+    try:
+        df_visao, _, _ = _load_daily_import_cache("visao")
+        entry = _write_cloud_cache_payload(C6_DAILY_VISAO_CACHE, df_visao)
+        if entry:
+            cache_entries.append(entry)
+    except Exception:
+        pass
+    try:
+        df_leads, _, _ = _load_daily_import_cache("leads")
+        entry = _write_cloud_cache_payload(C6_DAILY_LEADS_CACHE, df_leads)
+        if entry:
+            cache_entries.append(entry)
+    except Exception:
+        pass
+    try:
+        df_lct, _, _ = _load_daily_import_cache("lct")
+        entry = _write_cloud_cache_payload(C6_DAILY_LCT_CACHE, df_lct)
+        if entry:
+            cache_entries.append(entry)
+    except Exception:
+        pass
+    try:
+        df_ops, _ = _load_ops_import_cache()
+        entry = _write_cloud_cache_payload(C6_OPS_CACHE, df_ops)
+        if entry:
+            cache_entries.append(entry)
+    except Exception:
+        pass
+
+    for entry in cache_entries:
+        by_key[os.path.basename(str(entry.get("target") or entry.get("source") or ""))] = entry
+    return list(by_key.values())
+
+
+def _sync_local_data_to_cloud_seed(reason: str = "") -> Tuple[bool, str]:
+    """Publica os dados locais versionados para o app online reidratar o Firestore."""
+    if "firebase" in st.secrets:
+        return False, "O app já está usando a base em nuvem."
+    if not os.path.isdir(os.path.join(APP_DIR, ".git")):
+        return False, "Repositório Git não encontrado."
+    try:
+        files = _prepare_cloud_seed_from_local_data()
+        version = dt.datetime.now().strftime("%Y-%m-%d-%H%M%S")
+        seed = {
+            "version": version,
+            "generated_at": dt.datetime.now().isoformat(timespec="seconds"),
+            "reason": str(reason or "sync-local"),
+            "files": files,
+        }
+        seed_path = os.path.join(DATA_DIR, "cloud_seed_version.json")
+        with open(seed_path, "w", encoding="utf-8") as f:
+            json.dump(seed, f, ensure_ascii=False, indent=2)
+
+        paths = [os.path.join("data_store", "cloud_seed_version.json")]
+        for entry in files:
+            source = entry.get("source") if isinstance(entry, dict) else entry
+            source = os.path.basename(str(source or ""))
+            if source:
+                paths.append(os.path.join("data_store", source))
+        subprocess.run(["git", "add", "-f", *paths], cwd=APP_DIR, check=True, capture_output=True, text=True)
+        diff = subprocess.run(["git", "diff", "--cached", "--quiet", "--", "data_store"], cwd=APP_DIR)
+        if diff.returncode == 0:
+            return False, "Sem mudanças de dados para publicar."
+        label = dt.datetime.now().strftime("%d/%m/%Y %H:%M")
+        subprocess.run(["git", "commit", "-m", f"Atualizar dados C6 online {label}"], cwd=APP_DIR, check=True, capture_output=True, text=True)
+        subprocess.run(["git", "push", "origin", "main"], cwd=APP_DIR, check=True, capture_output=True, text=True)
+        return True, "Dados locais publicados para o app online."
+    except Exception as exc:
+        return False, f"Falha ao publicar dados locais: {exc}"
 
 
 def _truthy_flag(value) -> bool:
@@ -7723,6 +7904,16 @@ def _render_c6_operacao_tab(view_only: bool = False, operator_filter: str = ""):
             st.session_state["c6_operacao_ops_df__name"] = up_ops.name
             st.session_state["c6_operacao_ops_df__ts"] = dt.datetime.now().timestamp()
             _save_ops_import_cache(up_ops.name, raw_ops_bytes)
+            if "firebase" not in st.secrets:
+                _ops_sync_sig = json.dumps(["ops", up_ops.name, getattr(up_ops, "size", 0)], ensure_ascii=False)
+                if st.session_state.get("_last_ops_cloud_sync_sig") != _ops_sync_sig:
+                    with st.spinner("Sincronizando C6 Operação com o app online..."):
+                        _sync_ok, _sync_msg = _sync_local_data_to_cloud_seed("c6-operacao-upload")
+                    st.session_state["_last_ops_cloud_sync_sig"] = _ops_sync_sig
+                    if _sync_ok:
+                        st.success("C6 Operação publicado para o app online. O Streamlit pode levar alguns minutos para recarregar.")
+                    elif "Sem mudanças" not in _sync_msg:
+                        st.warning(_sync_msg)
         else:
             st.warning("Arquivo de operadores veio vazio ou não foi reconhecido; mantive o último cache válido.")
 
@@ -8165,6 +8356,20 @@ if "Painel C6 Empresas" in tabs_map:
 
     _daily_upload = bool((up_c6 and len(up_c6) > 0) or (up_leads and len(up_leads) > 0))
     _monthly_upload = bool(up_monthly and len(up_monthly) > 0)
+    if (_daily_upload or _monthly_upload) and "firebase" not in st.secrets:
+        _sync_items = []
+        for _kind, _files in [("visao", up_c6 or []), ("leads", up_leads or []), ("mensal", up_monthly or [])]:
+            for _f in _files:
+                _sync_items.append([_kind, getattr(_f, "name", ""), getattr(_f, "size", 0)])
+        _sync_sig = json.dumps(_sync_items, ensure_ascii=False, sort_keys=True)
+        if _sync_sig and st.session_state.get("_last_local_cloud_sync_sig") != _sync_sig:
+            with st.spinner("Sincronizando dados locais com o app online..."):
+                _sync_ok, _sync_msg = _sync_local_data_to_cloud_seed("painel-c6-upload")
+            st.session_state["_last_local_cloud_sync_sig"] = _sync_sig
+            if _sync_ok:
+                st.success("Dados publicados para o app online. O Streamlit pode levar alguns minutos para recarregar.")
+            elif "Sem mudanças" not in _sync_msg:
+                st.warning(_sync_msg)
 
     if _daily_upload and (df_c6 is None or df_c6.empty):
         df_c6_cache, _, _ = _load_daily_import_cache("visao")
