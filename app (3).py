@@ -56,10 +56,13 @@ def _fs_load_payload(doc_id: str, default):
     db = _get_fs_db()
     if db is None:
         return default
-    snap = db.collection("app_store").document(doc_id).get()
-    if not snap.exists:
+    try:
+        snap = db.collection("app_store").document(doc_id).get()
+        if not snap.exists:
+            return default
+        data = snap.to_dict() or {}
+    except Exception:
         return default
-    data = snap.to_dict() or {}
     if data.get("chunked"):
         try:
             total = int(data.get("chunks") or 0)
@@ -85,41 +88,32 @@ def _fs_save_payload(doc_id: str, obj):
     except Exception:
         raw = json.dumps(json.loads(json.dumps(obj, ensure_ascii=False, default=str)), ensure_ascii=False, separators=(",", ":"))
     max_chars = 650_000
-    if len(raw.encode("utf-8")) <= max_chars:
-        old = doc_ref.get()
-        old_chunks = int(((old.to_dict() or {}) if old.exists else {}).get("chunks") or 0)
-        doc_ref.set({"payload": obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
-        for idx in range(old_chunks):
-            try:
-                doc_ref.collection("chunks").document(f"{idx:05d}").delete()
-            except Exception:
-                pass
-        return
-    chunks = []
-    current = []
-    current_size = 0
-    for ch in raw:
-        ch_size = len(ch.encode("utf-8"))
-        if current and current_size + ch_size > max_chars:
+    try:
+        if len(raw.encode("utf-8")) <= max_chars:
+            # Não faz leitura prévia: no Streamlit Cloud a cota de Firestore pode
+            # estourar, e metadados/cache não podem derrubar o app.
+            doc_ref.set({"payload": obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
+            return
+        chunks = []
+        current = []
+        current_size = 0
+        for ch in raw:
+            ch_size = len(ch.encode("utf-8"))
+            if current and current_size + ch_size > max_chars:
+                chunks.append("".join(current))
+                current = [ch]
+                current_size = ch_size
+            else:
+                current.append(ch)
+                current_size += ch_size
+        if current:
             chunks.append("".join(current))
-            current = [ch]
-            current_size = ch_size
-        else:
-            current.append(ch)
-            current_size += ch_size
-    if current:
-        chunks.append("".join(current))
-    old = doc_ref.get()
-    old_chunks = int(((old.to_dict() or {}) if old.exists else {}).get("chunks") or 0)
-    doc_ref.set({"payload": None, "chunked": True, "chunks": len(chunks), "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
-    chunks_ref = doc_ref.collection("chunks")
-    for idx, part in enumerate(chunks):
-        chunks_ref.document(f"{idx:05d}").set({"data": part})
-    for idx in range(len(chunks), old_chunks):
-        try:
-            chunks_ref.document(f"{idx:05d}").delete()
-        except Exception:
-            pass
+        doc_ref.set({"payload": None, "chunked": True, "chunks": len(chunks), "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
+        chunks_ref = doc_ref.collection("chunks")
+        for idx, part in enumerate(chunks):
+            chunks_ref.document(f"{idx:05d}").set({"data": part})
+    except Exception:
+        return
 
 def _fs_delete_doc(doc_id: str):
     db = _get_fs_db()
