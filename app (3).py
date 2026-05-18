@@ -137,7 +137,9 @@ def _fs_delete_doc(doc_id: str):
 
 
 def _cloud_fast_open() -> bool:
-    return "firebase" in st.secrets
+    # O online agora lê o pacote versionado direto do deploy; manter "fast open"
+    # ocultava históricos/datas no painel publicado.
+    return False
 
 
 # =========================================================
@@ -282,13 +284,56 @@ PIX_VALID_VALUES = {
 # =========================================================
 # HELPERS - EXATAMENTE COMO ESTAVAM
 # =========================================================
+_MISSING = object()
+
+
+def _bundled_seed_payload(doc_id: str, default):
+    """Lê o payload versionado no deploy sem copiar a base inteira para o Firestore."""
+    seed_path = os.path.join(DATA_DIR, "cloud_seed_version.json")
+    if not os.path.exists(seed_path):
+        return default
+    try:
+        with open(seed_path, "r", encoding="utf-8") as f:
+            seed = json.load(f)
+    except Exception:
+        return default
+    source_name = ""
+    doc_base = os.path.basename(str(doc_id or ""))
+    for entry in seed.get("files", []):
+        if isinstance(entry, dict):
+            target = os.path.basename(str(entry.get("target") or entry.get("source") or ""))
+            source = os.path.basename(str(entry.get("source") or ""))
+        else:
+            target = os.path.basename(str(entry or ""))
+            source = target
+        if target == doc_base:
+            source_name = source
+            break
+    if not source_name:
+        source_name = doc_base if doc_base.endswith(".json") else ""
+    if not source_name or not source_name.endswith(".json"):
+        return default
+    path = os.path.join(DATA_DIR, source_name)
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+
 def safe_json_load(path: str, default):
     """
     ✅ Se existir st.secrets["firebase"], lê do Firestore.
     Caso contrário, mantém comportamento local.
     """
     if "firebase" in st.secrets:
-        return _fs_load_payload(_fs_doc_id_from_path(path), default)
+        doc_id = _fs_doc_id_from_path(path)
+        bundled = _bundled_seed_payload(doc_id, _MISSING)
+        if bundled is not _MISSING:
+            return bundled
+        return _fs_load_payload(doc_id, default)
 
     if os.path.exists(path):
         try:
@@ -374,6 +419,17 @@ def _bootstrap_cloud_from_bundled_data():
         return
     version = str(seed.get("version") or "").strip()
     if not version:
+        return
+    if not seed.get("copy_to_firestore"):
+        try:
+            _fs_save_payload("cloud_seed_version.json", {
+                "version": version,
+                "generated_at": seed.get("generated_at", ""),
+                "files_count": len(seed.get("files", []) or []),
+                "mode": "bundled-fast-open",
+            })
+        except Exception:
+            pass
         return
     current = _fs_load_payload("cloud_seed_version.json", default={}) or {}
     if str(current.get("version") or "") == version:
