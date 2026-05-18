@@ -173,8 +173,8 @@ POSSIVEIS_COL_DATA_BASE = [
 # Conversão
 ALVO_CONVERSAO = 0.20
 
-# A partir de Jan/26 salvar histórico diário
-HIST_START = dt.date(2026, 1, 1)
+# Preserva todo histórico disponível no app, inclusive bases antigas de 2025.
+HIST_START = dt.date(2025, 1, 1)
 
 # =========================================================
 # REMUNERAÇÃO (FAIXAS) - NÃO ALTERADO
@@ -2730,7 +2730,7 @@ def month_levels_upsert_from_daily_df(df_c6: pd.DataFrame):
     if mes_rel is None:
         return
 
-    if mes_rel < dt.date(2026, 1, 1):
+    if mes_rel < HIST_START:
         return
 
     mkey = fmt_month(mes_rel)
@@ -8209,7 +8209,7 @@ st.toggle(
 if "Painel C6 Empresas" in tabs_map:
   with tabs_map["Painel C6 Empresas"]:
 
-    st.subheader("Importação diária (Janeiro/26 em diante)")
+    st.subheader("Importação diária")
     colA, colB = st.columns(2)
     with colA:
         up_c6 = st.file_uploader("Planilha C6 (Visão Cliente) — diária (.xlsx)", type=["xlsx"], accept_multiple_files=True, key="c6")
@@ -8300,7 +8300,7 @@ if "Painel C6 Empresas" in tabs_map:
 
             month_levels_upsert_from_daily_df(df_c6)
 
-            if mes_rel and mes_rel >= dt.date(2026, 1, 1):
+            if mes_rel and mes_rel >= HIST_START:
                 mkey = fmt_month(mes_rel)
 
                 df_tmp = df_c6_panel.copy()
@@ -8975,7 +8975,7 @@ if "Painel C6 Empresas" in tabs_map:
         m7.metric("Níveis (1/2/3/4)", f"{br_int(n1)} / {br_int(n2)} / {br_int(n3)} / {br_int(n4)}")
 
     else:
-        st.info("Ainda não há histórico de remuneração. Importe os diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
+        st.info("Ainda não há histórico de remuneração. Importe os diários e/ou Nov/25 e Dez/25.")
 
     st.divider()
 
@@ -9173,7 +9173,7 @@ if "Painel C6 Empresas" in tabs_map:
 
         saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
         if not saved:
-            st.info("Sem histórico mensal ainda. Importe os diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
+            st.info("Sem histórico mensal ainda. Importe os diários e/ou Nov/25 e Dez/25.")
         else:
             months_sorted = sorted(saved.keys(), key=month_key_str)
             mes_sel = st.selectbox("Selecione o mês para ver o líquido", months_sorted, index=len(months_sorted) - 1)
@@ -9216,7 +9216,7 @@ if "Painel C6 Empresas" in tabs_map:
 
     saved = safe_json_load(HIST_RESUMO_MENSAL, default={})
     if not saved:
-        st.info("Sem histórico mensal ainda. Importe diários (Jan/26 em diante) e/ou Nov/25 e Dez/25.")
+        st.info("Sem histórico mensal ainda. Importe diários e/ou Nov/25 e Dez/25.")
     else:
         rows = []
         for mes, info in saved.items():
