@@ -1,7 +1,7 @@
 {
-  "version": "2026-05-16-153802",
-  "generated_at": "2026-05-16T15:38:02",
-  "reason": "sync-current-local-data",
+  "version": "2026-05-18-184209",
+  "generated_at": "2026-05-18T18:42:09",
+  "reason": "fix-lct-sbm-payload",
   "files": [
     "c6_daily_funil_track.json",
     "c6_daily_import_meta.json",

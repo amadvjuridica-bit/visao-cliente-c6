@@ -6973,6 +6973,25 @@ def _read_lct_file_any(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
         if str(name or "").lower().endswith(".csv"):
             sample = raw_bytes[:200_000].decode("utf-8-sig", errors="replace")
             sep = _detect_delim_for_csv(sample) if "_detect_delim_for_csv" in globals() else ","
+            if sep == ";":
+                lines = sample.splitlines()
+                first_data = lines[1].split(";") if len(lines) > 1 else []
+                header = lines[0].split(";") if lines else []
+                if len(header) == 16 and len(first_data) == 17:
+                    text = raw_bytes.decode("utf-8-sig", errors="replace")
+                    rows = []
+                    for ln in text.splitlines()[1:]:
+                        parts = ln.split(";")
+                        if len(parts) < 17:
+                            parts = parts + ([""] * (17 - len(parts)))
+                        elif len(parts) > 17:
+                            parts = parts[:16] + [";".join(parts[16:])]
+                        rows.append(parts)
+                    fixed_cols = [
+                        "Nome", "Cód", "CPF / CNPJ", "Agente Flag", "Agente", "Ação", "Data", "Hora",
+                        "Histórico", "Fila", "Fone Discado", "Credor", "Atraso", "Valor", "Inclusão", "CDEC", "Fase"
+                    ]
+                    return pd.DataFrame(rows, columns=fixed_cols, dtype=str)
             return pd.read_csv(io.BytesIO(raw_bytes), sep=sep, engine="python", on_bad_lines="skip", encoding="utf-8-sig")
         return pd.read_excel(io.BytesIO(raw_bytes))
     except Exception as e:
@@ -7032,13 +7051,14 @@ def _load_funil_history_from_temp_imports(keyword: str, extractor) -> pd.DataFra
     return out.reset_index(drop=True)
 
 
-def _extract_lct_base(df_lct: pd.DataFrame) -> pd.DataFrame:
+def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]] = None) -> pd.DataFrame:
     df = df_lct.copy()
     nome_col = _coalesce_col(df, ["Nome", "NOME", "NOME_CLIENTE"])
     cnpj_col = _coalesce_col(df, ["CPF / CNPJ", "CNPJ", "CNPJ_CLIENTE"])
     data_col = _coalesce_col(df, ["Data", "DATA"])
     fase_col = _coalesce_col(df, ["Fase", "FASE"])
     acao_col = _coalesce_col(df, ["Ação", "ACAO", "Acao"])
+    hist_col = _coalesce_col(df, ["Histórico", "HISTORICO", "HISTÓRICO", "Historico"])
 
     out = pd.DataFrame()
     out["nome_cliente_lct"] = normalize_str(df[nome_col]) if nome_col else ""
@@ -7060,9 +7080,13 @@ def _extract_lct_base(df_lct: pd.DataFrame) -> pd.DataFrame:
     else:
         out["dt_fundacao_lct"] = pd.NaT
     out["acao_lct"] = normalize_str(df[acao_col]).str.upper() if acao_col else ""
+    hist_txt = normalize_str(df[hist_col]).str.upper() if hist_col else pd.Series([""] * len(df), index=df.index)
+    out["origem_lct_texto"] = (out["acao_lct"].astype(str) + " " + hist_txt.astype(str)).str.strip()
     out = out[out["cnpj"] != ""].copy()
-    if "acao_lct" in out.columns and out["acao_lct"].astype(str).str.strip().ne("").any():
-        out = out[out["acao_lct"].astype(str).str.contains("LCT", na=False)].copy()
+    keywords = [str(k or "").strip().upper() for k in (source_keywords or ["LCT"]) if str(k or "").strip()]
+    if keywords and "origem_lct_texto" in out.columns and out["origem_lct_texto"].astype(str).str.strip().ne("").any():
+        pattern = "|".join(re.escape(k) for k in keywords)
+        out = out[out["origem_lct_texto"].astype(str).str.contains(pattern, na=False, regex=True)].copy()
     out["data_lct_dia"] = pd.to_datetime(out["data_lct"], errors="coerce").dt.date
     if out["data_lct_dia"].isna().all() and data_col:
         out["data_lct_dia"] = pd.to_datetime(df.loc[out.index, data_col], errors="coerce", dayfirst=True).dt.date
@@ -7070,8 +7094,14 @@ def _extract_lct_base(df_lct: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _build_ura_reports(df_panel_lct: Optional[pd.DataFrame], leads_funil: pd.DataFrame, visao_funil: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    lct_work = _extract_lct_base(df_panel_lct) if df_panel_lct is not None else pd.DataFrame()
+def _build_lct_source_reports(
+    df_panel_lct: Optional[pd.DataFrame],
+    leads_funil: pd.DataFrame,
+    visao_funil: pd.DataFrame,
+    source_label: str,
+    source_keywords: List[str],
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    lct_work = _extract_lct_base(df_panel_lct, source_keywords) if df_panel_lct is not None else pd.DataFrame()
     if lct_work.empty:
         return pd.DataFrame(), pd.DataFrame()
 
@@ -7086,9 +7116,9 @@ def _build_ura_reports(df_panel_lct: Optional[pd.DataFrame], leads_funil: pd.Dat
     lct_merged["indicado_banco"] = lct_merged["data_hora_cadastro"].notna()
     lct_merged["abriu_conta"] = lct_merged["dt_conta_criada"].notna()
 
-    ura_daily = (
+    source_daily = (
         lct_work.groupby("data_lct_dia", dropna=True)
-        .agg(clientes_ura=("cnpj", "nunique"))
+        .agg(clientes_origem=("cnpj", "nunique"))
         .reset_index()
         .sort_values("data_lct_dia", ascending=False)
     )
@@ -7106,31 +7136,40 @@ def _build_ura_reports(df_panel_lct: Optional[pd.DataFrame], leads_funil: pd.Dat
         .rename("contas_abertas")
         .reset_index()
     )
-    ura_daily = ura_daily.merge(indicados_daily, on="data_lct_dia", how="left").merge(aberturas_daily, on="data_lct_dia", how="left")
-    ura_daily["clientes_indicados"] = pd.to_numeric(ura_daily["clientes_indicados"], errors="coerce").fillna(0).astype(int)
-    ura_daily["contas_abertas"] = pd.to_numeric(ura_daily["contas_abertas"], errors="coerce").fillna(0).astype(int)
-    ura_daily["% viraram indicação"] = (ura_daily["clientes_indicados"] / ura_daily["clientes_ura"].replace(0, pd.NA) * 100).fillna(0)
-    ura_daily["% abriram conta"] = (ura_daily["contas_abertas"] / ura_daily["clientes_ura"].replace(0, pd.NA) * 100).fillna(0)
+    source_daily = source_daily.merge(indicados_daily, on="data_lct_dia", how="left").merge(aberturas_daily, on="data_lct_dia", how="left")
+    source_daily["clientes_indicados"] = pd.to_numeric(source_daily["clientes_indicados"], errors="coerce").fillna(0).astype(int)
+    source_daily["contas_abertas"] = pd.to_numeric(source_daily["contas_abertas"], errors="coerce").fillna(0).astype(int)
+    source_daily["% viraram indicação"] = (source_daily["clientes_indicados"] / source_daily["clientes_origem"].replace(0, pd.NA) * 100).fillna(0)
+    source_daily["% abriram conta"] = (source_daily["contas_abertas"] / source_daily["clientes_origem"].replace(0, pd.NA) * 100).fillna(0)
 
-    view_ura = ura_daily.copy()
-    view_ura["Data"] = pd.to_datetime(view_ura["data_lct_dia"], errors="coerce").dt.strftime("%d/%m/%Y")
-    view_ura = view_ura.rename(columns={
-        "clientes_ura": "Clientes URA",
+    view_source = source_daily.copy()
+    view_source["Data"] = pd.to_datetime(view_source["data_lct_dia"], errors="coerce").dt.strftime("%d/%m/%Y")
+    view_source = view_source.rename(columns={
+        "clientes_origem": f"Clientes {source_label}",
         "clientes_indicados": "Indicados no banco",
         "contas_abertas": "Abriram conta",
-    })[["Data", "Clientes URA", "Indicados no banco", "Abriram conta", "% viraram indicação", "% abriram conta"]]
+    })[["Data", f"Clientes {source_label}", "Indicados no banco", "Abriram conta", "% viraram indicação", "% abriram conta"]]
 
-    analitico_ura = lct_merged.copy()
-    analitico_ura["Data URA"] = pd.to_datetime(analitico_ura["data_lct"], errors="coerce").dt.strftime("%d/%m/%Y")
-    analitico_ura["Fundação empresa"] = pd.to_datetime(analitico_ura["fundacao_final"], errors="coerce").dt.strftime("%d/%m/%Y")
-    analitico_ura["Data cadastro banco"] = pd.to_datetime(analitico_ura["data_hora_cadastro"], errors="coerce").dt.strftime("%d/%m/%Y")
-    analitico_ura["Data conta criada"] = pd.to_datetime(analitico_ura["dt_conta_criada"], errors="coerce").dt.strftime("%d/%m/%Y")
-    analitico_ura["Indicado no banco"] = analitico_ura["indicado_banco"].map({True: "SIM", False: "NÃO"})
-    analitico_ura["Abriu conta"] = analitico_ura["abriu_conta"].map({True: "SIM", False: "NÃO"})
-    analitico_ura["CNPJ"] = analitico_ura["cnpj"]
-    analitico_ura["Nome cliente"] = analitico_ura["nome_cliente_final"]
-    analitico_ura = analitico_ura[["Data URA", "Nome cliente", "CNPJ", "Fundação empresa", "Indicado no banco", "Data cadastro banco", "Abriu conta", "Data conta criada", "status_abertura_conta", "pendencias"]].rename(columns={"status_abertura_conta": "Status abertura", "pendencias": "Pendências"})
-    return view_ura, analitico_ura
+    analitico_source = lct_merged.copy()
+    analitico_source[f"Data {source_label}"] = pd.to_datetime(analitico_source["data_lct"], errors="coerce").dt.strftime("%d/%m/%Y")
+    analitico_source["Origem"] = source_label
+    analitico_source["Fundação empresa"] = pd.to_datetime(analitico_source["fundacao_final"], errors="coerce").dt.strftime("%d/%m/%Y")
+    analitico_source["Data cadastro banco"] = pd.to_datetime(analitico_source["data_hora_cadastro"], errors="coerce").dt.strftime("%d/%m/%Y")
+    analitico_source["Data conta criada"] = pd.to_datetime(analitico_source["dt_conta_criada"], errors="coerce").dt.strftime("%d/%m/%Y")
+    analitico_source["Indicado no banco"] = analitico_source["indicado_banco"].map({True: "SIM", False: "NÃO"})
+    analitico_source["Abriu conta"] = analitico_source["abriu_conta"].map({True: "SIM", False: "NÃO"})
+    analitico_source["CNPJ"] = analitico_source["cnpj"]
+    analitico_source["Nome cliente"] = analitico_source["nome_cliente_final"]
+    analitico_source = analitico_source[[f"Data {source_label}", "Origem", "Nome cliente", "CNPJ", "Fundação empresa", "Indicado no banco", "Data cadastro banco", "Abriu conta", "Data conta criada", "status_abertura_conta", "pendencias"]].rename(columns={"status_abertura_conta": "Status abertura", "pendencias": "Pendências"})
+    return view_source, analitico_source
+
+
+def _build_ura_reports(df_panel_lct: Optional[pd.DataFrame], leads_funil: pd.DataFrame, visao_funil: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    return _build_lct_source_reports(df_panel_lct, leads_funil, visao_funil, "URA", ["LCT", "URA", "AURA"])
+
+
+def _build_sbm_reports(df_panel_lct: Optional[pd.DataFrame], leads_funil: pd.DataFrame, visao_funil: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    return _build_lct_source_reports(df_panel_lct, leads_funil, visao_funil, "SBM", ["SBM", "SABER MAIS", "SABERMAIS"])
 
 
 def _build_followup_daily_outputs(leads_base: pd.DataFrame, df_visao_raw: Optional[pd.DataFrame] = None, previous_files=None) -> dict:
@@ -9536,6 +9575,7 @@ if "Meta Supervisor C6" in tabs_map:
                 visao_mail_hist = visao_mail_base
             df_mail_lct_hist, _ = _load_lct_history_from_temp_imports(df_mail_lct)
             ura_resumo_mail, ura_analitico_mail = _build_ura_reports(df_mail_lct_hist, leads_mail_hist, visao_mail_hist)
+            sbm_resumo_mail, sbm_analitico_mail = _build_sbm_reports(df_mail_lct_hist, leads_mail_hist, visao_mail_hist)
             follow_mail = _build_followup_daily_outputs(leads_mail_base, df_mail_visao) if not leads_mail_base.empty else {}
 
             report_options = []
@@ -9576,6 +9616,26 @@ if "Meta Supervisor C6" in tabs_map:
                     "maintype": "application",
                     "subtype": "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     "data": _to_excel_bytes({"URA_Analitico": ura_analitico_mail}),
+                })
+            if not sbm_resumo_mail.empty:
+                report_options.append({
+                    "key": "sbm_resumo_excel",
+                    "group": "Leads Diários",
+                    "label": "SBM Saber Mais efetividade (Excel)",
+                    "filename": f"sbm_saber_mais_efetividade_{report_day.replace('/', '-') or 'atual'}.xlsx",
+                    "maintype": "application",
+                    "subtype": "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "data": _to_excel_bytes({"SBM_Resumo": sbm_resumo_mail}),
+                })
+            if not sbm_analitico_mail.empty:
+                report_options.append({
+                    "key": "sbm_analitico_excel",
+                    "group": "Leads Diários",
+                    "label": "SBM Saber Mais analítico (Excel)",
+                    "filename": f"sbm_saber_mais_analitico_{report_day.replace('/', '-') or 'atual'}.xlsx",
+                    "maintype": "application",
+                    "subtype": "vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "data": _to_excel_bytes({"SBM_Analitico": sbm_analitico_mail}),
                 })
             if follow_mail and not follow_mail.get("mensagens", pd.DataFrame()).empty:
                 data_envio_txt = dt.date.today().strftime("%d%m%Y")
@@ -10759,6 +10819,16 @@ if "Leads Diários" in tabs_map:
             if df_lct_tmp is not None and not df_lct_tmp.empty:
                 _save_daily_import_cache("lct", up_lct.name, raw_lct_bytes)
                 st.success("Resumo LCT importado.")
+                if "firebase" not in st.secrets:
+                    _lct_sync_sig = json.dumps(["lct", up_lct.name, getattr(up_lct, "size", 0)], ensure_ascii=False)
+                    if st.session_state.get("_last_lct_cloud_sync_sig") != _lct_sync_sig:
+                        with st.spinner("Sincronizando Resumo LCT com o app online..."):
+                            _sync_ok, _sync_msg = _sync_local_data_to_cloud_seed("leads-lct-upload")
+                        st.session_state["_last_lct_cloud_sync_sig"] = _lct_sync_sig
+                        if _sync_ok:
+                            st.success("Resumo LCT publicado para o app online. O Streamlit pode levar alguns minutos para recarregar.")
+                        elif "Sem mudanças" not in _sync_msg:
+                            st.warning(_sync_msg)
 
         df_panel_lct, panel_lct_name, panel_lct_origin = _load_daily_import_cache("lct")
         df_ura_lct, ura_lct_names = _load_lct_history_from_temp_imports(df_panel_lct)
@@ -11134,7 +11204,7 @@ if "Leads Diários" in tabs_map:
         df_lct_for_ura = df_ura_lct if 'df_ura_lct' in locals() and df_ura_lct is not None and not df_ura_lct.empty else df_panel_lct
         if 'df_lct_for_ura' in locals() and df_lct_for_ura is not None and not df_lct_for_ura.empty:
             st.divider()
-            st.markdown("### Clientes da URA")
+            st.markdown("### Clientes da URA / Saber Mais")
             leads_ura_funil = _load_funil_history_from_temp_imports("leads", _extract_leads_base)
             visao_ura_funil = _load_funil_history_from_temp_imports("visao", _extract_visao_base)
             if not leads_funil.empty:
@@ -11148,17 +11218,27 @@ if "Leads Diários" in tabs_map:
                 leads_ura_funil = leads_funil
             if visao_ura_funil.empty:
                 visao_ura_funil = visao_funil
-            view_ura, analitico_ura = _build_ura_reports(df_lct_for_ura, leads_ura_funil, visao_ura_funil)
-            if not view_ura.empty:
-                view_ura_show = view_ura.copy()
-                for col in ["Clientes URA", "Indicados no banco", "Abriram conta"]:
-                    view_ura_show[col] = pd.to_numeric(view_ura_show[col], errors="coerce").fillna(0).astype(int).apply(br_int)
+
+            def _render_lct_source(label: str, view_df: pd.DataFrame, analitico_df: pd.DataFrame, key_prefix: str):
+                if view_df.empty:
+                    st.info(f"O Resumo LCT foi lido, mas não encontrei clientes {label} com CNPJ e Data.")
+                    return
+                st.markdown(f"#### Clientes {label}")
+                view_show = view_df.copy()
+                count_cols = [c for c in view_show.columns if c.startswith("Clientes ")] + ["Indicados no banco", "Abriram conta"]
+                for col in count_cols:
+                    if col in view_show.columns:
+                        view_show[col] = pd.to_numeric(view_show[col], errors="coerce").fillna(0).astype(int).apply(br_int)
                 for col in ["% viraram indicação", "% abriram conta"]:
-                    view_ura_show[col] = view_ura_show[col].apply(lambda x: f"{float(x):.1f}%".replace(".", ","))
-                render_downloadable_table(view_ura_show, "leads_lct_resumo", "leads_clientes_ura", raw_df=view_ura)
-                render_downloadable_table(analitico_ura, "leads_lct_analitico", "leads_clientes_ura_analitico", raw_df=analitico_ura)
-            else:
-                st.info("O Resumo LCT foi lido, mas não encontrei linhas válidas com CNPJ e Data.")
+                    if col in view_show.columns:
+                        view_show[col] = view_show[col].apply(lambda x: f"{float(x):.1f}%".replace(".", ","))
+                render_downloadable_table(view_show, f"{key_prefix}_resumo", f"{key_prefix}_resumo", raw_df=view_df)
+                render_downloadable_table(analitico_df, f"{key_prefix}_analitico", f"{key_prefix}_analitico", raw_df=analitico_df)
+
+            view_ura, analitico_ura = _build_ura_reports(df_lct_for_ura, leads_ura_funil, visao_ura_funil)
+            view_sbm, analitico_sbm = _build_sbm_reports(df_lct_for_ura, leads_ura_funil, visao_ura_funil)
+            _render_lct_source("URA", view_ura, analitico_ura, "leads_clientes_ura")
+            _render_lct_source("SBM / Saber Mais", view_sbm, analitico_sbm, "leads_clientes_sbm")
         elif 'df_lct_for_ura' in locals() and df_lct_for_ura is not None and df_lct_for_ura.empty:
             st.info("O Resumo LCT foi carregado, mas veio vazio.")
 
