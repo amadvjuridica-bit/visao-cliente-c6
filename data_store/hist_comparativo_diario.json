@@ -1150,5 +1150,17 @@
     "qual_m2": 148,
     "pix_total": 824,
     "cashin_total": 6919739.890000001
+  },
+  "18/05/2026": {
+    "mes_ref": "05/2026",
+    "base_receber_mes": 41775.0,
+    "c6_total": 1345,
+    "leads_total": 5143,
+    "qual_total": 333,
+    "qual_m0": 29,
+    "qual_m1": 149,
+    "qual_m2": 155,
+    "pix_total": 845,
+    "cashin_total": 7882884.36
   }
 }
