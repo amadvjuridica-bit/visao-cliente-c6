@@ -8936,19 +8936,25 @@ if "Painel C6 Empresas" in tabs_map:
         hist_leads = hist_to_df(HIST_LEADS_DAILY, "Cadastradas")
     saved_resumo = safe_json_load(HIST_RESUMO_MENSAL, default={}) or {}
 
-    if hist_open.empty or hist_leads.empty:
+    if hist_open.empty and hist_leads.empty and not saved_resumo:
         st.info("Importe C6 + Leads (diário) para montar o mês.")
     else:
-        base = pd.merge(hist_leads, hist_open, on="Data", how="outer").fillna(0)
-        base["Abertas"] = base["Abertas"].astype(int)
-        base["Cadastradas"] = base["Cadastradas"].astype(int)
-        base["Mes_ref"] = base["Data"].map(month_first)
+        if hist_open.empty and hist_leads.empty:
+            base = pd.DataFrame(columns=["Data", "Abertas", "Cadastradas", "Mes_ref"])
+        else:
+            base = pd.merge(hist_leads, hist_open, on="Data", how="outer").fillna(0)
+            base["Abertas"] = base["Abertas"].astype(int)
+            base["Cadastradas"] = base["Cadastradas"].astype(int)
+            base["Mes_ref"] = base["Data"].map(month_first)
 
-        meses = sorted(base["Mes_ref"].unique())
-        mes_atual = meses[-1]
-        mes_lbl = fmt_month(mes_atual)
+        meses_daily = set(base["Mes_ref"].dropna().unique()) if "Mes_ref" in base.columns else set()
+        meses_salvos = {dt.date(int(str(m).split("/")[1]), int(str(m).split("/")[0]), 1) for m in saved_resumo.keys() if "/" in str(m)}
+        meses = sorted(meses_daily | meses_salvos)
+        meses_lbl = [fmt_month(m) for m in meses]
+        mes_lbl = st.selectbox("Selecione o mês do resumo executivo", meses_lbl, index=len(meses_lbl) - 1, key="painel_resumo_exec_mes")
+        mes_atual = meses[meses_lbl.index(mes_lbl)]
 
-        mes_df = base[base["Mes_ref"] == mes_atual].copy()
+        mes_df = base[base["Mes_ref"] == mes_atual].copy() if not base.empty else pd.DataFrame(columns=["Abertas", "Cadastradas"])
         # No resumo executivo do Painel C6, a abertura mensal também deve refletir
         # a soma bruta do histórico diário importado, sem exceções.
         total_ab_mes = int(mes_df["Abertas"].sum())
@@ -8983,7 +8989,7 @@ if "Painel C6 Empresas" in tabs_map:
 
     if saved_resumo:
         months_sorted = sorted(saved_resumo.keys(), key=month_key_str)
-        mes_atual = months_sorted[-1]
+        mes_atual = st.selectbox("Selecione o mês da remuneração", months_sorted, index=len(months_sorted) - 1, key="painel_remun_mes")
         info = saved_resumo.get(mes_atual, {})
 
         faixa = info.get("faixa", "-")
