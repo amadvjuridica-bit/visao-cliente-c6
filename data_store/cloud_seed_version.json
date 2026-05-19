@@ -1,7 +1,7 @@
 {
-  "version": "2026-05-18-184209",
-  "generated_at": "2026-05-18T18:42:09",
-  "reason": "fix-lct-sbm-payload",
+  "version": "2026-05-19-110904",
+  "generated_at": "2026-05-19T11:09:04",
+  "reason": "painel-c6-upload",
   "files": [
     "c6_daily_funil_track.json",
     "c6_daily_import_meta.json",
