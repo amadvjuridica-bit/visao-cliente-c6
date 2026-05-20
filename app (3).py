@@ -262,7 +262,7 @@ C6_OPS_CACHE_META = os.path.join(DATA_DIR, "c6_operacao_ops_cache_meta.json")
 PANEL_C6_REFRESH_META = os.path.join(DATA_DIR, "panel_c6_refresh_meta.json")
 PANEL_C6_INCREMENTAL_CACHE = os.path.join(DATA_DIR, "panel_c6_incremental_cache.json")
 PANEL_C6_CARTILHA_NOVA_CACHE = os.path.join(DATA_DIR, "panel_c6_cartilha_nova_cache.json")
-REMUN_ENGINE_VERSION = "2026-05-13-remun-winner-memory-v6"
+REMUN_ENGINE_VERSION = "2026-05-19-wallet-direta-v7"
 
 PIX_VALID_VALUES = {
     "CNPJ",
@@ -3433,8 +3433,7 @@ def recompute_cartilha_nova() -> pd.DataFrame:
             dt_install = _parse_br_date_text(row.get("dt_install_maq"))
             if dt_abertura and dt_install and fmt_month(dt_abertura) == mkey:
                 c6pay_credenciados += 1
-            dt_entrega = _parse_br_date_text(row.get("dt_entrega_cartao"))
-            if dt_entrega and fmt_month(dt_entrega) == mkey and _truthy_flag(row.get("wallet")):
+            if _truthy_flag(row.get("wallet")):
                 detail_counts["wallet"] += 1
 
         ja_pago_ref = total_cheio - total_receber
@@ -5930,8 +5929,7 @@ def _refresh_current_month_remuneration_from_rows(mkey: str, month_rows: Dict[st
         dt_install = _parse_br_date_text(row.get("dt_install_maq"))
         if dt_abertura and dt_install and fmt_month(dt_abertura) == mkey:
             c6pay_credenciados += 1
-        dt_entrega = _parse_br_date_text(row.get("dt_entrega_cartao"))
-        if dt_entrega and fmt_month(dt_entrega) == mkey and _truthy_flag(row.get("wallet")):
+        if _truthy_flag(row.get("wallet")):
             detail_counts["wallet"] += 1
 
     new_summary = {
