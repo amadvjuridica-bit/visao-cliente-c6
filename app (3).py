@@ -611,6 +611,29 @@ def _normalize_person_key(value: str) -> str:
     return txt
 
 
+def _canonicalize_operator_series(series: pd.Series, remun_cfg: Optional[dict] = None) -> pd.Series:
+    values = series.astype("string").fillna("").str.strip()
+    cfg_ops = (remun_cfg or {}).get("operadores") if isinstance(remun_cfg, dict) else {}
+    cfg_names = {}
+    if isinstance(cfg_ops, dict):
+        for name in cfg_ops.keys():
+            key = _normalize_person_key(name)
+            if key:
+                cfg_names[key] = str(name).strip()
+
+    preferred = {}
+    for raw in values.tolist():
+        key = _normalize_person_key(raw)
+        if not key:
+            continue
+        if key in cfg_names:
+            preferred[key] = cfg_names[key]
+        elif key not in preferred:
+            preferred[key] = str(raw).strip()
+
+    return values.apply(lambda raw: preferred.get(_normalize_person_key(raw), str(raw).strip()))
+
+
 def _extract_date_from_filename(name: str) -> Optional[dt.date]:
     txt = str(name or "")
     m = re.search(r"(\d{2})(\d{2})(\d{4})", txt)
@@ -5432,11 +5455,13 @@ def send_email_with_attachments(to_email: str, smtp_password: str, subject: str,
     msg["Date"] = formatdate(localtime=True)
     msg.set_content(body)
     for att in attachments:
+        data = att.get("data")
+        if not isinstance(data, (bytes, bytearray)) or not data:
+            continue
         maintype = str(att.get("maintype") or "application")
         subtype = str(att.get("subtype") or "octet-stream")
         filename = str(att.get("filename") or "anexo.bin")
-        data = att.get("data") or b""
-        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=filename)
+        msg.add_attachment(bytes(data), maintype=maintype, subtype=subtype, filename=filename)
 
     passwords = []
     raw_pwd = str(smtp_password or "")
@@ -7547,6 +7572,8 @@ def _process_c6_operacao(df_ops_raw: pd.DataFrame, df_leads_raw: pd.DataFrame, d
     ops = _extract_ops_base(df_ops_raw)
     leads = _extract_leads_base(df_leads_raw)
     visao = _extract_visao_base(df_visao_raw)
+    if not ops.empty and "operador" in ops.columns:
+        ops["operador"] = _canonicalize_operator_series(ops["operador"], remun_cfg)
 
     base = leads.merge(visao, on="cnpj", how="outer", suffixes=("_lead", "_visao"))
     base["nome_cliente"] = base["nome_cliente_lead"].fillna("").replace("", pd.NA).fillna(base["nome_cliente_visao"])
@@ -9802,18 +9829,28 @@ if "Meta Supervisor C6" in tabs_map:
                 for i, opt in enumerate(group_options):
                     with opt_cols[i % 2]:
                         csel, cdl = st.columns([4, 1])
+                        opt_data = opt.get("data")
+                        opt_available = isinstance(opt_data, (bytes, bytearray)) and len(opt_data) > 0
                         with csel:
-                            checked = st.checkbox(opt["label"], value=(opt["key"] == "supervisor_pdf"), key=f"mail_opt_{opt['key']}")
-                        with cdl:
-                            st.download_button(
-                                "Baixar",
-                                data=opt["data"],
-                                file_name=opt["filename"],
-                                mime=f"{opt['maintype']}/{opt['subtype']}",
-                                key=f"preview_mail_inline_{opt['key']}",
-                                use_container_width=True,
+                            checked = st.checkbox(
+                                opt["label"],
+                                value=(opt["key"] == "supervisor_pdf" and opt_available),
+                                key=f"mail_opt_{opt['key']}",
+                                disabled=not opt_available,
                             )
-                        if checked:
+                            if not opt_available:
+                                st.caption("Indisponível nesta importação.")
+                        with cdl:
+                            if opt_available:
+                                st.download_button(
+                                    "Baixar",
+                                    data=bytes(opt_data),
+                                    file_name=opt["filename"],
+                                    mime=f"{opt['maintype']}/{opt['subtype']}",
+                                    key=f"preview_mail_inline_{opt['key']}",
+                                    use_container_width=True,
+                                )
+                        if checked and opt_available:
                             selected_reports.append(opt)
 
             selected_labels = [opt["label"] for opt in selected_reports]
@@ -9850,11 +9887,15 @@ if "Meta Supervisor C6" in tabs_map:
             if st.button("Enviar e-mail agora", key="send_supervisor_email_btn"):
                 _save_supervisor_email_cfg(to_email, smtp_password)
                 pwd = str(smtp_password or "").strip() or _smtp_password_from_secrets()
+                attachments_to_send = [
+                    opt for opt in selected_reports
+                    if isinstance(opt.get("data"), (bytes, bytearray)) and len(opt.get("data")) > 0
+                ]
                 if not str(to_email or "").strip():
                     st.error("Preencha o e-mail de destino.")
                 elif not pwd:
                     st.error("Preencha a senha do e-mail remetente para enviar.")
-                elif not selected_reports:
+                elif not attachments_to_send:
                     st.error("Selecione ao menos um relatório para enviar.")
                 else:
                     try:
@@ -9863,7 +9904,7 @@ if "Meta Supervisor C6" in tabs_map:
                             smtp_password=pwd,
                             subject=str(subject or subj_default).strip(),
                             body=str(body or body_default).strip(),
-                            attachments=selected_reports,
+                            attachments=attachments_to_send,
                         )
                         st.success("E-mail enviado com sucesso.")
                     except Exception as e:
