@@ -324,6 +324,9 @@ def safe_json_load(path: str, default):
     """
     if "firebase" in st.secrets:
         doc_id = _fs_doc_id_from_path(path)
+        session_payloads = st.session_state.get("_cloud_session_payloads", {})
+        if isinstance(session_payloads, dict) and doc_id in session_payloads:
+            return session_payloads.get(doc_id, default)
         bundled = _bundled_seed_payload(doc_id, _MISSING)
         if bundled is not _MISSING:
             return bundled
@@ -349,7 +352,9 @@ def safe_json_save(path: str, obj):
     Caso contrário, mantém comportamento local.
     """
     if "firebase" in st.secrets:
-        _fs_save_payload(_fs_doc_id_from_path(path), obj)
+        doc_id = _fs_doc_id_from_path(path)
+        st.session_state.setdefault("_cloud_session_payloads", {})[doc_id] = obj
+        _fs_save_payload(doc_id, obj)
         return
 
     with open(path, "w", encoding="utf-8") as f:
@@ -361,7 +366,9 @@ def safe_json_delete(path: str):
     Remove somente o doc/arquivo daquele relatório.
     """
     if "firebase" in st.secrets:
-        _fs_delete_doc(_fs_doc_id_from_path(path))
+        doc_id = _fs_doc_id_from_path(path)
+        st.session_state.setdefault("_cloud_session_payloads", {}).pop(doc_id, None)
+        _fs_delete_doc(doc_id)
     if os.path.exists(path):
         os.remove(path)
 
