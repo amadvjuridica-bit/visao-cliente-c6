@@ -8092,12 +8092,30 @@ def _process_c6_operacao(df_ops_raw: pd.DataFrame, df_leads_raw: pd.DataFrame, d
         "eficiencia_%": "conversao_%"
     })[["operador", "tipo_operador", "clientes_act", "clientes_abriram_conta", "clientes_abriram_14d", "conversao_%", "comissao_total", "aparece_email"]].copy()
     act_conversao_operadores = act_conversao_operadores.sort_values(["conversao_%", "clientes_abriram_conta", "clientes_act"], ascending=[False, False, False])
+    act_indicados_base = act_rep[act_rep["operador_ativo"] & act_rep["data_acao"].notna()].copy()
+    act_indicados_base["dia_indicacao"] = pd.to_datetime(act_indicados_base["data_acao"], errors="coerce").dt.date
+    act_indicados_base["dia_indicacao_key"] = pd.to_datetime(act_indicados_base["dia_indicacao"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
+    act_indicados_base["mes_ref_indicacao"] = pd.to_datetime(act_indicados_base["dia_indicacao"], errors="coerce").dt.strftime("%Y-%m").fillna("")
     act_daily_base = act_rep[act_rep["operador_ativo"] & act_rep["dia_comissao"].notna()].copy()
-    act_diario = act_daily_base.groupby(["dia_comissao", "operador", "tipo_operador"], dropna=False).agg(clientes_indicados=("cnpj", "nunique"), contas_abertas=("abriu_apos_indicacao", "sum"), abertas_14d=("janela_14d", "sum"), comissao_total=("valor_total", "sum"), aparece_email=("operador_relatorio", "max")).reset_index()
+    act_diario = act_daily_base.groupby(["dia_comissao", "operador", "tipo_operador"], dropna=False).agg(contas_abertas=("abriu_apos_indicacao", "sum"), abertas_14d=("janela_14d", "sum"), comissao_total=("valor_total", "sum"), aparece_email=("operador_relatorio", "max")).reset_index()
+    indicados_diario = act_indicados_base[act_indicados_base["dia_indicacao"].notna()].groupby(["dia_indicacao", "operador", "tipo_operador"], dropna=False).agg(clientes_indicados=("cnpj", "nunique")).reset_index().rename(columns={"dia_indicacao": "dia_comissao"})
+    if not act_diario.empty or not indicados_diario.empty:
+        act_diario = indicados_diario.merge(act_diario, on=["dia_comissao", "operador", "tipo_operador"], how="outer")
+        for col in ["clientes_indicados", "contas_abertas", "abertas_14d"]:
+            act_diario[col] = pd.to_numeric(act_diario.get(col, 0), errors="coerce").fillna(0).astype(int)
+        act_diario["comissao_total"] = pd.to_numeric(act_diario.get("comissao_total", 0.0), errors="coerce").fillna(0.0)
+        act_diario["aparece_email"] = act_diario.get("aparece_email", True).fillna(True).astype(bool)
     if not act_diario.empty:
         act_diario["eficiencia_%"] = (act_diario["contas_abertas"] / act_diario["clientes_indicados"].replace(0, pd.NA) * 100).fillna(0).round(2)
         act_diario = act_diario.sort_values(["dia_comissao", "comissao_total", "contas_abertas"], ascending=[False, False, False])
-    act_mensal = act_daily_base[act_daily_base["mes_ref_comissao"].ne("")].groupby(["mes_ref_comissao", "operador", "tipo_operador"], dropna=False).agg(clientes_indicados=("cnpj", "nunique"), contas_abertas=("abriu_apos_indicacao", "sum"), abertas_14d=("janela_14d", "sum"), comissao_total=("valor_total", "sum"), aparece_email=("operador_relatorio", "max")).reset_index()
+    act_mensal = act_daily_base[act_daily_base["mes_ref_comissao"].ne("")].groupby(["mes_ref_comissao", "operador", "tipo_operador"], dropna=False).agg(contas_abertas=("abriu_apos_indicacao", "sum"), abertas_14d=("janela_14d", "sum"), comissao_total=("valor_total", "sum"), aparece_email=("operador_relatorio", "max")).reset_index()
+    indicados_mensal = act_indicados_base[act_indicados_base["mes_ref_indicacao"].ne("")].groupby(["mes_ref_indicacao", "operador", "tipo_operador"], dropna=False).agg(clientes_indicados=("cnpj", "nunique")).reset_index().rename(columns={"mes_ref_indicacao": "mes_ref_comissao"})
+    if not act_mensal.empty or not indicados_mensal.empty:
+        act_mensal = indicados_mensal.merge(act_mensal, on=["mes_ref_comissao", "operador", "tipo_operador"], how="outer")
+        for col in ["clientes_indicados", "contas_abertas", "abertas_14d"]:
+            act_mensal[col] = pd.to_numeric(act_mensal.get(col, 0), errors="coerce").fillna(0).astype(int)
+        act_mensal["comissao_total"] = pd.to_numeric(act_mensal.get("comissao_total", 0.0), errors="coerce").fillna(0.0)
+        act_mensal["aparece_email"] = act_mensal.get("aparece_email", True).fillna(True).astype(bool)
     if not act_mensal.empty:
         act_mensal["eficiencia_%"] = (act_mensal["contas_abertas"] / act_mensal["clientes_indicados"].replace(0, pd.NA) * 100).fillna(0).round(2)
         act_mensal = act_mensal.sort_values(["mes_ref_comissao", "comissao_total", "contas_abertas"], ascending=[False, False, False])
