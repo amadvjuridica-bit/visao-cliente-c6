@@ -142,5 +142,17 @@
     "ops_rows": 1315,
     "leads_rows": 5136,
     "visao_rows": 1345
+  },
+  {
+    "processed_at": "2026-05-19 11:13:52",
+    "ops_rows": 1633,
+    "leads_rows": 5136,
+    "visao_rows": 1345
+  },
+  {
+    "processed_at": "2026-05-19 11:18:46",
+    "ops_rows": 1633,
+    "leads_rows": 5136,
+    "visao_rows": 1345
   }
 ]

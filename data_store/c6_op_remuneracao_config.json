@@ -75,18 +75,91 @@
           "valor": 15.0
         }
       ]
+    },
+    "outros": {
+      "label": "Outros",
+      "act_indicacao": 0.0,
+      "semana": [
+        {
+          "min": 1,
+          "max": 999,
+          "valor": 0.0
+        }
+      ],
+      "sabado": [
+        {
+          "min": 1,
+          "max": 999,
+          "valor": 0.0
+        }
+      ]
     }
   },
   "operadores": {
-    "CAMILA HOSANA ROJAS ARAUJO": "estagiario",
-    "CARLOS AUGUSTO BRITTES DOS SAN": "clt",
-    "DANIEL DEL OLMO ALVES": "estagiario",
-    "HELLEN CRISTYNE DE SOUSA SANTO": "estagiario",
-    "ISABELA FERREIRA": "estagiario",
-    "ISADORA VARGAS RIBEIRO": "estagiario",
-    "LIVIA ALVES GRANJA": "estagiario",
-    "LUIZ EDUARDO": "estagiario",
-    "LUIZ EDUARDO CAPOVILLA": "clt",
-    "SUPORTE XPRISMA": "clt"
+    "CAMILA HOSANA ROJAS ARAUJO": {
+      "categoria": "estagiario",
+      "ativo": true,
+      "relatorio": true
+    },
+    "CARLOS AUGUSTO BRITTES DOS SAN": {
+      "categoria": "clt",
+      "ativo": true,
+      "relatorio": true
+    },
+    "DANIEL DEL OLMO ALVES": {
+      "categoria": "clt",
+      "ativo": true,
+      "relatorio": true
+    },
+    "HELLEN CRISTYNE DE SOUSA SANTO": {
+      "categoria": "estagiario",
+      "ativo": true,
+      "relatorio": true
+    },
+    "ISABELA FERREIRA": {
+      "categoria": "estagiario",
+      "ativo": true,
+      "relatorio": true
+    },
+    "ISADORA VARGAS RIBEIRO": {
+      "categoria": "estagiario",
+      "ativo": true,
+      "relatorio": true
+    },
+    "LIVIA ALVES GRANJA": {
+      "categoria": "estagiario",
+      "ativo": true,
+      "relatorio": true
+    },
+    "LUIZ EDUARDO": {
+      "categoria": "estagiario",
+      "ativo": true,
+      "relatorio": true
+    },
+    "LUIZ EDUARDO CAPOVILLA": {
+      "categoria": "clt",
+      "ativo": true,
+      "relatorio": true
+    },
+    "SUPORTE XPRISMA": {
+      "categoria": "clt",
+      "ativo": true,
+      "relatorio": true
+    },
+    "FERNANDA AQUINO DA SILVA": {
+      "categoria": "clt",
+      "ativo": true,
+      "relatorio": true
+    },
+    "JULIANA DOS SANTOS MARI": {
+      "categoria": "clt",
+      "ativo": true,
+      "relatorio": true
+    },
+    "LUCIANA RIBEIRO": {
+      "categoria": "clt",
+      "ativo": true,
+      "relatorio": true
+    }
   }
 }
