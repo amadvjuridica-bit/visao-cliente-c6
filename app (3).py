@@ -81,7 +81,7 @@ def _fs_load_payload(doc_id: str, default):
 def _fs_save_payload(doc_id: str, obj):
     db = _get_fs_db()
     if db is None:
-        return
+        return False
     doc_ref = db.collection("app_store").document(doc_id)
     try:
         raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str)
@@ -93,7 +93,7 @@ def _fs_save_payload(doc_id: str, obj):
             # Não faz leitura prévia: no Streamlit Cloud a cota de Firestore pode
             # estourar, e metadados/cache não podem derrubar o app.
             doc_ref.set({"payload": obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
-            return
+            return True
         chunks = []
         current = []
         current_size = 0
@@ -112,8 +112,9 @@ def _fs_save_payload(doc_id: str, obj):
         chunks_ref = doc_ref.collection("chunks")
         for idx, part in enumerate(chunks):
             chunks_ref.document(f"{idx:05d}").set({"data": part})
+        return True
     except Exception:
-        return
+        return False
 
 def _fs_delete_doc(doc_id: str):
     db = _get_fs_db()
@@ -327,10 +328,13 @@ def safe_json_load(path: str, default):
         session_payloads = st.session_state.get("_cloud_session_payloads", {})
         if isinstance(session_payloads, dict) and doc_id in session_payloads:
             return session_payloads.get(doc_id, default)
+        cloud_payload = _fs_load_payload(doc_id, _MISSING)
+        if cloud_payload is not _MISSING:
+            return cloud_payload
         bundled = _bundled_seed_payload(doc_id, _MISSING)
         if bundled is not _MISSING:
             return bundled
-        return _fs_load_payload(doc_id, default)
+        return default
 
     if os.path.exists(path):
         try:
@@ -354,11 +358,11 @@ def safe_json_save(path: str, obj):
     if "firebase" in st.secrets:
         doc_id = _fs_doc_id_from_path(path)
         st.session_state.setdefault("_cloud_session_payloads", {})[doc_id] = obj
-        _fs_save_payload(doc_id, obj)
-        return
+        return _fs_save_payload(doc_id, obj)
 
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
+    return True
 
 
 def safe_json_delete(path: str):
@@ -392,10 +396,10 @@ def local_json_load(path: str, default):
 
 def local_json_save(path: str, obj):
     if "firebase" in st.secrets:
-        safe_json_save(path, obj)
-        return
+        return safe_json_save(path, obj)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
+    return True
 
 
 def local_json_delete(path: str):
@@ -1143,6 +1147,7 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
     else:
         cache_path = C6_DAILY_LEADS_CACHE
     if "firebase" in st.secrets:
+        saved_cache = False
         try:
             if kind_key == "lct":
                 df_cache = _read_lct_file_any(file_name, raw_bytes)
@@ -1157,9 +1162,11 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
             else:
                 df_cache = read_excel_any(raw_bytes)
             if df_cache is not None:
-                safe_json_save(cache_path, _df_to_store_payload(df_cache))
+                saved_cache = bool(safe_json_save(cache_path, _df_to_store_payload(df_cache)))
         except Exception:
-            pass
+            saved_cache = False
+        if not saved_cache:
+            return False
     else:
         with open(cache_path, "wb") as f:
             f.write(raw_bytes)
@@ -1168,11 +1175,12 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
         "name": str(file_name or "").strip(),
         "cached_at": dt.datetime.now().isoformat(),
     }
-    local_json_save(C6_DAILY_IMPORT_META, meta)
+    saved_meta = bool(local_json_save(C6_DAILY_IMPORT_META, meta))
     try:
         _write_daily_temp_import_copy(file_name, raw_bytes)
     except Exception:
         pass
+    return saved_meta
 
 
 def _filename_has_required_keyword(file_name: str, keyword: str) -> bool:
@@ -8317,7 +8325,8 @@ if "Painel C6 Empresas" in tabs_map:
             st.session_state["c6_daily_visao_df"] = df_c6.copy()
             st.session_state["c6_daily_visao_df__name"] = f.name
             st.session_state["c6_daily_visao_df__ts"] = dt.datetime.now().timestamp()
-            _save_daily_import_cache("visao", f.name, raw_c6_bytes)
+            if not _save_daily_import_cache("visao", f.name, raw_c6_bytes):
+                st.error("Não consegui salvar a Visão Cliente na nuvem. A importação não ficará disponível em outros computadores.")
 
             if COL_ABERTURA not in df_c6.columns:
                 df_c6[COL_ABERTURA] = pd.NA
@@ -8432,7 +8441,8 @@ if "Painel C6 Empresas" in tabs_map:
             st.session_state["c6_daily_leads_df"] = df_leads.copy()
             st.session_state["c6_daily_leads_df__name"] = f.name
             st.session_state["c6_daily_leads_df__ts"] = dt.datetime.now().timestamp()
-            _save_daily_import_cache("leads", f.name, raw_leads_bytes)
+            if not _save_daily_import_cache("leads", f.name, raw_leads_bytes):
+                st.error("Não consegui salvar o arquivo de Leads na nuvem. A importação não ficará disponível em outros computadores.")
             _persist_leads_cnpj_track(df_leads)
 
             if COL_LEADS_DATA not in df_leads.columns:
@@ -10869,8 +10879,10 @@ if "Leads Diários" in tabs_map:
             raw_lct_bytes = up_lct.getvalue()
             df_lct_tmp = _read_lct_file_any(up_lct.name, raw_lct_bytes)
             if df_lct_tmp is not None and not df_lct_tmp.empty:
-                _save_daily_import_cache("lct", up_lct.name, raw_lct_bytes)
-                st.success("Resumo LCT importado.")
+                if _save_daily_import_cache("lct", up_lct.name, raw_lct_bytes):
+                    st.success("Resumo LCT importado.")
+                else:
+                    st.error("Não consegui salvar o Resumo LCT na nuvem. A importação não ficará disponível em outros computadores.")
                 if "firebase" not in st.secrets:
                     _lct_sync_sig = json.dumps(["lct", up_lct.name, getattr(up_lct, "size", 0)], ensure_ascii=False)
                     if st.session_state.get("_last_lct_cloud_sync_sig") != _lct_sync_sig:
