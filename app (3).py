@@ -7125,7 +7125,7 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
     df = df_visao.copy()
     data_abertura_all = pd.to_datetime(_series_by_name_or_letter(df, [COL_ABERTURA, "DATA CONTA CRIADA", "DT CONTA CRIADA"], "T"), errors="coerce", dayfirst=True)
     status_all = normalize_str(_series_by_name_or_letter(df, [COL_STATUS, "STATUS", "STATUS_CONTA", "STATUS CC"], "V")).str.upper()
-    mask = data_abertura_all.notna() & status_all.str.contains("LIBERADA", na=False)
+    mask = data_abertura_all.notna()
     mask &= ~status_all.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
     base = df.loc[mask].copy()
     if base.empty:
@@ -7176,6 +7176,21 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
                 "criterios_atingidos": criterios_s.loc[idx],
             })
     return pd.DataFrame(rows)
+
+
+def _open_accounts_actions_summary(df_visao: pd.DataFrame) -> dict:
+    if df_visao is None or df_visao.empty:
+        return {"linhas_base": 0, "contas_criadas": 0, "excluidas_status": 0, "clientes_validos": 0}
+    data_abertura = pd.to_datetime(_series_by_name_or_letter(df_visao, [COL_ABERTURA, "DATA CONTA CRIADA", "DT CONTA CRIADA"], "T"), errors="coerce", dayfirst=True)
+    status_s = normalize_str(_series_by_name_or_letter(df_visao, [COL_STATUS, "STATUS", "STATUS_CONTA", "STATUS CC"], "V")).str.upper()
+    has_open = data_abertura.notna()
+    blocked = status_s.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
+    return {
+        "linhas_base": int(len(df_visao)),
+        "contas_criadas": int(has_open.sum()),
+        "excluidas_status": int((has_open & blocked).sum()),
+        "clientes_validos": int((has_open & ~blocked).sum()),
+    }
 
 
 def _read_lct_file_any(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
@@ -11797,6 +11812,7 @@ if "Mensagens" in tabs_map:
           st.info("Importe primeiro a planilha C6 (Visão Cliente) no Painel C6 Empresas.")
         else:
           acoes_abertas_df = _build_open_accounts_actions_report(df_visao_msg)
+          acoes_summary = _open_accounts_actions_summary(df_visao_msg)
           st.caption(f"Visão Cliente em uso: {visao_msg_name or 'arquivo importado'}")
           if acoes_abertas_df.empty:
             st.info("Nenhum cliente com conta liberada/aberta encontrado para o relatório de ações.")
@@ -11811,8 +11827,10 @@ if "Mensagens" in tabs_map:
               use_container_width=True,
             )
             st.caption(
-              f"{br_int(acoes_abertas_df['cnpj'].nunique())} clientes e "
-              f"{br_int(len(acoes_abertas_df))} linhas de telefone no arquivo."
+              f"Base importada: {br_int(acoes_summary['linhas_base'])} clientes. "
+              f"Contas criadas: {br_int(acoes_summary['contas_criadas'])}. "
+              f"Excluídos por status bloqueado/desativado/encerrado/cancelado: {br_int(acoes_summary['excluidas_status'])}. "
+              f"No arquivo: {br_int(acoes_abertas_df['cnpj'].nunique())} clientes e {br_int(len(acoes_abertas_df))} linhas de telefone."
             )
 
           st.divider()
