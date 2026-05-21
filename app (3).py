@@ -7130,6 +7130,18 @@ def _read_temp_import_file_any(path: str) -> Optional[pd.DataFrame]:
 
 
 def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = None) -> Tuple[pd.DataFrame, str]:
+    frames, names = _load_lct_temp_history_cached()
+    frames = [df.copy() for df in frames]
+    names = list(names)
+    if cached_lct is not None and not cached_lct.empty:
+        frames.append(cached_lct.copy())
+    if not frames:
+        return pd.DataFrame(), ""
+    return pd.concat(frames, ignore_index=True), ", ".join(sorted(set(names)))
+
+
+@st.cache_data(show_spinner=False)
+def _load_lct_temp_history_cached() -> Tuple[List[pd.DataFrame], List[str]]:
     frames = []
     names = []
     for path in _temp_import_files_by_keyword("resumo lct"):
@@ -7138,25 +7150,11 @@ def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = Non
             continue
         frames.append(df)
         names.append(os.path.basename(path))
-    if cached_lct is not None and not cached_lct.empty:
-        frames.append(cached_lct.copy())
-    if not frames:
-        return pd.DataFrame(), ""
-    return pd.concat(frames, ignore_index=True), ", ".join(sorted(set(names)))
+    return frames, names
 
 
-def _load_funil_history_from_temp_imports(keyword: str, extractor) -> pd.DataFrame:
-    frames = []
-    for path in _temp_import_files_by_keyword(keyword):
-        df = _read_temp_import_file_any(path)
-        if df is None or df.empty:
-            continue
-        try:
-            extracted = extractor(df)
-        except Exception:
-            continue
-        if extracted is not None and not extracted.empty:
-            frames.append(extracted)
+def _load_funil_history_from_temp_imports(keyword: str, _extractor) -> pd.DataFrame:
+    frames = [df.copy() for df in _load_funil_temp_history_cached(keyword, _extractor)]
     cache_kind = ""
     key_norm = unicodedata.normalize("NFKD", str(keyword or "")).encode("ascii", "ignore").decode("ascii").lower()
     if "lead" in key_norm:
@@ -7167,7 +7165,7 @@ def _load_funil_history_from_temp_imports(keyword: str, extractor) -> pd.DataFra
         cached_df, _, _ = _load_daily_import_cache(cache_kind)
         if cached_df is not None and not cached_df.empty:
             try:
-                extracted = extractor(cached_df)
+                extracted = _extractor(cached_df)
             except Exception:
                 extracted = pd.DataFrame()
             if extracted is not None and not extracted.empty:
@@ -7181,6 +7179,22 @@ def _load_funil_history_from_temp_imports(keyword: str, extractor) -> pd.DataFra
             out = out.sort_values(sort_cols)
         out = out.drop_duplicates(subset=["cnpj"], keep="last")
     return out.reset_index(drop=True)
+
+
+@st.cache_data(show_spinner=False)
+def _load_funil_temp_history_cached(keyword: str, _extractor) -> List[pd.DataFrame]:
+    frames = []
+    for path in _temp_import_files_by_keyword(keyword):
+        df = _read_temp_import_file_any(path)
+        if df is None or df.empty:
+            continue
+        try:
+            extracted = _extractor(df)
+        except Exception:
+            continue
+        if extracted is not None and not extracted.empty:
+            frames.append(extracted)
+    return frames
 
 
 def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]] = None) -> pd.DataFrame:
@@ -7350,9 +7364,16 @@ def _build_followup_daily_outputs(leads_base: pd.DataFrame, df_visao_raw: Option
     if "abriu_conta_flag" not in followup_base.columns:
         followup_base["abriu_conta_flag"] = "NÃO"
     followup_base = followup_base[followup_base["abriu_conta_flag"].ne("SIM")].copy()
+    if "nome_cliente" not in followup_base.columns:
+        followup_base["nome_cliente"] = ""
+    if "nome_envio" not in followup_base.columns:
+        followup_base["nome_envio"] = followup_base["nome_cliente"]
+    else:
+        followup_base["nome_envio"] = followup_base["nome_envio"].fillna("").replace("", pd.NA).fillna(followup_base["nome_cliente"])
 
     hist_prev = _build_previous_message_history(previous_files)
-    followup_base["nome_key"] = followup_base["nome_envio"].fillna("").apply(_normalize_person_key)
+    nome_envio_series = followup_base["nome_envio"] if "nome_envio" in followup_base.columns else pd.Series([""] * len(followup_base), index=followup_base.index)
+    followup_base["nome_key"] = nome_envio_series.fillna("").apply(_normalize_person_key)
     if not hist_prev.empty:
         followup_base = followup_base.merge(hist_prev, on="nome_key", how="left")
     else:
