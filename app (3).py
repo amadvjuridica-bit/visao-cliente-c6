@@ -7339,8 +7339,22 @@ def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]]
     acao_col = _coalesce_col(df, ["Ação", "ACAO", "Acao"])
     hist_col = _coalesce_col(df, ["Histórico", "HISTORICO", "HISTÓRICO", "Historico"])
 
+    shifted_lct = False
+    if cnpj_col and "Cód" in df.columns:
+        cnpj_valid = _normalize_cnpj_series(df[cnpj_col]).astype(str).str.len().ge(14).mean()
+        cod_valid = _normalize_cnpj_series(df["Cód"]).astype(str).str.len().ge(14).mean()
+        shifted_lct = bool(cod_valid > cnpj_valid and cod_valid > 0.5)
+    if shifted_lct:
+        cnpj_col = "Cód"
+        acao_col = "Unnamed: 4" if "Unnamed: 4" in df.columns else acao_col
+        data_col = "Ação" if "Ação" in df.columns else data_col
+        hist_col = "Hora" if "Hora" in df.columns else hist_col
+
     out = pd.DataFrame()
-    out["nome_cliente_lct"] = normalize_str(df[nome_col]) if nome_col else ""
+    if shifted_lct and not isinstance(df.index, pd.RangeIndex):
+        out["nome_cliente_lct"] = normalize_str(pd.Series(df.index, index=df.index))
+    else:
+        out["nome_cliente_lct"] = normalize_str(df[nome_col]) if nome_col else ""
     out["cnpj"] = _normalize_cnpj_series(df[cnpj_col]) if cnpj_col else ""
     if data_col:
         data_raw = df[data_col].astype("string").fillna("").str.strip()
@@ -11360,9 +11374,16 @@ if "Leads Diários" in tabs_map:
             if "abriu_conta_flag" not in followup_base.columns:
                 followup_base["abriu_conta_flag"] = "NÃO"
             followup_base = followup_base[followup_base["abriu_conta_flag"].ne("SIM")].copy()
+            if "nome_cliente" not in followup_base.columns:
+                followup_base["nome_cliente"] = ""
+            if "nome_envio" not in followup_base.columns:
+                followup_base["nome_envio"] = followup_base["nome_cliente"]
+            else:
+                followup_base["nome_envio"] = followup_base["nome_envio"].fillna("").replace("", pd.NA).fillna(followup_base["nome_cliente"])
 
             hist_prev = _build_previous_message_history(up_prev_msgs)
-            followup_base["nome_key"] = followup_base["nome_envio"].fillna("").apply(_normalize_person_key)
+            nome_envio_series = followup_base["nome_envio"] if "nome_envio" in followup_base.columns else pd.Series([""] * len(followup_base), index=followup_base.index)
+            followup_base["nome_key"] = nome_envio_series.fillna("").apply(_normalize_person_key)
             if not hist_prev.empty:
                 followup_base = followup_base.merge(hist_prev, on="nome_key", how="left")
             else:
