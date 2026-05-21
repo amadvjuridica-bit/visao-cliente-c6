@@ -7469,9 +7469,28 @@ def _compact_lct_cache_df(df_lct: Optional[pd.DataFrame]) -> Optional[pd.DataFra
     try:
         extracted = _extract_lct_base(df_lct, ["LCT", "URA", "AURA", "SBM", "SABER MAIS", "SABERMAIS"])
     except Exception:
-        return df_lct.reset_index(drop=True)
+        extracted = pd.DataFrame()
     if extracted is None or extracted.empty:
-        return df_lct.reset_index(drop=True)
+        df = df_lct.copy()
+        nome_col = _coalesce_col(df, ["nome_cliente_lct", "nome_cliente_index", "Nome", "NOME", "NOME_CLIENTE"])
+        cnpj_col = _coalesce_col(df, ["cnpj", "CPF / CNPJ", "CNPJ", "CNPJ_CLIENTE", "Cód"])
+        data_col = _coalesce_col(df, ["data_lct", "Data", "DATA", "Ação"])
+        fase_col = _coalesce_col(df, ["dt_fundacao_lct", "Fase", "FASE"])
+        acao_col = _coalesce_col(df, ["acao_lct", "Unnamed: 4", "Ação", "ACAO", "Acao"])
+        extracted = pd.DataFrame(index=df.index)
+        extracted["nome_cliente_lct"] = normalize_str(df[nome_col]) if nome_col else ""
+        extracted["cnpj"] = _normalize_cnpj_series(df[cnpj_col]) if cnpj_col else ""
+        extracted["data_lct"] = pd.to_datetime(df[data_col], errors="coerce", dayfirst=True) if data_col else pd.NaT
+        extracted["dt_fundacao_lct"] = pd.to_datetime(df[fase_col], errors="coerce", dayfirst=True) if fase_col else pd.NaT
+        extracted["acao_lct"] = normalize_str(df[acao_col]).str.upper() if acao_col else ""
+        extracted = extracted[extracted["cnpj"].astype(str).str.len().ge(14)].copy()
+    if extracted is None or extracted.empty:
+        return pd.DataFrame(columns=["nome_cliente_lct", "cnpj", "data_lct", "dt_fundacao_lct", "acao_lct", "origem_lct_texto"])
+    if "acao_lct" in extracted.columns:
+        extracted["acao_lct"] = normalize_str(extracted["acao_lct"]).str.upper()
+    else:
+        extracted["acao_lct"] = ""
+    extracted["origem_lct_texto"] = extracted["acao_lct"]
     keep_cols = [
         "nome_cliente_lct",
         "cnpj",
