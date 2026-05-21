@@ -259,6 +259,7 @@ META_GROUPS_CONTROL = os.path.join(DATA_DIR, "meta_groups_control.json")
 C6_DAILY_VISAO_CACHE = os.path.join(DATA_DIR, "c6_daily_visao_cache.xlsx")
 C6_DAILY_LEADS_CACHE = os.path.join(DATA_DIR, "c6_daily_leads_cache.xlsx")
 C6_DAILY_LCT_CACHE = os.path.join(DATA_DIR, "c6_daily_lct_cache.bin")
+C6_DAILY_LCT_CLOUD_CACHE = os.path.join(DATA_DIR, "c6_daily_lct_cache_compacto.json")
 C6_DAILY_IMPORT_META = os.path.join(DATA_DIR, "c6_daily_import_meta.json")
 C6_DAILY_FUNIL_TRACK = os.path.join(DATA_DIR, "c6_daily_funil_track.json")
 C6_LEADS_CNPJ_TRACK = os.path.join(DATA_DIR, "c6_leads_cnpj_track.json")
@@ -1162,7 +1163,7 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
     if kind_key == "visao":
         cache_path = C6_DAILY_VISAO_CACHE
     elif kind_key == "lct":
-        cache_path = C6_DAILY_LCT_CACHE
+        cache_path = C6_DAILY_LCT_CLOUD_CACHE if "firebase" in st.secrets else C6_DAILY_LCT_CACHE
     else:
         cache_path = C6_DAILY_LEADS_CACHE
     if "firebase" in st.secrets:
@@ -1306,11 +1307,13 @@ def _load_daily_import_cache(kind: str):
     if kind_key == "visao":
         cache_path = C6_DAILY_VISAO_CACHE
     elif kind_key == "lct":
-        cache_path = C6_DAILY_LCT_CACHE
+        cache_path = C6_DAILY_LCT_CLOUD_CACHE if "firebase" in st.secrets else C6_DAILY_LCT_CACHE
     else:
         cache_path = C6_DAILY_LEADS_CACHE
     if "firebase" in st.secrets:
         payload, meta, origin = _load_cloud_daily_import_payload(cache_path, kind_key)
+        if kind_key == "lct" and not payload:
+            payload, meta, origin = _load_cloud_daily_import_payload(C6_DAILY_LCT_CACHE, kind_key)
         if payload:
             df = _df_from_store_payload(payload)
             info = meta.get(kind_key) or {}
@@ -1439,7 +1442,7 @@ def _prepare_cloud_seed_from_local_data() -> List:
     try:
         df_lct, _, _ = _load_daily_import_cache("lct")
         df_lct = _compact_lct_cache_df(df_lct)
-        entry = _write_cloud_cache_payload(C6_DAILY_LCT_CACHE, df_lct)
+        entry = _write_cloud_cache_payload(C6_DAILY_LCT_CLOUD_CACHE, df_lct)
         if entry:
             cache_entries.append(entry)
     except Exception:
