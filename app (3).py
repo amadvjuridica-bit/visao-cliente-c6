@@ -1194,6 +1194,37 @@ def _daily_import_cached_at(meta: dict, kind_key: str) -> dt.datetime:
         return dt.datetime.min
 
 
+def _daily_payload_max_data_base(payload) -> dt.datetime:
+    if not isinstance(payload, dict):
+        return dt.datetime.min
+    cols = payload.get("columns")
+    data = payload.get("data")
+    if not isinstance(cols, list) or not isinstance(data, list):
+        return dt.datetime.min
+    target_idx = None
+    for idx, col in enumerate(cols):
+        key = _normalize_person_key(col)
+        if key in {"DATA BASE", "DATA_BASE", "DT BASE", "DT_BASE"} or key.endswith("DATA BASE"):
+            target_idx = idx
+            break
+    if target_idx is None:
+        return dt.datetime.min
+    max_ts = pd.NaT
+    sample_rows = data[-500:] if len(data) > 500 else data
+    for row in sample_rows:
+        if not isinstance(row, list) or target_idx >= len(row):
+            continue
+        ts = pd.to_datetime(row[target_idx], errors="coerce", dayfirst=True)
+        if pd.notna(ts) and (pd.isna(max_ts) or ts > max_ts):
+            max_ts = ts
+    if pd.isna(max_ts):
+        return dt.datetime.min
+    try:
+        return max_ts.to_pydatetime()
+    except Exception:
+        return dt.datetime.min
+
+
 def _load_cloud_daily_import_payload(cache_path: str, kind_key: str):
     cache_doc = _fs_doc_id_from_path(cache_path)
     meta_doc = _fs_doc_id_from_path(C6_DAILY_IMPORT_META)
@@ -1216,7 +1247,17 @@ def _load_cloud_daily_import_payload(cache_path: str, kind_key: str):
 
     cloud_ts = _daily_import_cached_at(cloud_meta, kind_key)
     bundled_ts = _daily_import_cached_at(bundled_meta, kind_key)
-    if bundled_payload is not _MISSING and (cloud_payload is _MISSING or bundled_ts > cloud_ts):
+    cloud_data_day = _daily_payload_max_data_base(cloud_payload)
+    bundled_data_day = _daily_payload_max_data_base(bundled_payload)
+
+    if (
+        bundled_payload is not _MISSING
+        and (
+            cloud_payload is _MISSING
+            or bundled_data_day > cloud_data_day
+            or (bundled_data_day == cloud_data_day and cloud_ts != dt.datetime.min and bundled_ts > cloud_ts)
+        )
+    ):
         return bundled_payload, bundled_meta, "Importação diária (pacote publicado)"
     if cloud_payload is not _MISSING:
         return cloud_payload, cloud_meta, "Importação diária (cache nuvem)"
