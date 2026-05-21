@@ -1166,6 +1166,7 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
         try:
             if kind_key == "lct":
                 df_cache = _read_lct_file_any(file_name, raw_bytes)
+                df_cache = _compact_lct_cache_df(df_cache)
             elif str(file_name or "").lower().endswith(".csv"):
                 sample = raw_bytes[:200_000].decode("utf-8-sig", errors="replace")
                 candidates = [";", ",", "\t", "|"]
@@ -1185,6 +1186,7 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
     else:
         with open(cache_path, "wb") as f:
             f.write(raw_bytes)
+        saved_cache = True
     meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
     meta[kind_key] = {
         "name": str(file_name or "").strip(),
@@ -1195,7 +1197,7 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
         _write_daily_temp_import_copy(file_name, raw_bytes)
     except Exception:
         pass
-    return saved_meta
+    return saved_cache if "firebase" in st.secrets else saved_meta
 
 
 def _daily_import_cached_at(meta: dict, kind_key: str) -> dt.datetime:
@@ -1219,7 +1221,7 @@ def _daily_payload_max_data_base(payload) -> dt.datetime:
     target_idx = None
     for idx, col in enumerate(cols):
         key = _normalize_person_key(col)
-        if key in {"DATA BASE", "DATA_BASE", "DT BASE", "DT_BASE"} or key.endswith("DATA BASE"):
+        if key in {"DATA BASE", "DATA_BASE", "DT BASE", "DT_BASE", "DATA LCT", "DATA_LCT"} or key.endswith("DATA BASE"):
             target_idx = idx
             break
     if target_idx is None:
@@ -1320,6 +1322,8 @@ def _load_daily_import_cache(kind: str):
             if counts.get(sep, 0) <= 0:
                 sep = ","
             df = pd.read_csv(io.BytesIO(raw), sep=sep, engine="python", on_bad_lines="skip", encoding="utf-8-sig")
+        elif kind_key == "lct":
+            df = _read_lct_file_any(file_name, raw)
         else:
             df = read_excel_any(raw)
         meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
@@ -1425,6 +1429,7 @@ def _prepare_cloud_seed_from_local_data() -> List:
         pass
     try:
         df_lct, _, _ = _load_daily_import_cache("lct")
+        df_lct = _compact_lct_cache_df(df_lct)
         entry = _write_cloud_cache_payload(C6_DAILY_LCT_CACHE, df_lct)
         if entry:
             cache_entries.append(entry)
@@ -7406,12 +7411,12 @@ def _load_funil_temp_history_cached(keyword: str, _extractor) -> List[pd.DataFra
 
 def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]] = None) -> pd.DataFrame:
     df = df_lct.copy()
-    nome_col = _coalesce_col(df, ["nome_cliente_index", "Nome", "NOME", "NOME_CLIENTE"])
-    cnpj_col = _coalesce_col(df, ["CPF / CNPJ", "CNPJ", "CNPJ_CLIENTE"])
-    data_col = _coalesce_col(df, ["Data", "DATA"])
-    fase_col = _coalesce_col(df, ["Fase", "FASE"])
-    acao_col = _coalesce_col(df, ["Ação", "ACAO", "Acao"])
-    hist_col = _coalesce_col(df, ["Histórico", "HISTORICO", "HISTÓRICO", "Historico"])
+    nome_col = _coalesce_col(df, ["nome_cliente_lct", "nome_cliente_index", "Nome", "NOME", "NOME_CLIENTE"])
+    cnpj_col = _coalesce_col(df, ["cnpj", "CPF / CNPJ", "CNPJ", "CNPJ_CLIENTE"])
+    data_col = _coalesce_col(df, ["data_lct", "Data", "DATA"])
+    fase_col = _coalesce_col(df, ["dt_fundacao_lct", "Fase", "FASE"])
+    acao_col = _coalesce_col(df, ["acao_lct", "Ação", "ACAO", "Acao"])
+    hist_col = _coalesce_col(df, ["origem_lct_texto", "Histórico", "HISTORICO", "HISTÓRICO", "Historico"])
 
     shifted_lct = False
     if cnpj_col and "Cód" in df.columns:
@@ -7458,6 +7463,26 @@ def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]]
     return out
 
 
+def _compact_lct_cache_df(df_lct: Optional[pd.DataFrame]) -> Optional[pd.DataFrame]:
+    if df_lct is None or df_lct.empty:
+        return df_lct
+    try:
+        extracted = _extract_lct_base(df_lct, ["LCT", "URA", "AURA", "SBM", "SABER MAIS", "SABERMAIS"])
+    except Exception:
+        return df_lct.reset_index(drop=True)
+    if extracted is None or extracted.empty:
+        return df_lct.reset_index(drop=True)
+    keep_cols = [
+        "nome_cliente_lct",
+        "cnpj",
+        "data_lct",
+        "dt_fundacao_lct",
+        "acao_lct",
+        "origem_lct_texto",
+    ]
+    return extracted[[c for c in keep_cols if c in extracted.columns]].reset_index(drop=True)
+
+
 def _build_lct_source_reports(
     df_panel_lct: Optional[pd.DataFrame],
     leads_funil: pd.DataFrame,
@@ -7471,6 +7496,11 @@ def _build_lct_source_reports(
 
     leads_idx = leads_funil[["cnpj", "data_hora_cadastro", "status_abertura_conta", "pendencias"]].copy() if not leads_funil.empty else pd.DataFrame(columns=["cnpj", "data_hora_cadastro", "status_abertura_conta", "pendencias"])
     visao_idx = visao_funil[["cnpj", "dt_conta_criada", "nome_cliente", "dt_fundacao_empresa"]].copy() if not visao_funil.empty else pd.DataFrame(columns=["cnpj", "dt_conta_criada", "nome_cliente", "dt_fundacao_empresa"])
+    lct_work["cnpj"] = lct_work["cnpj"].apply(_normalize_cnpj_text)
+    if not leads_idx.empty:
+        leads_idx["cnpj"] = leads_idx["cnpj"].apply(_normalize_cnpj_text)
+    if not visao_idx.empty:
+        visao_idx["cnpj"] = visao_idx["cnpj"].apply(_normalize_cnpj_text)
 
     lct_merged = lct_work.merge(leads_idx, on="cnpj", how="left").merge(visao_idx, on="cnpj", how="left")
     lct_merged["nome_cliente_final"] = lct_merged["nome_cliente_lct"].replace("", pd.NA).fillna(lct_merged["nome_cliente"])
