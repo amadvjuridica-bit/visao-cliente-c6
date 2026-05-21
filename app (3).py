@@ -1680,7 +1680,13 @@ def _calc_bko_business_streak(cnpj: str, current_data_base) -> int:
         segment_start = day
 
     bdays = pd.bdate_range(segment_start, current_day)
-    return int(len(bdays))
+    days_count = int(len(bdays))
+    if days_count < 5:
+        payload = (timeline or {}).get(current_day.isoformat()) or {}
+        cadastro = pd.to_datetime((payload or {}).get("data_hora_cadastro"), errors="coerce", dayfirst=True)
+        if pd.notna(cadastro):
+            days_count = max(days_count, int(len(pd.bdate_range(pd.Timestamp(cadastro).date(), current_day))))
+    return int(days_count)
 
 
 def _calc_bko_followup(cnpj: str, current_data_base) -> Dict[str, object]:
@@ -1826,7 +1832,22 @@ def _build_bko_followup_table(base: pd.DataFrame, oco: pd.DataFrame) -> pd.DataF
             i += 1
 
         if not segments:
-            continue
+            latest_day, latest_payload, latest_status = events[-1]
+            if latest_status != target_status:
+                continue
+            cadastro = pd.to_datetime((latest_payload or {}).get("data_hora_cadastro"), errors="coerce", dayfirst=True)
+            if pd.isna(cadastro):
+                continue
+            start_day = pd.Timestamp(cadastro).date()
+            days_count = int(len(pd.bdate_range(start_day, latest_day)))
+            if days_count < 5:
+                continue
+            segments.append({
+                "start": start_day,
+                "end": latest_day,
+                "days": days_count,
+                "exit": None,
+            })
 
         last_segment = segments[-1]
         latest_day, latest_payload, latest_status = events[-1]
