@@ -9,8 +9,8 @@
     "pix_cnpj": 0,
     "wallet": 0,
     "deveria_receber": 316900.0,
-    "ja_pago_ref": 151190.0,
-    "receber_mes": 165710.0
+    "ja_pago_ref": 0.0,
+    "receber_mes": 316900.0
   },
   "05/2026": {
     "qualificadas": 335,
