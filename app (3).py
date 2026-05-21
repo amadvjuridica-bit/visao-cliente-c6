@@ -7157,6 +7157,21 @@ def _load_funil_history_from_temp_imports(keyword: str, extractor) -> pd.DataFra
             continue
         if extracted is not None and not extracted.empty:
             frames.append(extracted)
+    cache_kind = ""
+    key_norm = unicodedata.normalize("NFKD", str(keyword or "")).encode("ascii", "ignore").decode("ascii").lower()
+    if "lead" in key_norm:
+        cache_kind = "leads"
+    elif "visao" in key_norm:
+        cache_kind = "visao"
+    if cache_kind:
+        cached_df, _, _ = _load_daily_import_cache(cache_kind)
+        if cached_df is not None and not cached_df.empty:
+            try:
+                extracted = extractor(cached_df)
+            except Exception:
+                extracted = pd.DataFrame()
+            if extracted is not None and not extracted.empty:
+                frames.append(extracted)
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True)
@@ -7327,9 +7342,13 @@ def _build_followup_daily_outputs(leads_base: pd.DataFrame, df_visao_raw: Option
             followup_base[col] = default_val
 
     followup_base["dias_desde_cadastro"] = followup_base["data_hora_cadastro"].apply(lambda x: _days_since_today_exclusive(x, dt.date.today()))
-    followup_base["abriu_conta_flag"] = followup_base.apply(lambda r: "SIM" if pd.notna(r.get("dt_abertura_ref")) or pd.notna(r.get("dt_conta_criada")) else "NÃO", axis=1)
+    dt_abertura_ref = pd.to_datetime(followup_base.get("dt_abertura_ref", pd.Series(pd.NaT, index=followup_base.index)), errors="coerce")
+    dt_conta_criada = pd.to_datetime(followup_base.get("dt_conta_criada", pd.Series(pd.NaT, index=followup_base.index)), errors="coerce")
+    followup_base["abriu_conta_flag"] = np.where(dt_abertura_ref.notna() | dt_conta_criada.notna(), "SIM", "NÃO")
     followup_base = followup_base[followup_base["dias_desde_cadastro"].apply(lambda x: isinstance(x, (int, np.integer)) and 1 <= int(x) <= 15)].copy()
     followup_base = followup_base[followup_base["status_abertura_conta"].fillna("").apply(_is_actionable_followup_status)].copy()
+    if "abriu_conta_flag" not in followup_base.columns:
+        followup_base["abriu_conta_flag"] = "NÃO"
     followup_base = followup_base[followup_base["abriu_conta_flag"].ne("SIM")].copy()
 
     hist_prev = _build_previous_message_history(previous_files)
@@ -11175,16 +11194,17 @@ if "Leads Diários" in tabs_map:
             followup_base["dias_desde_cadastro"] = followup_base["data_hora_cadastro"].apply(
                 lambda x: _days_since_today_exclusive(x, dt.date.today())
             )
-            followup_base["abriu_conta_flag"] = followup_base.apply(
-                lambda r: "SIM" if pd.notna(r.get("dt_abertura_ref")) or pd.notna(r.get("dt_conta_criada")) else "NÃO",
-                axis=1
-            )
+            dt_abertura_ref = pd.to_datetime(followup_base.get("dt_abertura_ref", pd.Series(pd.NaT, index=followup_base.index)), errors="coerce")
+            dt_conta_criada = pd.to_datetime(followup_base.get("dt_conta_criada", pd.Series(pd.NaT, index=followup_base.index)), errors="coerce")
+            followup_base["abriu_conta_flag"] = np.where(dt_abertura_ref.notna() | dt_conta_criada.notna(), "SIM", "NÃO")
             followup_base = followup_base[
                 followup_base["dias_desde_cadastro"].apply(lambda x: isinstance(x, (int, np.integer)) and 1 <= int(x) <= 15)
             ].copy()
             followup_base = followup_base[
                 followup_base["status_abertura_conta"].fillna("").apply(_is_actionable_followup_status)
             ].copy()
+            if "abriu_conta_flag" not in followup_base.columns:
+                followup_base["abriu_conta_flag"] = "NÃO"
             followup_base = followup_base[followup_base["abriu_conta_flag"].ne("SIM")].copy()
 
             hist_prev = _build_previous_message_history(up_prev_msgs)
