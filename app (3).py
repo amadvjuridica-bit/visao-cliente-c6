@@ -1216,6 +1216,16 @@ def _daily_import_cached_at(meta: dict, kind_key: str) -> dt.datetime:
         return dt.datetime.min
 
 
+def _meta_cached_at(meta: dict) -> float:
+    try:
+        ts = pd.to_datetime((meta or {}).get("cached_at"), errors="coerce")
+        if pd.isna(ts):
+            return -1.0
+        return float(ts.timestamp())
+    except Exception:
+        return -1.0
+
+
 def _daily_payload_max_data_base(payload) -> dt.datetime:
     if not isinstance(payload, dict):
         return dt.datetime.min
@@ -1361,6 +1371,11 @@ def _save_ops_import_cache(file_name: str, raw_bytes: bytes):
         "name": str(file_name or "").strip(),
         "cached_at": dt.datetime.now().isoformat(),
     })
+
+
+def _clear_c6_operacao_runtime_cache():
+    for key in ["c6_operacao_last_signature", "c6_operacao_last_result", "c6_operacao_last_result__ts"]:
+        st.session_state.pop(key, None)
 
 
 def _load_ops_import_cache():
@@ -8433,6 +8448,7 @@ def _render_c6_operacao_tab(view_only: bool = False, operator_filter: str = ""):
             st.session_state["c6_operacao_ops_df__name"] = up_ops.name
             st.session_state["c6_operacao_ops_df__ts"] = dt.datetime.now().timestamp()
             _save_ops_import_cache(up_ops.name, raw_ops_bytes)
+            _clear_c6_operacao_runtime_cache()
             if "firebase" not in st.secrets:
                 _ops_sync_sig = json.dumps(["ops", up_ops.name, getattr(up_ops, "size", 0)], ensure_ascii=False)
                 if st.session_state.get("_last_ops_cloud_sync_sig") != _ops_sync_sig:
@@ -8476,8 +8492,26 @@ def _render_c6_operacao_tab(view_only: bool = False, operator_filter: str = ""):
         df_leads_raw, leads_name, leads_origin = _load_daily_import_cache("leads")
     if df_visao_raw is None:
         df_visao_raw, visao_name, visao_origin = _load_daily_import_cache("visao")
-    if df_ops_raw is None:
-        df_ops_raw, ops_name = _load_ops_import_cache()
+    else:
+        df_leads_cache, leads_cache_name, leads_cache_origin = _load_daily_import_cache("leads")
+        meta_daily = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
+        cache_ts = _meta_cached_at((meta_daily or {}).get("leads") or {})
+        session_ts = float(st.session_state.get("c6_daily_leads_df__ts", -1.0) or -1.0)
+        if df_leads_cache is not None and cache_ts > session_ts:
+            df_leads_raw, leads_name, leads_origin = df_leads_cache, leads_cache_name, leads_cache_origin
+    if df_visao_raw is not None:
+        df_visao_cache, visao_cache_name, visao_cache_origin = _load_daily_import_cache("visao")
+        meta_daily = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
+        cache_ts = _meta_cached_at((meta_daily or {}).get("visao") or {})
+        session_ts = float(st.session_state.get("c6_daily_visao_df__ts", -1.0) or -1.0)
+        if df_visao_cache is not None and cache_ts > session_ts:
+            df_visao_raw, visao_name, visao_origin = df_visao_cache, visao_cache_name, visao_cache_origin
+    df_ops_cache, ops_cache_name = _load_ops_import_cache()
+    ops_meta = local_json_load(C6_OPS_CACHE_META, default={}) or {}
+    ops_cache_ts = _meta_cached_at(ops_meta)
+    ops_session_ts = float(st.session_state.get("c6_operacao_ops_df__ts", -1.0) or -1.0)
+    if df_ops_raw is None or (df_ops_cache is not None and ops_cache_ts > ops_session_ts):
+        df_ops_raw, ops_name = df_ops_cache, ops_cache_name
 
     if not (df_ops_raw is not None and df_leads_raw is not None and df_visao_raw is not None):
         faltantes = []
@@ -8725,6 +8759,7 @@ if "Painel C6 Empresas" in tabs_map:
             st.session_state["c6_daily_visao_df"] = df_c6.copy()
             st.session_state["c6_daily_visao_df__name"] = f.name
             st.session_state["c6_daily_visao_df__ts"] = dt.datetime.now().timestamp()
+            _clear_c6_operacao_runtime_cache()
             if not _save_daily_import_cache("visao", f.name, raw_c6_bytes):
                 st.error("Não consegui salvar a Visão Cliente na nuvem. A importação não ficará disponível em outros computadores.")
 
@@ -8841,6 +8876,7 @@ if "Painel C6 Empresas" in tabs_map:
             st.session_state["c6_daily_leads_df"] = df_leads.copy()
             st.session_state["c6_daily_leads_df__name"] = f.name
             st.session_state["c6_daily_leads_df__ts"] = dt.datetime.now().timestamp()
+            _clear_c6_operacao_runtime_cache()
             if not _save_daily_import_cache("leads", f.name, raw_leads_bytes):
                 st.error("Não consegui salvar o arquivo de Leads na nuvem. A importação não ficará disponível em outros computadores.")
             _persist_leads_cnpj_track(df_leads)
@@ -10989,10 +11025,12 @@ if "Leads Diários" in tabs_map:
 
         df_obj = st.session_state.get(key)
         name = str(st.session_state.get(f"{key}__name", "") or "")
-        if df_obj is not None:
-            return df_obj.copy(), name, "Painel C6 Empresas (sessão atual)"
-
         df_cache, cache_name, cache_origin = _load_daily_import_cache(kind)
+        meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
+        cache_ts = _meta_cached_at((meta or {}).get(kind) or {})
+        session_ts = float(st.session_state.get(f"{key}__ts", -1.0) or -1.0)
+        if df_obj is not None and (df_cache is None or session_ts >= cache_ts):
+            return df_obj.copy(), name, "Painel C6 Empresas (sessão atual)"
         if df_cache is not None:
             return df_cache.copy(), cache_name, cache_origin
         return None, "", ""
