@@ -7085,6 +7085,99 @@ def _extract_visao_base(df_visao: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _excel_col_name(df: pd.DataFrame, letters: str) -> Optional[str]:
+    if df is None or df.empty:
+        return None
+    idx = 0
+    for ch in str(letters or "").strip().upper():
+        if not ("A" <= ch <= "Z"):
+            continue
+        idx = idx * 26 + (ord(ch) - ord("A") + 1)
+    idx -= 1
+    if 0 <= idx < len(df.columns):
+        return df.columns[idx]
+    return None
+
+
+def _series_by_name_or_letter(df: pd.DataFrame, names: List[str], letters: Optional[str] = None, default="") -> pd.Series:
+    col = _coalesce_col(df, names)
+    if col is None and letters:
+        col = _excel_col_name(df, letters)
+    if col is None:
+        return pd.Series([default] * len(df), index=df.index)
+    return df[col]
+
+
+def _msg_open_account_phone(v) -> str:
+    digits = re.sub(r"\D+", "", str(v or ""))
+    if not digits:
+        return ""
+    if digits.startswith("00"):
+        digits = digits[2:]
+    if digits.startswith("55"):
+        return digits
+    return "55" + digits
+
+
+def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
+    if df_visao is None or df_visao.empty:
+        return pd.DataFrame()
+    df = df_visao.copy()
+    data_abertura_all = pd.to_datetime(_series_by_name_or_letter(df, [COL_ABERTURA, "DATA CONTA CRIADA", "DT CONTA CRIADA"], "T"), errors="coerce", dayfirst=True)
+    status_all = normalize_str(_series_by_name_or_letter(df, [COL_STATUS, "STATUS", "STATUS_CONTA", "STATUS CC"], "V")).str.upper()
+    mask = data_abertura_all.notna() & status_all.str.contains("LIBERADA", na=False)
+    mask &= ~status_all.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
+    base = df.loc[mask].copy()
+    if base.empty:
+        return pd.DataFrame()
+
+    data_abertura = data_abertura_all.loc[base.index]
+    cnpj_s = _series_by_name_or_letter(base, [COL_CNPJ, "CNPJ", "CPF_CNPJ"], "C").astype("string").fillna("")
+    nome_s = _series_by_name_or_letter(base, ["NOME_CLIENTE", "NOME CLIENTE", "CLIENTE", "NOME"], "D").astype("string").fillna("")
+    uf_s = _series_by_name_or_letter(base, ["UF"], "J").astype("string").fillna("")
+    fund_s = pd.to_datetime(_series_by_name_or_letter(base, [COL_FUNDACAO, "DATA FUNDACAO EMPRESA", "DT FUNDACAO EMPRESA"], "P"), errors="coerce", dayfirst=True)
+    ramo_s = _series_by_name_or_letter(base, ["RAMO_ATUACAO", "RAMO ATUACAO", "RAMO_ATIVIDADE", "RAMO DE ATIVIDADE"], "Q").astype("string").fillna("")
+    conta_s = _series_by_name_or_letter(base, ["NUM_CONTA", "NUMERO_CONTA", "NUMERO DA CONTA"], "R").astype("string").fillna("")
+    pix_s = _series_by_name_or_letter(base, [COL_PIX, "CHAVES PIX FORTE", "CHAVE_PIX"], "X").astype("string").fillna("")
+    cash_s = pd.to_numeric(_series_by_name_or_letter(base, [COL_CASHIN_MTD, "VALOR CASHIN", "VALOR CASH IN", "VL CASH IN MTD"], "Y"), errors="coerce").fillna(0.0)
+    entrega_s = pd.to_datetime(_series_by_name_or_letter(base, ["DT_ENTREGA_CARTAO", "DATA ENTREGA CARTAO", "DATA ENTREGA CARTÃO"], "AB"), errors="coerce", dayfirst=True)
+    limite_cartao_s = pd.to_numeric(_series_by_name_or_letter(base, ["LIMITE_CARTAO", "LIMITE CARTAO", "LIMITE CARTÃO"], "Z"), errors="coerce").fillna(0.0)
+    limite_cdb_s = pd.to_numeric(_series_by_name_or_letter(base, ["LIMITE_ALOCADO_CARTAO_CDB", "LIMITE ALOCADO CARTAO CDB", "LIMITE ALOCADO CARTÃO CDB"], "AA"), errors="coerce").fillna(0.0)
+    mes_ref_s = _series_by_name_or_letter(base, [COL_BR, "MES_REF_COMISS", "MES REFERENCIA COMISSAO"], "BO").astype("string").fillna("")
+    tpv_m0_s = pd.to_numeric(_series_by_name_or_letter(base, ["TPV_M0", "TPVM0", "TPV M0"], "AS"), errors="coerce").fillna(0.0)
+    criterios_s = _series_by_name_or_letter(base, [COL_CRIT, "CRITERIOS_ATINGIDOS_COMISS", "CRITÉRIOS ATINGIDOS"], "BV").astype("string").fillna("")
+    tel_1_s = _series_by_name_or_letter(base, ["TELEFONE", "TELEFONE_1", "TEL", "FONE"], "M")
+    tel_2_s = _series_by_name_or_letter(base, ["TELEFONE_MASTER", "TELEFONE_2", "TEL2", "FONE2", "CELULAR"], "N")
+
+    rows = []
+    for idx in base.index:
+        telefones = []
+        for raw_phone in [tel_1_s.loc[idx], tel_2_s.loc[idx]]:
+            phone = _msg_open_account_phone(raw_phone)
+            if phone and phone not in telefones:
+                telefones.append(phone)
+        for phone in telefones:
+            rows.append({
+                "telefone": phone,
+                "cnpj": cnpj_s.loc[idx],
+                "nome_cliente": nome_s.loc[idx],
+                "uf": uf_s.loc[idx],
+                "dt_fundacao_empresa": fmt_date(fund_s.loc[idx]) if pd.notna(fund_s.loc[idx]) else "",
+                "ramo_atividade": ramo_s.loc[idx],
+                "num_conta": conta_s.loc[idx],
+                "dt_conta_criada": fmt_date(data_abertura.loc[idx]) if pd.notna(data_abertura.loc[idx]) else "",
+                "chaves_pix_forte": pix_s.loc[idx],
+                "valor_cashin": float(cash_s.loc[idx] or 0.0),
+                "dt_entrega_cartao": fmt_date(entrega_s.loc[idx]) if pd.notna(entrega_s.loc[idx]) else "",
+                "limite_cartao": float(limite_cartao_s.loc[idx] or 0.0),
+                "limite_alocado_cartao_cdb": float(limite_cdb_s.loc[idx] or 0.0),
+                "mes_ref_comissao": mes_ref_s.loc[idx],
+                "tpv_m0": float(tpv_m0_s.loc[idx] or 0.0),
+                "criterios_atingidos": criterios_s.loc[idx],
+            })
+    return pd.DataFrame(rows)
+
+
 def _read_lct_file_any(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
     try:
         if str(name or "").lower().endswith(".csv"):
@@ -11697,12 +11790,34 @@ if "Mensagens" in tabs_map:
 
     if "Abertura" in msg_tabs_map:
       with msg_tabs_map["Abertura"]:
-        st.subheader("Abertura - clientes com até 4 dias")
+        st.subheader("Relatório para ações - contas abertas")
         df_visao_msg, visao_msg_name, _ = _load_daily_import_cache("visao")
 
         if df_visao_msg is None or df_visao_msg.empty:
           st.info("Importe primeiro a planilha C6 (Visão Cliente) no Painel C6 Empresas.")
         else:
+          acoes_abertas_df = _build_open_accounts_actions_report(df_visao_msg)
+          st.caption(f"Visão Cliente em uso: {visao_msg_name or 'arquivo importado'}")
+          if acoes_abertas_df.empty:
+            st.info("Nenhum cliente com conta liberada/aberta encontrado para o relatório de ações.")
+          else:
+            latest_open = pd.to_datetime(acoes_abertas_df["dt_conta_criada"], errors="coerce", dayfirst=True).max()
+            file_date = latest_open.strftime("%d%m%Y") if pd.notna(latest_open) else dt.date.today().strftime("%d%m%Y")
+            st.download_button(
+              "Baixar relatório para ações - contas abertas (Excel)",
+              data=_to_excel_bytes({"Contas_Abertas": acoes_abertas_df}),
+              file_name=f"relatorio_acoes_contas_abertas_{file_date}.xlsx",
+              mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+              use_container_width=True,
+            )
+            st.caption(
+              f"{br_int(acoes_abertas_df['cnpj'].nunique())} clientes e "
+              f"{br_int(len(acoes_abertas_df))} linhas de telefone no arquivo."
+            )
+
+          st.divider()
+          st.subheader("Abertura - clientes com até 4 dias")
+
           def _msg_col(df: pd.DataFrame, names: List[str], index_zero_based: Optional[int] = None) -> Optional[str]:
             col = _coalesce_col(df, names)
             if col is not None:
@@ -11794,7 +11909,6 @@ if "Mensagens" in tabs_map:
                 "tipo": tipo,
               })
 
-          st.caption(f"Visão Cliente em uso: {visao_msg_name or 'arquivo importado'}")
           c1, c2, c3 = st.columns(3)
           c1.metric("Clientes aptos", br_int(len(base_filtrada)))
           c2.metric("Linhas para envio", br_int(len(csv_rows)))
