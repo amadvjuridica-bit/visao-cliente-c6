@@ -7144,6 +7144,65 @@ def _msg_open_account_phone(v) -> str:
     return "55" + digits
 
 
+def _phone_without_55(v) -> str:
+    digits = re.sub(r"\D+", "", str(v or ""))
+    if digits.startswith("55") and len(digits) > 11:
+        return digits[2:]
+    return digits
+
+
+def _read_blacklist_upload(uploaded_file) -> pd.DataFrame:
+    if uploaded_file is None:
+        return pd.DataFrame()
+    raw = uploaded_file.getvalue()
+    name = str(getattr(uploaded_file, "name", "") or "").lower()
+    if name.endswith(".csv"):
+        for enc in ["utf-8-sig", "utf-8", "latin1"]:
+            try:
+                sample = raw[:100_000].decode(enc, errors="replace")
+                sep = _detect_delim_for_csv(sample) if "_detect_delim_for_csv" in globals() else ";"
+                return pd.read_csv(io.BytesIO(raw), sep=sep, dtype="string", encoding=enc, engine="python", on_bad_lines="skip")
+            except Exception:
+                continue
+        return pd.read_csv(io.BytesIO(raw), sep=None, dtype="string", engine="python", on_bad_lines="skip")
+    return read_excel_any(raw).astype("string")
+
+
+def _blacklist_sets_from_df(df_black: pd.DataFrame) -> Tuple[set, set]:
+    if df_black is None or df_black.empty:
+        return set(), set()
+    cnpj_cols = [c for c in df_black.columns if "CNPJ" in _normalize_person_key(c) or "CPF" in _normalize_person_key(c)]
+    phone_cols = [c for c in df_black.columns if any(k in _normalize_person_key(c) for k in ["TELEFONE", "FONE", "CELULAR", "WHATS"])]
+    if not cnpj_cols and len(df_black.columns) >= 1:
+        cnpj_cols = [df_black.columns[0]]
+    if not phone_cols and len(df_black.columns) >= 2:
+        phone_cols = [df_black.columns[1]]
+    cnpjs = set()
+    phones = set()
+    for col in cnpj_cols:
+        for val in df_black[col].dropna().tolist():
+            cnpj = _normalize_cnpj_text(val)
+            if cnpj:
+                cnpjs.add(cnpj)
+    for col in phone_cols:
+        for val in df_black[col].dropna().tolist():
+            phone = _phone_without_55(val)
+            if phone:
+                phones.add(phone)
+    return cnpjs, phones
+
+
+def _apply_ura_blacklist(df_ura: pd.DataFrame, blacklist_cnpjs: set, blacklist_phones: set) -> pd.DataFrame:
+    if df_ura is None or df_ura.empty:
+        return pd.DataFrame()
+    out = df_ura.copy()
+    cnpj_norm = out.get("CNPJ", pd.Series([""] * len(out), index=out.index)).apply(_normalize_cnpj_text)
+    tel1_norm = out.get("TELEFONE1", pd.Series([""] * len(out), index=out.index)).apply(_phone_without_55)
+    tel2_norm = out.get("TELEFONE2", pd.Series([""] * len(out), index=out.index)).apply(_phone_without_55)
+    remove = cnpj_norm.isin(blacklist_cnpjs) | tel1_norm.isin(blacklist_phones) | tel2_norm.isin(blacklist_phones)
+    return out.loc[~remove].copy()
+
+
 def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
     if df_visao is None or df_visao.empty:
         return pd.DataFrame()
@@ -11537,17 +11596,42 @@ if "Leads Diários" in tabs_map:
                     )
                 if not clientes_ura_df.empty:
                     st.markdown("##### clientes um a 15 dias URa")
-                    st.dataframe(clientes_ura_df, use_container_width=True, hide_index=True)
-                    csv_ura_text = clientes_ura_df.to_csv(index=False, header=True, sep=";", lineterminator="\n")
-                    csv_ura_bytes = csv_ura_text.encode("utf-8-sig")
-                    st.download_button(
-                        "Baixar clientes 1 a 15 dias URA",
-                        data=csv_ura_bytes,
-                        file_name="clientes um a 15 dias URa.csv",
-                        mime="text/csv",
-                        key="dl_leads_followup_clientes_ura_csv",
-                        help="Baixar CSV UTF-8 dos clientes de 1 a 15 dias",
+                    st.caption("Importe uma blacklist com CNPJ e/ou telefone para excluir clientes deste arquivo. O CNPJ pode vir com ou sem máscara; telefone pode vir com ou sem 55.")
+                    blacklist_upload = st.file_uploader(
+                        "Blacklist URA 1 a 15 dias (CSV/XLSX)",
+                        type=["csv", "xlsx"],
+                        accept_multiple_files=False,
+                        key="leads_ura_1a15_blacklist",
                     )
+                    gerar_sem_blacklist = st.checkbox("Não tenho blacklist para este envio", key="leads_ura_1a15_sem_blacklist")
+                    clientes_ura_filtrado = pd.DataFrame()
+                    if blacklist_upload is not None:
+                        try:
+                            blacklist_df = _read_blacklist_upload(blacklist_upload)
+                            blacklist_cnpjs, blacklist_phones = _blacklist_sets_from_df(blacklist_df)
+                            clientes_ura_filtrado = _apply_ura_blacklist(clientes_ura_df, blacklist_cnpjs, blacklist_phones)
+                            removidos = len(clientes_ura_df) - len(clientes_ura_filtrado)
+                            st.caption(f"Blacklist aplicada: {br_int(len(blacklist_cnpjs))} CNPJ(s), {br_int(len(blacklist_phones))} telefone(s), {br_int(removidos)} linha(s) removida(s).")
+                        except Exception as exc:
+                            st.error(f"Não consegui ler a blacklist: {exc}")
+                    elif gerar_sem_blacklist:
+                        clientes_ura_filtrado = clientes_ura_df.copy()
+                        st.caption("Gerando sem blacklist.")
+                    else:
+                        st.info("Relatório disponível após importar a blacklist ou marcar que não existe blacklist.")
+
+                    if not clientes_ura_filtrado.empty:
+                        st.dataframe(clientes_ura_filtrado, use_container_width=True, hide_index=True)
+                        csv_ura_text = clientes_ura_filtrado.to_csv(index=False, header=True, sep=";", lineterminator="\n")
+                        csv_ura_bytes = csv_ura_text.encode("utf-8-sig")
+                        st.download_button(
+                            "Baixar clientes 1 a 15 dias URA",
+                            data=csv_ura_bytes,
+                            file_name="clientes um a 15 dias URa.csv",
+                            mime="text/csv",
+                            key="dl_leads_followup_clientes_ura_csv",
+                            help="Baixar CSV UTF-8 dos clientes de 1 a 15 dias após blacklist",
+                        )
         except Exception as exc:
             st.error(f"Não consegui montar o follow-up diário de 1 a 15 dias: {exc}")
 
