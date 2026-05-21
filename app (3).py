@@ -464,9 +464,9 @@ def _bootstrap_cloud_from_bundled_data():
 
 def _df_to_store_payload(df: pd.DataFrame) -> dict:
     try:
-        return json.loads(df.to_json(orient="split", date_format="iso", force_ascii=False))
+        return json.loads(df.reset_index(drop=True).to_json(orient="split", date_format="iso", force_ascii=False))
     except Exception:
-        safe_df = df.copy()
+        safe_df = df.reset_index(drop=True).copy()
         for col in safe_df.columns:
             safe_df[col] = safe_df[col].astype("string")
         return json.loads(safe_df.to_json(orient="split", force_ascii=False))
@@ -476,14 +476,29 @@ def _df_from_store_payload(payload) -> Optional[pd.DataFrame]:
     if not isinstance(payload, dict):
         return None
     try:
-        return pd.read_json(io.StringIO(json.dumps(payload, ensure_ascii=False)), orient="split")
+        df = pd.read_json(io.StringIO(json.dumps(payload, ensure_ascii=False)), orient="split")
     except Exception:
         try:
             cols = payload.get("columns") or []
             data = payload.get("data") or []
-            return pd.DataFrame(data, columns=cols)
+            df = pd.DataFrame(data, columns=cols)
         except Exception:
             return None
+    try:
+        if not isinstance(df.index, pd.RangeIndex):
+            first_col = str(df.columns[0]) if len(df.columns) else ""
+            idx_s = pd.Series(df.index, index=df.index).astype("string").fillna("")
+            col_s = df.iloc[:, 0].astype("string").fillna("") if len(df.columns) else pd.Series([], dtype="string")
+            if first_col.lower().startswith("unnamed") or idx_s.str.strip().ne("").mean() > 0.8:
+                if len(df.columns) == 0 or idx_s.ne(col_s).mean() > 0.8:
+                    df.insert(0, "nome_cliente_index", idx_s.to_numpy())
+            df = df.reset_index(drop=True)
+    except Exception:
+        try:
+            df = df.reset_index(drop=True)
+        except Exception:
+            pass
+    return df
 
 
 def file_md5(b: bytes) -> str:
@@ -7274,7 +7289,7 @@ def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = Non
 
 
 @st.cache_data(show_spinner=False)
-def _load_lct_temp_history_cached() -> Tuple[List[pd.DataFrame], List[str]]:
+def _load_lct_temp_history_cached(_version: str = "lct-v3") -> Tuple[List[pd.DataFrame], List[str]]:
     frames = []
     names = []
     for path in _temp_import_files_by_keyword("resumo lct"):
@@ -7332,7 +7347,7 @@ def _load_funil_temp_history_cached(keyword: str, _extractor) -> List[pd.DataFra
 
 def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]] = None) -> pd.DataFrame:
     df = df_lct.copy()
-    nome_col = _coalesce_col(df, ["Nome", "NOME", "NOME_CLIENTE"])
+    nome_col = _coalesce_col(df, ["nome_cliente_index", "Nome", "NOME", "NOME_CLIENTE"])
     cnpj_col = _coalesce_col(df, ["CPF / CNPJ", "CNPJ", "CNPJ_CLIENTE"])
     data_col = _coalesce_col(df, ["Data", "DATA"])
     fase_col = _coalesce_col(df, ["Fase", "FASE"])
@@ -7351,10 +7366,7 @@ def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]]
         hist_col = "Hora" if "Hora" in df.columns else hist_col
 
     out = pd.DataFrame()
-    if shifted_lct and not isinstance(df.index, pd.RangeIndex):
-        out["nome_cliente_lct"] = normalize_str(pd.Series(df.index, index=df.index))
-    else:
-        out["nome_cliente_lct"] = normalize_str(df[nome_col]) if nome_col else ""
+    out["nome_cliente_lct"] = normalize_str(df[nome_col]) if nome_col else ""
     out["cnpj"] = _normalize_cnpj_series(df[cnpj_col]) if cnpj_col else ""
     if data_col:
         data_raw = df[data_col].astype("string").fillna("").str.strip()
