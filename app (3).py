@@ -7109,7 +7109,17 @@ def _series_by_name_or_letter(df: pd.DataFrame, names: List[str], letters: Optio
 
 
 def _msg_open_account_phone(v) -> str:
-    digits = re.sub(r"\D+", "", str(v or ""))
+    if v is None or pd.isna(v):
+        return ""
+    if isinstance(v, (int, np.integer)):
+        raw = str(int(v))
+    elif isinstance(v, (float, np.floating)) and np.isfinite(v):
+        raw = str(int(v)) if float(v).is_integer() else str(v)
+    else:
+        raw = str(v or "").strip()
+        if raw.endswith(".0") and re.fullmatch(r"\d+\.0", raw):
+            raw = raw[:-2]
+    digits = re.sub(r"\D+", "", raw)
     if not digits:
         return ""
     if digits.startswith("00"):
@@ -7125,8 +7135,7 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
     df = df_visao.copy()
     data_abertura_all = pd.to_datetime(_series_by_name_or_letter(df, [COL_ABERTURA, "DATA CONTA CRIADA", "DT CONTA CRIADA"], "T"), errors="coerce", dayfirst=True)
     status_all = normalize_str(_series_by_name_or_letter(df, [COL_STATUS, "STATUS", "STATUS_CONTA", "STATUS CC"], "V")).str.upper()
-    mask = data_abertura_all.notna()
-    mask &= ~status_all.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
+    mask = ~status_all.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
     base = df.loc[mask].copy()
     if base.empty:
         return pd.DataFrame()
@@ -7180,16 +7189,32 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
 
 def _open_accounts_actions_summary(df_visao: pd.DataFrame) -> dict:
     if df_visao is None or df_visao.empty:
-        return {"linhas_base": 0, "contas_criadas": 0, "excluidas_status": 0, "clientes_validos": 0}
+        return {"linhas_base": 0, "linhas_telefone_brutas": 0, "telefones_duplicados_cliente": 0, "sem_telefone": 0, "contas_criadas": 0, "excluidas_status": 0, "clientes_validos": 0}
     data_abertura = pd.to_datetime(_series_by_name_or_letter(df_visao, [COL_ABERTURA, "DATA CONTA CRIADA", "DT CONTA CRIADA"], "T"), errors="coerce", dayfirst=True)
     status_s = normalize_str(_series_by_name_or_letter(df_visao, [COL_STATUS, "STATUS", "STATUS_CONTA", "STATUS CC"], "V")).str.upper()
     has_open = data_abertura.notna()
     blocked = status_s.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
+    tel_1_s = _series_by_name_or_letter(df_visao, ["TELEFONE", "TELEFONE_1", "TEL", "FONE"], "M")
+    tel_2_s = _series_by_name_or_letter(df_visao, ["TELEFONE_MASTER", "TELEFONE_2", "TEL2", "FONE2", "CELULAR"], "N")
+    valid_mask = ~blocked
+    raw_phone_lines = int(valid_mask.sum()) * 2
+    duplicates = 0
+    no_phone = 0
+    for idx in df_visao.loc[valid_mask].index:
+        p1 = _msg_open_account_phone(tel_1_s.loc[idx])
+        p2 = _msg_open_account_phone(tel_2_s.loc[idx])
+        if not p1 and not p2:
+            no_phone += 1
+        if p1 and p2 and p1 == p2:
+            duplicates += 1
     return {
         "linhas_base": int(len(df_visao)),
+        "linhas_telefone_brutas": raw_phone_lines,
+        "telefones_duplicados_cliente": int(duplicates),
+        "sem_telefone": int(no_phone),
         "contas_criadas": int(has_open.sum()),
-        "excluidas_status": int((has_open & blocked).sum()),
-        "clientes_validos": int((has_open & ~blocked).sum()),
+        "excluidas_status": int(blocked.sum()),
+        "clientes_validos": int(valid_mask.sum()),
     }
 
 
@@ -11828,8 +11853,10 @@ if "Mensagens" in tabs_map:
             )
             st.caption(
               f"Base importada: {br_int(acoes_summary['linhas_base'])} clientes. "
-              f"Contas criadas: {br_int(acoes_summary['contas_criadas'])}. "
+              f"Linhas potenciais de telefone: {br_int(acoes_summary['linhas_telefone_brutas'])}. "
               f"Excluídos por status bloqueado/desativado/encerrado/cancelado: {br_int(acoes_summary['excluidas_status'])}. "
+              f"Telefones duplicados no mesmo cliente removidos: {br_int(acoes_summary['telefones_duplicados_cliente'])}. "
+              f"Clientes sem telefone: {br_int(acoes_summary['sem_telefone'])}. "
               f"No arquivo: {br_int(acoes_abertas_df['cnpj'].nunique())} clientes e {br_int(len(acoes_abertas_df))} linhas de telefone."
             )
 
