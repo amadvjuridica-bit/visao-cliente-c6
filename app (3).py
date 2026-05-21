@@ -1183,6 +1183,46 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
     return saved_meta
 
 
+def _daily_import_cached_at(meta: dict, kind_key: str) -> dt.datetime:
+    try:
+        info = (meta or {}).get(kind_key) or {}
+        ts = pd.to_datetime(info.get("cached_at"), errors="coerce")
+        if pd.isna(ts):
+            return dt.datetime.min
+        return ts.to_pydatetime()
+    except Exception:
+        return dt.datetime.min
+
+
+def _load_cloud_daily_import_payload(cache_path: str, kind_key: str):
+    cache_doc = _fs_doc_id_from_path(cache_path)
+    meta_doc = _fs_doc_id_from_path(C6_DAILY_IMPORT_META)
+    session_payloads = st.session_state.get("_cloud_session_payloads", {})
+    if isinstance(session_payloads, dict) and cache_doc in session_payloads:
+        meta = session_payloads.get(meta_doc)
+        if not isinstance(meta, dict):
+            meta = safe_json_load(C6_DAILY_IMPORT_META, default={}) or {}
+        return session_payloads.get(cache_doc), meta, "Importação diária (sessão atual)"
+
+    cloud_payload = _fs_load_payload(cache_doc, _MISSING)
+    cloud_meta = _fs_load_payload(meta_doc, _MISSING)
+    if cloud_meta is _MISSING or not isinstance(cloud_meta, dict):
+        cloud_meta = {}
+
+    bundled_payload = _bundled_seed_payload(cache_doc, _MISSING)
+    bundled_meta = _bundled_seed_payload(meta_doc, {})
+    if not isinstance(bundled_meta, dict):
+        bundled_meta = {}
+
+    cloud_ts = _daily_import_cached_at(cloud_meta, kind_key)
+    bundled_ts = _daily_import_cached_at(bundled_meta, kind_key)
+    if bundled_payload is not _MISSING and (cloud_payload is _MISSING or bundled_ts > cloud_ts):
+        return bundled_payload, bundled_meta, "Importação diária (pacote publicado)"
+    if cloud_payload is not _MISSING:
+        return cloud_payload, cloud_meta, "Importação diária (cache nuvem)"
+    return None, {}, ""
+
+
 def _filename_has_required_keyword(file_name: str, keyword: str) -> bool:
     def _clean_text(v: str) -> str:
         txt = str(v or "").strip().lower()
@@ -1203,12 +1243,11 @@ def _load_daily_import_cache(kind: str):
     else:
         cache_path = C6_DAILY_LEADS_CACHE
     if "firebase" in st.secrets:
-        payload = safe_json_load(cache_path, default=None)
+        payload, meta, origin = _load_cloud_daily_import_payload(cache_path, kind_key)
         if payload:
             df = _df_from_store_payload(payload)
-            meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
             info = meta.get(kind_key) or {}
-            return df, str(info.get("name") or ""), "Importação diária (cache nuvem)"
+            return df, str(info.get("name") or ""), origin
         return None, "", ""
     if not os.path.exists(cache_path):
         return None, "", ""
@@ -2039,12 +2078,11 @@ def _load_daily_import_cache(kind: str):
     else:
         cache_path = C6_DAILY_LEADS_CACHE
     if "firebase" in st.secrets:
-        payload = safe_json_load(cache_path, default=None)
+        payload, meta, origin = _load_cloud_daily_import_payload(cache_path, kind_key)
         if payload:
             df = _df_from_store_payload(payload)
-            meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
             info = meta.get(kind_key) or {}
-            return df, str(info.get("name") or ""), "Importação diária (cache nuvem)"
+            return df, str(info.get("name") or ""), origin
         return None, "", ""
     if not os.path.exists(cache_path):
         return None, "", ""
