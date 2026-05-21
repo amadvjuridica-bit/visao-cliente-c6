@@ -87,12 +87,16 @@ def _fs_save_payload(doc_id: str, obj):
         raw = json.dumps(obj, ensure_ascii=False, separators=(",", ":"), default=str)
     except Exception:
         raw = json.dumps(json.loads(json.dumps(obj, ensure_ascii=False, default=str)), ensure_ascii=False, separators=(",", ":"))
+    try:
+        clean_obj = json.loads(raw)
+    except Exception:
+        clean_obj = obj
     max_chars = 650_000
     try:
         if len(raw.encode("utf-8")) <= max_chars:
             # Não faz leitura prévia: no Streamlit Cloud a cota de Firestore pode
             # estourar, e metadados/cache não podem derrubar o app.
-            doc_ref.set({"payload": obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
+            doc_ref.set({"payload": clean_obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
             return True
         chunks = []
         current = []
@@ -1294,6 +1298,11 @@ def _filename_has_required_keyword(file_name: str, keyword: str) -> bool:
 
 def _load_daily_import_cache(kind: str):
     kind_key = str(kind or "").strip().lower()
+    if kind_key == "lct" and st.session_state.get("c6_daily_lct_df") is not None:
+        try:
+            return st.session_state["c6_daily_lct_df"].copy(), str(st.session_state.get("c6_daily_lct_df__name") or ""), "Resumo LCT (sessão atual)"
+        except Exception:
+            pass
     if kind_key == "visao":
         cache_path = C6_DAILY_VISAO_CACHE
     elif kind_key == "lct":
@@ -7028,6 +7037,8 @@ def _extract_leads_base(df_leads: pd.DataFrame) -> pd.DataFrame:
     out["dt_conta_aberta_leads"] = pd.to_datetime(df[aberta_col], errors="coerce", dayfirst=True) if aberta_col else pd.NaT
     out["status_abertura_conta"] = normalize_str(df[status_abertura_col]) if status_abertura_col else ""
     out["status_final"] = normalize_str(df[status_final_col]) if status_final_col else ""
+    status_vazio = out["status_abertura_conta"].apply(_normalize_person_key).isin(["", "-", "'-", "'"])
+    out.loc[status_vazio, "status_abertura_conta"] = out.loc[status_vazio, "status_final"]
     out["pendencias"] = normalize_str(df[pendencias_col]) if pendencias_col else ""
     if out["nome_cliente"].apply(_normalize_text_value).eq("").all() and len(df.columns) > 4:
         out["nome_cliente"] = normalize_str(df.iloc[:, 4])
@@ -11265,6 +11276,8 @@ if "Leads Diários" in tabs_map:
             raw_lct_bytes = up_lct.getvalue()
             df_lct_tmp = _read_lct_file_any(up_lct.name, raw_lct_bytes)
             if df_lct_tmp is not None and not df_lct_tmp.empty:
+                st.session_state["c6_daily_lct_df"] = _compact_lct_cache_df(df_lct_tmp)
+                st.session_state["c6_daily_lct_df__name"] = up_lct.name
                 if _save_daily_import_cache("lct", up_lct.name, raw_lct_bytes):
                     st.success("Resumo LCT importado.")
                 else:
@@ -11282,6 +11295,8 @@ if "Leads Diários" in tabs_map:
 
         df_panel_lct, panel_lct_name, panel_lct_origin = _load_daily_import_cache("lct")
         df_ura_lct, ura_lct_names = _load_lct_history_from_temp_imports(df_panel_lct)
+        if df_panel_lct is not None and not df_panel_lct.empty:
+            df_ura_lct = pd.concat([df_ura_lct, df_panel_lct], ignore_index=True, sort=False) if df_ura_lct is not None and not df_ura_lct.empty else df_panel_lct
         if ura_lct_names:
             st.caption(f"Histórico Resumo LCT em uso: {ura_lct_names}")
         elif panel_lct_name:
@@ -11479,8 +11494,10 @@ if "Leads Diários" in tabs_map:
             if "data_hora_cadastro" not in followup_base.columns:
                 followup_base["data_hora_cadastro"] = pd.NaT
 
+            ref_followup = pd.to_datetime(followup_base.get("data_base"), errors="coerce").max() if "data_base" in followup_base.columns else pd.NaT
+            ref_followup_date = ref_followup.date() if pd.notna(ref_followup) else dt.date.today()
             followup_base["dias_desde_cadastro"] = followup_base["data_hora_cadastro"].apply(
-                lambda x: _days_since_today_exclusive(x, dt.date.today())
+                lambda x: _days_since_today_exclusive(x, ref_followup_date)
             )
             dt_abertura_ref = pd.to_datetime(followup_base.get("dt_abertura_ref", pd.Series(pd.NaT, index=followup_base.index)), errors="coerce")
             dt_conta_criada = pd.to_datetime(followup_base.get("dt_conta_criada", pd.Series(pd.NaT, index=followup_base.index)), errors="coerce")
