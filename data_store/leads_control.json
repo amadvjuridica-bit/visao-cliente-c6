@@ -690,13 +690,13 @@
       "name": "Analitico Leads_21052026.xlsx",
       "hash": "14143af97149e412c3eaa47d9eec2141",
       "day": "2026-05-21",
-      "imported_at": "2026-05-22T09:56:13.348406",
+      "imported_at": "2026-05-22T09:58:14.090632",
       "origin": "importacao_diaria"
     }
   ],
-  "updated_at": "2026-05-22T09:56:13.348406",
+  "updated_at": "2026-05-22T09:58:14.090632",
   "last_processed": {
     "day": "2026-05-21",
-    "imported_at": "2026-05-22T09:56:13.348406"
+    "imported_at": "2026-05-22T09:58:14.090632"
   }
 }
