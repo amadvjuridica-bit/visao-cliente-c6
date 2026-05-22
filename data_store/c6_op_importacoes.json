@@ -160,5 +160,23 @@
     "ops_rows": 1633,
     "leads_rows": 5437,
     "visao_rows": 1386
+  },
+  {
+    "processed_at": "2026-05-21 17:06:59",
+    "ops_rows": 1887,
+    "leads_rows": 5437,
+    "visao_rows": 1386
+  },
+  {
+    "processed_at": "2026-05-21 17:45:35",
+    "ops_rows": 1887,
+    "leads_rows": 5437,
+    "visao_rows": 1386
+  },
+  {
+    "processed_at": "2026-05-21 17:56:55",
+    "ops_rows": 1887,
+    "leads_rows": 5437,
+    "visao_rows": 1386
   }
 ]
