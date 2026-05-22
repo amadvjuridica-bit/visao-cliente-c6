@@ -504,7 +504,7 @@
     "first_tipo": "CNPJ|PHONE",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-05-20",
+    "last_seen": "2026-05-21",
     "removed_on": ""
   },
   "66718048000148": {
@@ -512,7 +512,7 @@
     "first_tipo": "CNPJ|EMAIL",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-05-20",
+    "last_seen": "2026-05-21",
     "removed_on": ""
   }
 }
