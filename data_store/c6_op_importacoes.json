@@ -184,5 +184,11 @@
     "ops_rows": 1887,
     "leads_rows": 5527,
     "visao_rows": 1421
+  },
+  {
+    "processed_at": "2026-05-22 10:07:23",
+    "ops_rows": 1985,
+    "leads_rows": 5527,
+    "visao_rows": 1421
   }
 ]

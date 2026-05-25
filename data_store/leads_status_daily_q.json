@@ -936,5 +936,16 @@
     "Orientar o cliente enviar documento societário via APP": 23,
     "Cliente deverá fazer um novo processo de abertura de conta via APP": 4,
     "_validas_14d": 1821
+  },
+  "2026-05-24": {
+    "SEM_STATUS": 3377,
+    "Ainda nao iniciou a abertura de conta": 2171,
+    "Desacordo comercial": 188,
+    "Aguardar atuação manual BKO": 27,
+    "Orientar o cliente enviar documento societário via APP": 21,
+    "Conta Aberta Oriente o cliente a fazer o primeiro acesso via APP": 19,
+    "Cliente deverá fazer um novo processo de abertura de conta via APP": 4,
+    "Abertura de conta em analise": 1,
+    "_validas_14d": 1672
   }
 }
