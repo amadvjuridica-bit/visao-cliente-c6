@@ -7461,54 +7461,59 @@ def _load_funil_temp_history_cached(keyword: str, _extractor) -> List[pd.DataFra
 
 def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]] = None) -> pd.DataFrame:
     df = df_lct.copy()
-    nome_col = _coalesce_col(df, ["nome_cliente_lct", "nome_cliente_index", "Nome", "NOME", "NOME_CLIENTE"])
-    cnpj_col = _coalesce_col(df, ["cnpj", "CPF / CNPJ", "CNPJ", "CNPJ_CLIENTE"])
-    data_col = _coalesce_col(df, ["data_lct", "Data", "DATA"])
-    fase_col = _coalesce_col(df, ["dt_fundacao_lct", "Fase", "FASE"])
-    acao_col = _coalesce_col(df, ["acao_lct", "Ação", "ACAO", "Acao"])
-    hist_col = _coalesce_col(df, ["origem_lct_texto", "Histórico", "HISTORICO", "HISTÓRICO", "Historico"])
+    if not isinstance(df.index, pd.RangeIndex) and "nome_cliente_index" not in df.columns:
+        df.insert(0, "nome_cliente_index", pd.Series(df.index, index=df.index).astype("string").fillna("").to_numpy())
 
-    shifted_lct = False
-    if cnpj_col and "Cód" in df.columns:
-        cnpj_valid = _normalize_cnpj_series(df[cnpj_col]).astype(str).str.len().ge(14).mean()
-        cod_valid = _normalize_cnpj_series(df["Cód"]).astype(str).str.len().ge(14).mean()
-        shifted_lct = bool(cod_valid > cnpj_valid and cod_valid > 0.5)
-    if shifted_lct:
-        cnpj_col = "Cód"
-        acao_col = "Unnamed: 4" if "Unnamed: 4" in df.columns else acao_col
-        data_col = "Ação" if "Ação" in df.columns else data_col
-        hist_col = "Hora" if "Hora" in df.columns else hist_col
+    def _first_text(cols: List[str]) -> pd.Series:
+        result = pd.Series([""] * len(df), index=df.index, dtype="string")
+        for col in cols:
+            if col not in df.columns:
+                continue
+            s = normalize_str(df[col])
+            result = result.mask(result.astype(str).str.strip().eq(""), s)
+        return result.fillna("")
 
-    out = pd.DataFrame()
-    out["nome_cliente_lct"] = normalize_str(df[nome_col]) if nome_col else ""
-    out["cnpj"] = _normalize_cnpj_series(df[cnpj_col]) if cnpj_col else ""
-    if data_col:
-        data_raw = df[data_col].astype("string").fillna("").str.strip()
-        data_dt = pd.to_datetime(data_raw, errors="coerce", dayfirst=True)
-        if data_dt.isna().all():
-            data_dt = pd.to_datetime(data_raw.str.extract(r"(\d{2}/\d{2}/\d{4})", expand=False), errors="coerce", dayfirst=True)
-        out["data_lct"] = data_dt
+    def _first_date(cols: List[str]) -> pd.Series:
+        result = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]")
+        for col in cols:
+            if col not in df.columns:
+                continue
+            raw = normalize_str(df[col])
+            parsed = pd.to_datetime(raw, errors="coerce", dayfirst=True)
+            if parsed.isna().all():
+                parsed = pd.to_datetime(raw.str.extract(r"(\d{2}/\d{2}/\d{4})", expand=False), errors="coerce", dayfirst=True)
+            result = result.mask(result.isna(), parsed)
+        return result
+
+    out = pd.DataFrame(index=df.index)
+    out["nome_cliente_lct"] = _first_text(["nome_cliente_lct", "nome_cliente_index", "Nome", "NOME", "NOME_CLIENTE"])
+    cnpj = pd.Series([""] * len(df), index=df.index, dtype="string")
+    for col in ["cnpj", "CPF / CNPJ", "CNPJ", "CNPJ_CLIENTE", "Cód"]:
+        if col not in df.columns:
+            continue
+        cand = _normalize_cnpj_series(df[col])
+        cnpj = cnpj.mask(cnpj.astype(str).str.len().lt(14) & cand.astype(str).str.len().ge(14), cand)
+    out["cnpj"] = cnpj.fillna("")
+    out["data_lct"] = _first_date(["data_lct", "Data", "DATA", "Ação"])
+    out["dt_fundacao_lct"] = _first_date(["dt_fundacao_lct", "Fase", "FASE", "Inclusão"])
+    source_parts = []
+    for col in ["acao_lct", "origem_lct_texto", "Unnamed: 4", "Ação", "ACAO", "Acao", "Agente", "Histórico", "HISTORICO", "HISTÓRICO", "Historico", "Hora"]:
+        if col in df.columns:
+            source_parts.append(normalize_str(df[col]).str.upper())
+    if source_parts:
+        source_txt = source_parts[0]
+        for part in source_parts[1:]:
+            source_txt = (source_txt.astype(str) + " " + part.astype(str)).str.strip()
     else:
-        out["data_lct"] = pd.NaT
-    if fase_col:
-        fase_raw = df[fase_col].astype("string").fillna("").str.strip()
-        fase_dt = pd.to_datetime(fase_raw, errors="coerce", dayfirst=True)
-        if fase_dt.isna().all():
-            fase_dt = pd.to_datetime(fase_raw.str.extract(r"(\d{2}/\d{2}/\d{4})", expand=False), errors="coerce", dayfirst=True)
-        out["dt_fundacao_lct"] = fase_dt
-    else:
-        out["dt_fundacao_lct"] = pd.NaT
-    out["acao_lct"] = normalize_str(df[acao_col]).str.upper() if acao_col else ""
-    hist_txt = normalize_str(df[hist_col]).str.upper() if hist_col else pd.Series([""] * len(df), index=df.index)
-    out["origem_lct_texto"] = (out["acao_lct"].astype(str) + " " + hist_txt.astype(str)).str.strip()
+        source_txt = pd.Series([""] * len(df), index=df.index)
+    out["origem_lct_texto"] = source_txt
+    out["acao_lct"] = _first_text(["acao_lct", "Unnamed: 4", "Ação", "ACAO", "Acao"]).str.upper()
     out = out[out["cnpj"] != ""].copy()
     keywords = [str(k or "").strip().upper() for k in (source_keywords or ["LCT"]) if str(k or "").strip()]
     if keywords and "origem_lct_texto" in out.columns and out["origem_lct_texto"].astype(str).str.strip().ne("").any():
         pattern = "|".join(re.escape(k) for k in keywords)
         out = out[out["origem_lct_texto"].astype(str).str.contains(pattern, na=False, regex=True)].copy()
     out["data_lct_dia"] = pd.to_datetime(out["data_lct"], errors="coerce").dt.date
-    if out["data_lct_dia"].isna().all() and data_col:
-        out["data_lct_dia"] = pd.to_datetime(df.loc[out.index, data_col], errors="coerce", dayfirst=True).dt.date
     out = out.sort_values(["data_lct", "cnpj"]).drop_duplicates(subset=["cnpj", "data_lct_dia"], keep="last")
     return out
 
