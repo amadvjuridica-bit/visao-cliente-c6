@@ -546,5 +546,13 @@
     "current_has_pix": true,
     "last_seen": "2026-05-23",
     "removed_on": ""
+  },
+  "66661408000112": {
+    "first_seen": "2026-05-23",
+    "first_tipo": "CNPJ|EMAIL",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-05-23",
+    "removed_on": ""
   }
 }
