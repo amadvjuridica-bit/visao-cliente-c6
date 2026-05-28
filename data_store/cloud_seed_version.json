@@ -1,7 +1,7 @@
 {
-  "version": "2026-05-28-150025",
-  "generated_at": "2026-05-28T15:00:25",
-  "reason": "leads-lct-upload",
+  "version": "2026-05-28-150124",
+  "generated_at": "2026-05-28T15:01:24",
+  "reason": "c6-operacao-upload",
   "files": [
     "c6_daily_funil_track.json",
     "c6_daily_import_meta.json",
