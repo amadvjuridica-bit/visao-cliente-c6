@@ -1,6 +1,6 @@
 {
   "columns": [
-    "Mês",
+    "M?s",
     "Qualificadas",
     "Acelerador",
     "Cash In",
@@ -10,8 +10,8 @@
     "PIX CNPJ",
     "Wallet",
     "Deveria receber (cheio)",
-    "Já pago (referência)",
-    "A receber no mês"
+    "J? pago (refer?ncia)",
+    "A receber no m?s"
   ],
   "index": [
     0,
@@ -34,17 +34,17 @@
     ],
     [
       "05/2026",
-      400,
+      413,
       1.0,
-      360,
+      373,
       22,
       18,
-      15,
+      17,
       0,
-      173,
-      201950.0,
-      116710.0,
-      85240.0
+      178,
+      208900.0,
+      107665.0,
+      101235.0
     ]
   ]
 }
