@@ -73,7 +73,18 @@
     "n3": 74,
     "n4": 104,
     "deveria_receber": 200325.0,
-    "ja_pago_ref": 101662.5,
-    "receber_mes": 98662.5
+    "ja_pago_ref": 118000.0,
+    "receber_mes": 82325.0
+  },
+  "06/2026": {
+    "faixa": "Até 49 (1.0)",
+    "qualificadas": 33,
+    "n1": 30,
+    "n2": 2,
+    "n3": 0,
+    "n4": 1,
+    "deveria_receber": 5200.0,
+    "ja_pago_ref": 3360.0,
+    "receber_mes": 1840.0
   }
 }
