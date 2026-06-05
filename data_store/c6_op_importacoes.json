@@ -280,5 +280,11 @@
     "ops_rows": 519,
     "leads_rows": 7585,
     "visao_rows": 1337
+  },
+  {
+    "processed_at": "2026-06-05 12:02:23",
+    "ops_rows": 519,
+    "leads_rows": 8008,
+    "visao_rows": 1416
   }
 ]
