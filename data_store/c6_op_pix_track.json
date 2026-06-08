@@ -572,5 +572,29 @@
     "removed_on": ""
   },
   "65951198000134": {},
-  "66918735000107": {}
+  "66918735000107": {},
+  "66034267000108": {
+    "first_seen": "2026-06-04",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-06-04",
+    "removed_on": ""
+  },
+  "66997603000118": {
+    "first_seen": "2026-06-04",
+    "first_tipo": "CNPJ",
+    "first_operator": "LUIZ EDUARDO CAPOVILLA",
+    "current_has_pix": true,
+    "last_seen": "2026-06-04",
+    "removed_on": ""
+  },
+  "67116742000158": {
+    "first_seen": "2026-06-04",
+    "first_tipo": "CNPJ",
+    "first_operator": "CAMILA HOSANA ROJAS ARAUJO",
+    "current_has_pix": true,
+    "last_seen": "2026-06-04",
+    "removed_on": ""
+  }
 }
