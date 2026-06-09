@@ -769,11 +769,18 @@
       "day": "2026-06-07",
       "imported_at": "2026-06-08T11:56:34.262660",
       "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_08062026.xlsx",
+      "hash": "e3d446732b674864aa3b9b652e448fd2",
+      "day": "2026-06-08",
+      "imported_at": "2026-06-09T11:47:03.738711",
+      "origin": "importacao_diaria"
     }
   ],
-  "updated_at": "2026-06-08T11:56:34.262660",
+  "updated_at": "2026-06-09T11:47:03.738711",
   "last_processed": {
-    "day": "2026-06-07",
-    "imported_at": "2026-06-08T11:56:34.262660"
+    "day": "2026-06-08",
+    "imported_at": "2026-06-09T11:47:03.738711"
   }
 }

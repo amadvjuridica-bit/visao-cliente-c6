@@ -578,7 +578,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "LIVIA ALVES GRANJA",
     "current_has_pix": true,
-    "last_seen": "2026-06-04",
+    "last_seen": "2026-06-07",
     "removed_on": ""
   },
   "66997603000118": {
@@ -586,7 +586,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "LUIZ EDUARDO CAPOVILLA",
     "current_has_pix": true,
-    "last_seen": "2026-06-04",
+    "last_seen": "2026-06-07",
     "removed_on": ""
   },
   "67116742000158": {
@@ -594,7 +594,10 @@
     "first_tipo": "CNPJ",
     "first_operator": "CAMILA HOSANA ROJAS ARAUJO",
     "current_has_pix": true,
-    "last_seen": "2026-06-04",
+    "last_seen": "2026-06-07",
     "removed_on": ""
-  }
+  },
+  "66255468000135": {},
+  "66269961000104": {},
+  "67146486000141": {}
 }
