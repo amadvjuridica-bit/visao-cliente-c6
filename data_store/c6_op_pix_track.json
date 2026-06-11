@@ -413,7 +413,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-04-21",
+    "last_seen": "2026-06-08",
     "removed_on": ""
   },
   "65788815000122": {
@@ -599,5 +599,47 @@
   },
   "66255468000135": {},
   "66269961000104": {},
-  "67146486000141": {}
+  "67146486000141": {},
+  "64310076000104": {
+    "first_seen": "2026-06-08",
+    "first_tipo": "EMAIL",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-08",
+    "removed_on": ""
+  },
+  "65281605000143": {
+    "first_seen": "2026-06-08",
+    "first_tipo": "EMAIL",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-08",
+    "removed_on": ""
+  },
+  "65522061000164": {
+    "first_seen": "2026-06-08",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-08",
+    "removed_on": ""
+  },
+  "66161579000182": {},
+  "66400993000105": {
+    "first_seen": "2026-06-08",
+    "first_tipo": "CNPJ",
+    "first_operator": "LUIZ EDUARDO CAPOVILLA",
+    "current_has_pix": true,
+    "last_seen": "2026-06-08",
+    "removed_on": ""
+  },
+  "66666154000125": {
+    "first_seen": "2026-06-08",
+    "first_tipo": "CNPJ",
+    "first_operator": "LUIZ EDUARDO CAPOVILLA",
+    "current_has_pix": true,
+    "last_seen": "2026-06-08",
+    "removed_on": ""
+  },
+  "66800879000164": {}
 }
