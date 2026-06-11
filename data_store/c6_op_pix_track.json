@@ -641,5 +641,15 @@
     "last_seen": "2026-06-09",
     "removed_on": ""
   },
-  "66800879000164": {}
+  "66800879000164": {},
+  "65324526000172": {},
+  "66047818000178": {
+    "first_seen": "2026-06-09",
+    "first_tipo": "CNPJ",
+    "first_operator": "DANIEL DEL OLMO ALVES",
+    "current_has_pix": true,
+    "last_seen": "2026-06-09",
+    "removed_on": ""
+  },
+  "67069509000161": {}
 }
