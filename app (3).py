@@ -370,6 +370,18 @@ def safe_json_save(path: str, obj):
     return True
 
 
+def merge_monthly_json_save(path: str, updates: dict):
+    """Atualiza meses recalculados sem apagar meses historicos que nao entraram no recompute atual."""
+    existing = safe_json_load(path, default={}) or {}
+    if not isinstance(existing, dict):
+        existing = {}
+    for key, value in (updates or {}).items():
+        if str(key).strip():
+            existing[str(key)] = value
+    safe_json_save(path, existing)
+    return existing
+
+
 def safe_json_delete(path: str):
     """
     Remove somente o doc/arquivo daquele relatório.
@@ -1203,6 +1215,36 @@ def _save_daily_import_cache(kind: str, file_name: str, raw_bytes: bytes):
     except Exception:
         pass
     return saved_cache if "firebase" in st.secrets else saved_meta
+
+
+def _upload_sig(kind: str, file_name: str, raw_bytes: bytes) -> str:
+    digest = hashlib.md5(raw_bytes or b"").hexdigest()
+    return f"{kind}|{str(file_name or '').strip()}|{len(raw_bytes or b'')}|{digest}"
+
+
+def _already_processed_upload(kind: str, file_name: str, raw_bytes: bytes) -> bool:
+    sig = _upload_sig(kind, file_name, raw_bytes)
+    done = st.session_state.setdefault("_daily_upload_processed_sigs", set())
+    if sig in done:
+        return True
+    try:
+        kind_key = str(kind or "").strip().lower()
+        meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
+        meta_name = str((meta.get(kind_key, {}) or {}).get("name", "") or "").strip()
+        safe_name = os.path.basename(str(file_name or "").strip())
+        temp_path = os.path.join(APP_DIR, "temp_imports", safe_name)
+        if meta_name == safe_name and os.path.exists(temp_path) and os.path.getsize(temp_path) == len(raw_bytes or b""):
+            done.add(sig)
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _mark_processed_upload(kind: str, file_name: str, raw_bytes: bytes):
+    sig = _upload_sig(kind, file_name, raw_bytes)
+    done = st.session_state.setdefault("_daily_upload_processed_sigs", set())
+    done.add(sig)
 
 
 def _daily_import_cached_at(meta: dict, kind_key: str) -> dt.datetime:
@@ -3642,7 +3684,7 @@ def recompute_cartilha_nova() -> pd.DataFrame:
         ])
 
     safe_json_save(HIST_NOVA_PAGO_POR_CNPJ, paid_max)
-    safe_json_save(HIST_NOVA_RESUMO_MENSAL, resumo)
+    merge_monthly_json_save(HIST_NOVA_RESUMO_MENSAL, resumo)
 
     return pd.DataFrame(
         rows,
@@ -6409,7 +6451,7 @@ def recompute_incremental() -> pd.DataFrame:
         ])
 
     safe_json_save(HIST_PAGO_POR_CNPJ, paid_max)
-    safe_json_save(HIST_RESUMO_MENSAL, resumo)
+    merge_monthly_json_save(HIST_RESUMO_MENSAL, resumo)
 
     return pd.DataFrame(
         rows,
@@ -7264,7 +7306,7 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
     df = df_visao.copy()
     data_abertura_all = pd.to_datetime(_series_by_name_or_letter(df, [COL_ABERTURA, "DATA CONTA CRIADA", "DT CONTA CRIADA"], "T"), errors="coerce", dayfirst=True)
     status_all = normalize_str(_series_by_name_or_letter(df, [COL_STATUS, "STATUS", "STATUS_CONTA", "STATUS CC"], "V")).str.upper()
-    mask = ~status_all.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
+    mask = data_abertura_all.notna() & status_all.str.contains("LIBERADA", na=False) & ~status_all.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
     base = df.loc[mask].copy()
     if base.empty:
         return pd.DataFrame()
@@ -7278,7 +7320,10 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
     conta_s = _series_by_name_or_letter(base, ["NUM_CONTA", "NUMERO_CONTA", "NUMERO DA CONTA"], "R").astype("string").fillna("")
     pix_s = _series_by_name_or_letter(base, [COL_PIX, "CHAVES PIX FORTE", "CHAVE_PIX"], "X").astype("string").fillna("")
     cash_s = pd.to_numeric(_series_by_name_or_letter(base, [COL_CASHIN_MTD, "VALOR CASHIN", "VALOR CASH IN", "VL CASH IN MTD"], "Y"), errors="coerce").fillna(0.0)
+    conta_ativa_90d_s = _series_by_name_or_letter(base, ["CONTA_ATIVA_90D", "CONTA ATIVA 90D"], "W").astype("string").fillna("")
     entrega_s = pd.to_datetime(_series_by_name_or_letter(base, ["DT_ENTREGA_CARTAO", "DATA ENTREGA CARTAO", "DATA ENTREGA CARTÃO"], "AB"), errors="coerce", dayfirst=True)
+    wallet_s = _series_by_name_or_letter(base, ["FL_WALLET_CADASTRADA", "WALLET", "FL_WALLET", "CARTAO_WALLET"], "AE").astype("string").fillna("")
+    elegivel_c6pay_s = _series_by_name_or_letter(base, ["FL_ELEGIVEL_VENDA_C6PAY", "ELEGIVEL C6 PAY", "ELEGÍVEL C6 PAY"], "AG").astype("string").fillna("")
     limite_cartao_s = pd.to_numeric(_series_by_name_or_letter(base, ["LIMITE_CARTAO", "LIMITE CARTAO", "LIMITE CARTÃO"], "Z"), errors="coerce").fillna(0.0)
     limite_cdb_s = pd.to_numeric(_series_by_name_or_letter(base, ["LIMITE_ALOCADO_CARTAO_CDB", "LIMITE ALOCADO CARTAO CDB", "LIMITE ALOCADO CARTÃO CDB"], "AA"), errors="coerce").fillna(0.0)
     mes_ref_s = _series_by_name_or_letter(base, [COL_BR, "MES_REF_COMISS", "MES REFERENCIA COMISSAO"], "BO").astype("string").fillna("")
@@ -7306,7 +7351,10 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
                 "dt_conta_criada": fmt_date(data_abertura.loc[idx]) if pd.notna(data_abertura.loc[idx]) else "",
                 "chaves_pix_forte": pix_s.loc[idx],
                 "valor_cashin": float(cash_s.loc[idx] or 0.0),
+                "conta_ativa_90d": conta_ativa_90d_s.loc[idx],
                 "dt_entrega_cartao": fmt_date(entrega_s.loc[idx]) if pd.notna(entrega_s.loc[idx]) else "",
+                "wallet": wallet_s.loc[idx],
+                "elegivel_venda_c6pay": elegivel_c6pay_s.loc[idx],
                 "limite_cartao": float(limite_cartao_s.loc[idx] or 0.0),
                 "limite_alocado_cartao_cdb": float(limite_cdb_s.loc[idx] or 0.0),
                 "mes_ref_comissao": mes_ref_s.loc[idx],
@@ -7323,9 +7371,10 @@ def _open_accounts_actions_summary(df_visao: pd.DataFrame) -> dict:
     status_s = normalize_str(_series_by_name_or_letter(df_visao, [COL_STATUS, "STATUS", "STATUS_CONTA", "STATUS CC"], "V")).str.upper()
     has_open = data_abertura.notna()
     blocked = status_s.str.contains("BLOQUEAD|DESATIVAD|ENCERRAD|CANCEL", na=False)
+    liberada = status_s.str.contains("LIBERADA", na=False)
     tel_1_s = _series_by_name_or_letter(df_visao, ["TELEFONE", "TELEFONE_1", "TEL", "FONE"], "M")
     tel_2_s = _series_by_name_or_letter(df_visao, ["TELEFONE_MASTER", "TELEFONE_2", "TEL2", "FONE2", "CELULAR"], "N")
-    valid_mask = ~blocked
+    valid_mask = has_open & liberada & ~blocked
     raw_phone_lines = int(valid_mask.sum()) * 2
     duplicates = 0
     no_phone = 0
@@ -8798,6 +8847,8 @@ if "Painel C6 Empresas" in tabs_map:
     if up_c6:
         for f in _sort_uploaded_c6_files(up_c6):
             raw_c6_bytes = f.getvalue()
+            if _already_processed_upload("visao", f.name, raw_c6_bytes):
+                continue
             df_c6 = read_excel_any(raw_c6_bytes)
             df_c6_panel = _panel_c6_valid_df(df_c6)
             st.session_state["c6_daily_visao_df"] = df_c6.copy()
@@ -8912,10 +8963,13 @@ if "Painel C6 Empresas" in tabs_map:
                     "base_receber_mes": float(_cmp_base_receber_mes or 0.0),
                 })
                 _cmp_pending[day_key] = rec
+            _mark_processed_upload("visao", f.name, raw_c6_bytes)
 
     if up_leads:
         for f in _sort_uploaded_leads_files(up_leads):
             raw_leads_bytes = f.getvalue()
+            if _already_processed_upload("leads", f.name, raw_leads_bytes):
+                continue
             df_leads = read_excel_any(raw_leads_bytes)
             st.session_state["c6_daily_leads_df"] = df_leads.copy()
             st.session_state["c6_daily_leads_df__name"] = f.name
@@ -8962,6 +9016,7 @@ if "Painel C6 Empresas" in tabs_map:
                     rec["mes_ref"] = fmt_month(dt.date(_cmp_day.year, _cmp_day.month, 1))
                 rec["leads_total"] = int(_cmp_leads_total or 0)
                 _cmp_pending[day_key] = rec
+            _mark_processed_upload("leads", f.name, raw_leads_bytes)
 
     st.divider()
 
@@ -9545,26 +9600,36 @@ if "Painel C6 Empresas" in tabs_map:
     df_novo_calc = st.session_state.get("_panel_c6_cartilha_nova_df", pd.DataFrame())
     if not isinstance(df_novo_calc, pd.DataFrame):
         df_novo_calc = pd.DataFrame()
+    saved_novo = {}
     if not df_novo_calc.empty:
-        saved_novo = {}
+        def _row_any(row, names, default=0):
+            for name in names:
+                try:
+                    val = row.get(name)
+                    if val is not None and not (isinstance(val, float) and pd.isna(val)):
+                        return val
+                except Exception:
+                    pass
+            return default
+
         for _, row in df_novo_calc.iterrows():
-            mkey = str(row.get("Mês", "") or "")
+            mkey = str(_row_any(row, ["Mês", "M?s"], "") or "")
             if not mkey:
                 continue
             saved_novo[mkey] = {
-                "qualificadas": int(pd.to_numeric(pd.Series([row.get("Qualificadas", 0)]), errors="coerce").fillna(0).iloc[0]),
-                "acelerador": float(pd.to_numeric(pd.Series([row.get("Acelerador", 1.0)]), errors="coerce").fillna(1.0).iloc[0]),
-                "cash_in": int(pd.to_numeric(pd.Series([row.get("Cash In", 0)]), errors="coerce").fillna(0).iloc[0]),
-                "spending": int(pd.to_numeric(pd.Series([row.get("Spending", 0)]), errors="coerce").fillna(0).iloc[0]),
-                "c6pay": int(pd.to_numeric(pd.Series([row.get("C6 Pay", 0)]), errors="coerce").fillna(0).iloc[0]),
-                "c6pay_credenciamento": int(pd.to_numeric(pd.Series([row.get("Credenciamento C6 Pay", 0)]), errors="coerce").fillna(0).iloc[0]),
-                "pix_cnpj": int(pd.to_numeric(pd.Series([row.get("PIX CNPJ", 0)]), errors="coerce").fillna(0).iloc[0]),
-                "wallet": int(pd.to_numeric(pd.Series([row.get("Wallet", 0)]), errors="coerce").fillna(0).iloc[0]),
-                "deveria_receber": float(pd.to_numeric(pd.Series([row.get("Deveria receber (cheio)", 0.0)]), errors="coerce").fillna(0.0).iloc[0]),
-                "ja_pago_ref": float(pd.to_numeric(pd.Series([row.get("Já pago (referência)", 0.0)]), errors="coerce").fillna(0.0).iloc[0]),
-                "receber_mes": float(pd.to_numeric(pd.Series([row.get("A receber no mês", 0.0)]), errors="coerce").fillna(0.0).iloc[0]),
+                "qualificadas": int(pd.to_numeric(pd.Series([_row_any(row, ["Qualificadas"], 0)]), errors="coerce").fillna(0).iloc[0]),
+                "acelerador": float(pd.to_numeric(pd.Series([_row_any(row, ["Acelerador"], 1.0)]), errors="coerce").fillna(1.0).iloc[0]),
+                "cash_in": int(pd.to_numeric(pd.Series([_row_any(row, ["Cash In"], 0)]), errors="coerce").fillna(0).iloc[0]),
+                "spending": int(pd.to_numeric(pd.Series([_row_any(row, ["Spending"], 0)]), errors="coerce").fillna(0).iloc[0]),
+                "c6pay": int(pd.to_numeric(pd.Series([_row_any(row, ["C6 Pay"], 0)]), errors="coerce").fillna(0).iloc[0]),
+                "c6pay_credenciamento": int(pd.to_numeric(pd.Series([_row_any(row, ["Credenciamento C6 Pay"], 0)]), errors="coerce").fillna(0).iloc[0]),
+                "pix_cnpj": int(pd.to_numeric(pd.Series([_row_any(row, ["PIX CNPJ"], 0)]), errors="coerce").fillna(0).iloc[0]),
+                "wallet": int(pd.to_numeric(pd.Series([_row_any(row, ["Wallet"], 0)]), errors="coerce").fillna(0).iloc[0]),
+                "deveria_receber": float(pd.to_numeric(pd.Series([_row_any(row, ["Deveria receber (cheio)"], 0.0)]), errors="coerce").fillna(0.0).iloc[0]),
+                "ja_pago_ref": float(pd.to_numeric(pd.Series([_row_any(row, ["Já pago (referência)", "J? pago (refer?ncia)"], 0.0)]), errors="coerce").fillna(0.0).iloc[0]),
+                "receber_mes": float(pd.to_numeric(pd.Series([_row_any(row, ["A receber no mês", "A receber no m?s"], 0.0)]), errors="coerce").fillna(0.0).iloc[0]),
             }
-    else:
+    if not saved_novo:
         saved_novo = safe_json_load(HIST_NOVA_RESUMO_MENSAL, default={}) or {}
     if not saved_novo:
         st.info("Ainda não há base suficiente para a cartilha nova. Importe os arquivos diários de abril, maio e junho para comparar.")
@@ -11359,24 +11424,26 @@ if "Leads Diários" in tabs_map:
         )
         if up_lct is not None:
             raw_lct_bytes = up_lct.getvalue()
-            df_lct_tmp = _read_lct_file_any(up_lct.name, raw_lct_bytes)
-            if df_lct_tmp is not None and not df_lct_tmp.empty:
-                st.session_state["c6_daily_lct_df"] = _compact_lct_cache_df(df_lct_tmp)
-                st.session_state["c6_daily_lct_df__name"] = up_lct.name
-                if _save_daily_import_cache("lct", up_lct.name, raw_lct_bytes):
-                    st.success("Resumo LCT importado.")
-                else:
-                    st.error("Não consegui salvar o Resumo LCT na nuvem. A importação não ficará disponível em outros computadores.")
-                if "firebase" not in st.secrets:
-                    _lct_sync_sig = json.dumps(["lct", up_lct.name, getattr(up_lct, "size", 0)], ensure_ascii=False)
-                    if st.session_state.get("_last_lct_cloud_sync_sig") != _lct_sync_sig:
-                        with st.spinner("Sincronizando Resumo LCT com o app online..."):
-                            _sync_ok, _sync_msg = _sync_local_data_to_cloud_seed("leads-lct-upload")
-                        st.session_state["_last_lct_cloud_sync_sig"] = _lct_sync_sig
-                        if _sync_ok:
-                            st.success("Resumo LCT publicado para o app online. O Streamlit pode levar alguns minutos para recarregar.")
-                        elif "Sem mudanças" not in _sync_msg:
-                            st.warning(_sync_msg)
+            if not _already_processed_upload("lct", up_lct.name, raw_lct_bytes):
+                df_lct_tmp = _read_lct_file_any(up_lct.name, raw_lct_bytes)
+                if df_lct_tmp is not None and not df_lct_tmp.empty:
+                    st.session_state["c6_daily_lct_df"] = _compact_lct_cache_df(df_lct_tmp)
+                    st.session_state["c6_daily_lct_df__name"] = up_lct.name
+                    if _save_daily_import_cache("lct", up_lct.name, raw_lct_bytes):
+                        st.success("Resumo LCT importado.")
+                    else:
+                        st.error("Não consegui salvar o Resumo LCT na nuvem. A importação não ficará disponível em outros computadores.")
+                    if "firebase" not in st.secrets:
+                        _lct_sync_sig = json.dumps(["lct", up_lct.name, getattr(up_lct, "size", 0)], ensure_ascii=False)
+                        if st.session_state.get("_last_lct_cloud_sync_sig") != _lct_sync_sig:
+                            with st.spinner("Sincronizando Resumo LCT com o app online..."):
+                                _sync_ok, _sync_msg = _sync_local_data_to_cloud_seed("leads-lct-upload")
+                            st.session_state["_last_lct_cloud_sync_sig"] = _lct_sync_sig
+                            if _sync_ok:
+                                st.success("Resumo LCT publicado para o app online. O Streamlit pode levar alguns minutos para recarregar.")
+                            elif "Sem mudanças" not in _sync_msg:
+                                st.warning(_sync_msg)
+                    _mark_processed_upload("lct", up_lct.name, raw_lct_bytes)
 
         df_panel_lct, panel_lct_name, panel_lct_origin = _load_daily_import_cache("lct")
         df_ura_lct, ura_lct_names = _load_lct_history_from_temp_imports(df_panel_lct)
