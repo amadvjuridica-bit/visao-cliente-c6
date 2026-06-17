@@ -742,5 +742,54 @@
   },
   "66863054000199": {},
   "66878104000101": {},
-  "67048351000143": {}
+  "67048351000143": {},
+  "65626787000147": {
+    "first_seen": "2026-06-15",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-15",
+    "removed_on": ""
+  },
+  "65817279000146": {},
+  "66049178000135": {},
+  "66187343000115": {},
+  "66217807000199": {},
+  "66219701000124": {},
+  "66398051000121": {
+    "first_seen": "2026-06-15",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-15",
+    "removed_on": ""
+  },
+  "66433486000160": {},
+  "66508337000112": {},
+  "66664692000180": {},
+  "66942199000185": {
+    "first_seen": "2026-06-15",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-15",
+    "removed_on": ""
+  },
+  "67110140000193": {
+    "first_seen": "2026-06-15",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-15",
+    "removed_on": ""
+  },
+  "67249505000165": {
+    "first_seen": "2026-06-15",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-15",
+    "removed_on": ""
+  },
+  "67258365000191": {}
 }
