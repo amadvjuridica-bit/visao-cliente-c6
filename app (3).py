@@ -1327,32 +1327,36 @@ def _load_cloud_daily_import_payload(cache_path: str, kind_key: str):
             meta = safe_json_load(C6_DAILY_IMPORT_META, default={}) or {}
         return session_payloads.get(cache_doc), meta, "Importação diária (sessão atual)"
 
-    cloud_payload = _fs_load_payload(cache_doc, _MISSING)
-    cloud_meta = _fs_load_payload(meta_doc, _MISSING)
-    if cloud_meta is _MISSING or not isinstance(cloud_meta, dict):
-        cloud_meta = {}
-
     bundled_payload = _bundled_seed_payload(cache_doc, _MISSING)
     bundled_meta = _bundled_seed_payload(meta_doc, {})
     if not isinstance(bundled_meta, dict):
         bundled_meta = {}
 
+    cloud_meta = _fs_load_payload(meta_doc, _MISSING)
+    if cloud_meta is _MISSING or not isinstance(cloud_meta, dict):
+        if bundled_payload is not _MISSING:
+            return bundled_payload, bundled_meta, "Importação diária (pacote publicado)"
+        return None, {}, ""
+
     cloud_ts = _daily_import_cached_at(cloud_meta, kind_key)
     bundled_ts = _daily_import_cached_at(bundled_meta, kind_key)
-    cloud_data_day = _daily_payload_max_data_base(cloud_payload)
-    bundled_data_day = _daily_payload_max_data_base(bundled_payload)
 
-    if (
-        bundled_payload is not _MISSING
-        and (
-            cloud_payload is _MISSING
-            or bundled_data_day > cloud_data_day
-            or (bundled_data_day == cloud_data_day and cloud_ts != dt.datetime.min and bundled_ts > cloud_ts)
-        )
-    ):
+    if bundled_payload is not _MISSING and (cloud_ts == dt.datetime.min or bundled_ts > cloud_ts):
         return bundled_payload, bundled_meta, "Importação diária (pacote publicado)"
+
+    cloud_payload = _fs_load_payload(cache_doc, _MISSING)
     if cloud_payload is not _MISSING:
+        if bundled_payload is not _MISSING:
+            cloud_data_day = _daily_payload_max_data_base(cloud_payload)
+            bundled_data_day = _daily_payload_max_data_base(bundled_payload)
+            if (
+                bundled_data_day > cloud_data_day
+                or (bundled_data_day == cloud_data_day and cloud_ts != dt.datetime.min and bundled_ts > cloud_ts)
+            ):
+                return bundled_payload, bundled_meta, "Importação diária (pacote publicado)"
         return cloud_payload, cloud_meta, "Importação diária (cache nuvem)"
+    if bundled_payload is not _MISSING:
+        return bundled_payload, bundled_meta, "Importação diária (pacote publicado)"
     return None, {}, ""
 
 
@@ -2243,7 +2247,7 @@ def _load_daily_import_cache(kind: str):
     if kind_key == "visao":
         cache_path = C6_DAILY_VISAO_CACHE
     elif kind_key == "lct":
-        cache_path = C6_DAILY_LCT_CACHE
+        cache_path = C6_DAILY_LCT_CLOUD_CACHE if "firebase" in st.secrets else C6_DAILY_LCT_CACHE
     else:
         cache_path = C6_DAILY_LEADS_CACHE
     if "firebase" in st.secrets:
