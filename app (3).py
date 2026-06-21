@@ -49,19 +49,36 @@ def _get_fs_db():
 
     return firestore.client()
 
+def _cloud_firestore_available() -> bool:
+    """Evita uma cascata de esperas quando o Firestore está lento/sem cota."""
+    try:
+        blocked_until = float(st.session_state.get("_cloud_firestore_blocked_until", 0) or 0)
+        return dt.datetime.now().timestamp() >= blocked_until
+    except Exception:
+        return True
+
+def _cloud_firestore_backoff(seconds: int = 90):
+    try:
+        st.session_state["_cloud_firestore_blocked_until"] = dt.datetime.now().timestamp() + seconds
+    except Exception:
+        pass
+
 def _fs_doc_id_from_path(path: str) -> str:
     return os.path.basename(path)
 
 def _fs_load_payload(doc_id: str, default):
+    if not _cloud_firestore_available():
+        return default
     db = _get_fs_db()
     if db is None:
         return default
     try:
-        snap = db.collection("app_store").document(doc_id).get()
+        snap = db.collection("app_store").document(doc_id).get(timeout=6)
         if not snap.exists:
             return default
         data = snap.to_dict() or {}
     except Exception:
+        _cloud_firestore_backoff()
         return default
     if data.get("chunked"):
         try:
@@ -69,16 +86,19 @@ def _fs_load_payload(doc_id: str, default):
             parts = []
             chunks_ref = db.collection("app_store").document(doc_id).collection("chunks")
             for idx in range(total):
-                chunk = chunks_ref.document(f"{idx:05d}").get()
+                chunk = chunks_ref.document(f"{idx:05d}").get(timeout=6)
                 if not chunk.exists:
                     return default
                 parts.append((chunk.to_dict() or {}).get("data", ""))
             return json.loads("".join(parts))
         except Exception:
+            _cloud_firestore_backoff()
             return default
     return data.get("payload", default)
 
 def _fs_save_payload(doc_id: str, obj):
+    if not _cloud_firestore_available():
+        return False
     db = _get_fs_db()
     if db is None:
         return False
@@ -96,7 +116,7 @@ def _fs_save_payload(doc_id: str, obj):
         if len(raw.encode("utf-8")) <= max_chars:
             # Não faz leitura prévia: no Streamlit Cloud a cota de Firestore pode
             # estourar, e metadados/cache não podem derrubar o app.
-            doc_ref.set({"payload": clean_obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
+            doc_ref.set({"payload": clean_obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False, timeout=6)
             return True
         chunks = []
         current = []
@@ -112,12 +132,13 @@ def _fs_save_payload(doc_id: str, obj):
                 current_size += ch_size
         if current:
             chunks.append("".join(current))
-        doc_ref.set({"payload": None, "chunked": True, "chunks": len(chunks), "updated_at": firestore.SERVER_TIMESTAMP}, merge=False)
+        doc_ref.set({"payload": None, "chunked": True, "chunks": len(chunks), "updated_at": firestore.SERVER_TIMESTAMP}, merge=False, timeout=6)
         chunks_ref = doc_ref.collection("chunks")
         for idx, part in enumerate(chunks):
-            chunks_ref.document(f"{idx:05d}").set({"data": part})
+            chunks_ref.document(f"{idx:05d}").set({"data": part}, timeout=6)
         return True
     except Exception:
+        _cloud_firestore_backoff()
         return False
 
 def _fs_delete_doc(doc_id: str):
