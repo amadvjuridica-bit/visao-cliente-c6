@@ -6489,12 +6489,6 @@ def recompute_incremental() -> pd.DataFrame:
 # LOGIN / TEMA / HEADER
 # =========================================================
 def login_gate() -> bool:
-    st.session_state["logged_in"] = True
-    st.session_state["user_role"] = "admin"
-    st.session_state["auth_user"] = "admin"
-    st.session_state["operator_filter"] = ""
-    return True
-
     url = str(getattr(st.context, "url", "") or "")
     if "localhost" in url or "127.0.0.1" in url:
         st.session_state["logged_in"] = True
@@ -6517,9 +6511,9 @@ def login_gate() -> bool:
     p = st.sidebar.text_input("Senha", value="", type="password")
     if st.sidebar.button("Entrar"):
         users_cfg = st.secrets.get("users", {})
-        admin_pwd = str(users_cfg.get("admin", "123456"))
-        supervisor_pwd = str(users_cfg.get("supervisor", "supervisor2026"))
-        operador_pwd = str(users_cfg.get("operador", "operador2026"))
+        admin_pwd = str(os.environ.get("ADMIN_PASS") or users_cfg.get("admin", "123456"))
+        supervisor_pwd = str(os.environ.get("SUPERVISOR_PASS") or users_cfg.get("supervisor", "supervisor2026"))
+        operador_pwd = str(os.environ.get("OPERADOR_PASS") or users_cfg.get("operador", "operador2026"))
 
         logged = False
         role = ""
