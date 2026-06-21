@@ -251,6 +251,7 @@ HIST_VISAO_MENSAL = os.path.join(DATA_DIR, "visao_mensal_curada.json")        # 
 HIST_NOVA_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "novo_pago_max_por_cnpj.json")
 HIST_NOVA_PAID_REF = os.path.join(DATA_DIR, "cartilha_nova_pago_ref.json")    # mm/aaaa -> {cnpj: ja pago banco}
 HIST_NOVA_RESUMO_MENSAL = os.path.join(DATA_DIR, "novo_resumo_mensal.json")
+HIST_REMUN_LEDGER = os.path.join(DATA_DIR, "remuneracao_cnpj_mes_ledger.json")
 HIST_SUPERVISOR_C6_DAILY = os.path.join(DATA_DIR, "supervisor_c6_daily.json")
 SUPERVISOR_C6_EMAIL_CFG = os.path.join(DATA_DIR, "supervisor_c6_email_config.json")
 SUPERVISOR_C6_MONTHLY_METAS_PATH = os.path.join(DATA_DIR, "supervisor_c6_monthly_metas.json")
@@ -3198,9 +3199,157 @@ def _new_cartilha_full_by_month(mkey: str) -> Dict[str, float]:
     return out
 
 
+def _available_remun_month_keys() -> List[str]:
+    month_levels = safe_json_load(HIST_MONTH_LEVELS, default={}) or {}
+    months = set(str(m) for m in month_levels.keys() if str(m).strip())
+    months.update(str(m) for m in (_load_visao_month_snapshot() or {}).keys() if str(m).strip())
+    return sorted(months, key=month_key_str)
+
+
+def _remun_ledger_payload(save: bool = False) -> dict:
+    """Memória única de remuneração: o que o banco já pagou por CNPJ independe da cartilha."""
+    month_levels = safe_json_load(HIST_MONTH_LEVELS, default={}) or {}
+    visao_snapshot = _load_visao_month_snapshot() or {}
+    months = sorted(
+        set(str(m) for m in month_levels.keys() if str(m).strip())
+        | set(str(m) for m in visao_snapshot.keys() if str(m).strip()),
+        key=month_key_str,
+    )
+    paid_acc: Dict[str, float] = {}
+    ledger: Dict[str, Dict[str, dict]] = {}
+    monthly: Dict[str, dict] = {}
+
+    for mkey in months:
+        rows_for_month = visao_snapshot.get(mkey, {}) or {}
+        old_levels: Dict[str, int] = {}
+        if rows_for_month:
+            for cnpj, row in rows_for_month.items():
+                nk = _normalize_cnpj_text(cnpj)
+                if not nk or not _c6_visao_row_eligible_pj(row):
+                    continue
+                lvl = int(_supervisor_level(row))
+                if lvl >= 1:
+                    old_levels[nk] = max(int(old_levels.get(nk, 0)), lvl)
+        else:
+            old_levels = {
+                _normalize_cnpj_text(k): int(v)
+                for k, v in (month_levels.get(mkey, {}) or {}).items()
+                if _normalize_cnpj_text(k) and int(v or 0) >= 1
+            }
+
+        if mkey == "12/2025":
+            _, old_prices = FAIXAS[-1][1], FAIXAS[-1][2]
+        else:
+            _, old_prices = faixa_por_qtd(len(old_levels))
+        old_full = {
+            cnpj: float(old_prices.get(int(lvl), 0.0))
+            for cnpj, lvl in old_levels.items()
+            if int(lvl) >= 1
+        }
+
+        new_full: Dict[str, float] = {}
+        if mkey in CARTILHA_NOVA_MESES and rows_for_month:
+            for cnpj, row in rows_for_month.items():
+                nk = _normalize_cnpj_text(cnpj)
+                if not nk or not _c6_visao_row_eligible_pj(row):
+                    continue
+                full = _new_cartilha_full_amount_from_row(row)
+                if full > 0:
+                    new_full[nk] = float(full)
+        all_cnpjs = sorted(set(old_full.keys()) | set(new_full.keys()))
+
+        old_receive_total = sum(max(0.0, float(old_full.get(cnpj, 0.0)) - float(paid_acc.get(cnpj, 0.0))) for cnpj in all_cnpjs)
+        new_receive_total = sum(max(0.0, float(new_full.get(cnpj, 0.0)) - float(paid_acc.get(cnpj, 0.0))) for cnpj in all_cnpjs)
+
+        if mkey in CARTILHA_NOVA_MESES and new_receive_total >= old_receive_total:
+            winner = "nova"
+            winner_map = new_full
+        else:
+            winner = "antiga"
+            winner_map = old_full
+
+        month_rows: Dict[str, dict] = {}
+        old_receive_winner_base = 0.0
+        new_receive_winner_base = 0.0
+        paid_month_total = 0.0
+
+        for cnpj in all_cnpjs:
+            old_value = float(old_full.get(cnpj, 0.0) or 0.0)
+            new_value = float(new_full.get(cnpj, 0.0) or 0.0)
+            paid_before = float(paid_acc.get(cnpj, 0.0) or 0.0)
+            old_receive = max(0.0, old_value - paid_before)
+            new_receive = max(0.0, new_value - paid_before)
+            winner_full = float(winner_map.get(cnpj, 0.0) or 0.0)
+            paid_month = max(0.0, winner_full - paid_before)
+            paid_after = max(paid_before, winner_full)
+
+            if paid_after > paid_before:
+                paid_acc[cnpj] = paid_after
+
+            old_receive_winner_base += old_receive
+            new_receive_winner_base += new_receive
+            paid_month_total += paid_month
+            month_rows[cnpj] = {
+                "cnpj": cnpj,
+                "mes": mkey,
+                "antiga_cheio": old_value,
+                "nova_cheio": new_value,
+                "ja_pago_antes": paid_before,
+                "a_receber_antiga": old_receive,
+                "a_receber_nova": new_receive,
+                "cartilha_vencedora_mes": winner,
+                "valor_vencedor_cheio": winner_full,
+                "pago_no_mes": paid_month,
+                "ja_pago_apos_mes": paid_after,
+            }
+
+        ledger[mkey] = month_rows
+        monthly[mkey] = {
+            "cartilha_vencedora": winner,
+            "antiga_a_receber": old_receive_total,
+            "nova_a_receber": new_receive_total,
+            "pago_no_mes": paid_month_total,
+            "clientes": len(all_cnpjs),
+        }
+
+    payload = {
+        "updated_at": dt.datetime.now().isoformat(timespec="seconds"),
+        "engine": REMUN_ENGINE_VERSION,
+        "monthly": monthly,
+        "ledger": ledger,
+    }
+    if save:
+        safe_json_save(HIST_REMUN_LEDGER, payload)
+    return payload
+
+
+def _remun_paid_before_from_ledger(current_month: str) -> Dict[str, float]:
+    payload = safe_json_load(HIST_REMUN_LEDGER, default={}) or {}
+    if not isinstance(payload, dict) or not payload.get("ledger"):
+        payload = _remun_ledger_payload(save=True)
+    out: Dict[str, float] = {}
+    target = month_key_str(current_month)
+    for mkey, rows in (payload.get("ledger") or {}).items():
+        if month_key_str(mkey) >= target or not isinstance(rows, dict):
+            continue
+        for cnpj, item in rows.items():
+            nk = _normalize_cnpj_text(cnpj)
+            if not nk or not isinstance(item, dict):
+                continue
+            try:
+                val = float(item.get("ja_pago_apos_mes", 0.0) or 0.0)
+            except (TypeError, ValueError):
+                val = 0.0
+            out[nk] = max(float(out.get(nk, 0.0)), val)
+    return out
+
+
 @lru_cache(maxsize=24)
 def _winner_paid_before_month(current_month: str) -> Dict[str, float]:
     """Memória única: o banco paga a maior cartilha em abr/mai/jun e esse valor vira já pago por CNPJ."""
+    ledger_paid = _remun_paid_before_from_ledger(current_month)
+    if ledger_paid:
+        return ledger_paid
     paid: Dict[str, float] = {}
     if month_key_str(current_month) > month_key_str("04/2026"):
         paid.update(_old_paid_max_before("04/2026") or {})
@@ -3707,6 +3856,11 @@ def recompute_cartilha_nova() -> pd.DataFrame:
 
     safe_json_save(HIST_NOVA_PAGO_POR_CNPJ, paid_max)
     merge_monthly_json_save(HIST_NOVA_RESUMO_MENSAL, resumo)
+    try:
+        _winner_paid_before_month.cache_clear()
+        _remun_ledger_payload(save=True)
+    except Exception:
+        pass
 
     return pd.DataFrame(
         rows,
@@ -6474,6 +6628,11 @@ def recompute_incremental() -> pd.DataFrame:
 
     safe_json_save(HIST_PAGO_POR_CNPJ, paid_max)
     merge_monthly_json_save(HIST_RESUMO_MENSAL, resumo)
+    try:
+        _winner_paid_before_month.cache_clear()
+        _remun_ledger_payload(save=True)
+    except Exception:
+        pass
 
     return pd.DataFrame(
         rows,
@@ -6852,6 +7011,7 @@ def reset_all_data():
         HIST_OPEN_DAILY, HIST_LEADS_DAILY, HIST_MONTH_LEVELS,
         HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL,
         HIST_NOVA_PAGO_POR_CNPJ, HIST_NOVA_RESUMO_MENSAL,
+        HIST_REMUN_LEDGER,
         HIST_SUPERVISOR_C6_DAILY,
         HIST_COMPARE_DAILY,
         LEADS_STATUS_DAILY_PATH,

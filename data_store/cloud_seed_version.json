@@ -1,7 +1,7 @@
 {
-  "version": "2026-06-21-113000",
-  "generated_at": "2026-06-21T11:30:00",
-  "reason": "sync-local-online",
+  "version": "2026-06-21-182300",
+  "generated_at": "2026-06-21T18:23:00",
+  "reason": "remuneracao-ledger-unificado",
   "files": [
     "c6_daily_funil_track.json",
     "c6_daily_import_meta.json",
@@ -26,6 +26,7 @@
     "panel_c6_cartilha_nova_cache.json",
     "panel_c6_incremental_cache.json",
     "panel_c6_refresh_meta.json",
+    "remuneracao_cnpj_mes_ledger.json",
     "resumo_mensal.json",
     "snapshot_mensal.json",
     "supervisor_c6_daily.json",
