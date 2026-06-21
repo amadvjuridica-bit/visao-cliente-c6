@@ -97,8 +97,6 @@ def _fs_load_payload(doc_id: str, default):
     return data.get("payload", default)
 
 def _fs_save_payload(doc_id: str, obj):
-    if not _cloud_firestore_available():
-        return False
     db = _get_fs_db()
     if db is None:
         return False
@@ -116,7 +114,7 @@ def _fs_save_payload(doc_id: str, obj):
         if len(raw.encode("utf-8")) <= max_chars:
             # Não faz leitura prévia: no Streamlit Cloud a cota de Firestore pode
             # estourar, e metadados/cache não podem derrubar o app.
-            doc_ref.set({"payload": clean_obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False, timeout=6)
+            doc_ref.set({"payload": clean_obj, "chunked": False, "chunks": 0, "updated_at": firestore.SERVER_TIMESTAMP}, merge=False, timeout=25)
             return True
         chunks = []
         current = []
@@ -132,13 +130,12 @@ def _fs_save_payload(doc_id: str, obj):
                 current_size += ch_size
         if current:
             chunks.append("".join(current))
-        doc_ref.set({"payload": None, "chunked": True, "chunks": len(chunks), "updated_at": firestore.SERVER_TIMESTAMP}, merge=False, timeout=6)
+        doc_ref.set({"payload": None, "chunked": True, "chunks": len(chunks), "updated_at": firestore.SERVER_TIMESTAMP}, merge=False, timeout=25)
         chunks_ref = doc_ref.collection("chunks")
         for idx, part in enumerate(chunks):
-            chunks_ref.document(f"{idx:05d}").set({"data": part}, timeout=6)
+            chunks_ref.document(f"{idx:05d}").set({"data": part}, timeout=25)
         return True
     except Exception:
-        _cloud_firestore_backoff()
         return False
 
 def _fs_delete_doc(doc_id: str):
