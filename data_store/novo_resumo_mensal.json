@@ -22,8 +22,8 @@
     "pix_cnpj": 0,
     "wallet": 183,
     "deveria_receber": 222000.0,
-    "ja_pago_ref": 123250.0,
-    "receber_mes": 98750.0
+    "ja_pago_ref": 122485.0,
+    "receber_mes": 99515.0
   },
   "06/2026": {
     "qualificadas": 354,
@@ -34,8 +34,8 @@
     "c6pay_credenciamento": 17,
     "pix_cnpj": 296,
     "wallet": 187,
-    "deveria_receber": 171440.0,
-    "ja_pago_ref": 74855.0,
-    "receber_mes": 96585.0
+    "deveria_receber": 167000.0,
+    "ja_pago_ref": 75800.0,
+    "receber_mes": 91200.0
   }
 }

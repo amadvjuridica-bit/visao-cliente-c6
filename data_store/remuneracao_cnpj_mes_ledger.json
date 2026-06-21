@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-06-21T18:22:09",
+  "updated_at": "2026-06-21T19:48:09",
   "engine": "2026-05-19-wallet-direta-v7",
   "monthly": {
     "11/2025": {
@@ -55,7 +55,7 @@
       "cartilha_vencedora": "nova",
       "antiga_a_receber": 80180.0,
       "nova_a_receber": 92700.0,
-      "pago_no_mes": 92700.0,
+      "pago_no_mes": 91200.0,
       "clientes": 399
     }
   },
@@ -51313,13 +51313,13 @@
         "mes": "06/2026",
         "antiga_cheio": 345.0,
         "nova_cheio": 600.0,
-        "ja_pago_antes": 1100.0,
+        "ja_pago_antes": 1400.0,
         "a_receber_antiga": 0.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 600.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 1100.0
+        "ja_pago_apos_mes": 1400.0
       },
       "64744393000120": {
         "cnpj": "64744393000120",
@@ -51430,26 +51430,26 @@
         "mes": "06/2026",
         "antiga_cheio": 810.0,
         "nova_cheio": 750.0,
-        "ja_pago_antes": 750.0,
-        "a_receber_antiga": 60.0,
+        "ja_pago_antes": 800.0,
+        "a_receber_antiga": 10.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 750.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 750.0
+        "ja_pago_apos_mes": 800.0
       },
       "65028090000174": {
         "cnpj": "65028090000174",
         "mes": "06/2026",
         "antiga_cheio": 210.0,
         "nova_cheio": 250.0,
-        "ja_pago_antes": 400.0,
+        "ja_pago_antes": 600.0,
         "a_receber_antiga": 0.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 250.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 400.0
+        "ja_pago_apos_mes": 600.0
       },
       "65029311000129": {
         "cnpj": "65029311000129",
@@ -52171,12 +52171,12 @@
         "mes": "06/2026",
         "antiga_cheio": 810.0,
         "nova_cheio": 750.0,
-        "ja_pago_antes": 0.0,
-        "a_receber_antiga": 810.0,
-        "a_receber_nova": 750.0,
+        "ja_pago_antes": 250.0,
+        "a_receber_antiga": 560.0,
+        "a_receber_nova": 500.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 750.0,
-        "pago_no_mes": 750.0,
+        "pago_no_mes": 500.0,
         "ja_pago_apos_mes": 750.0
       },
       "65813143000168": {
@@ -52223,13 +52223,13 @@
         "mes": "06/2026",
         "antiga_cheio": 600.0,
         "nova_cheio": 600.0,
-        "ja_pago_antes": 750.0,
+        "ja_pago_antes": 1000.0,
         "a_receber_antiga": 0.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 600.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 750.0
+        "ja_pago_apos_mes": 1000.0
       },
       "65842952000106": {
         "cnpj": "65842952000106",
@@ -52483,13 +52483,13 @@
         "mes": "06/2026",
         "antiga_cheio": 810.0,
         "nova_cheio": 800.0,
-        "ja_pago_antes": 1100.0,
+        "ja_pago_antes": 1400.0,
         "a_receber_antiga": 0.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 800.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 1100.0
+        "ja_pago_apos_mes": 1400.0
       },
       "65987672000188": {
         "cnpj": "65987672000188",
@@ -52626,12 +52626,12 @@
         "mes": "06/2026",
         "antiga_cheio": 345.0,
         "nova_cheio": 1100.0,
-        "ja_pago_antes": 500.0,
+        "ja_pago_antes": 800.0,
         "a_receber_antiga": 0.0,
-        "a_receber_nova": 600.0,
+        "a_receber_nova": 300.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 1100.0,
-        "pago_no_mes": 600.0,
+        "pago_no_mes": 300.0,
         "ja_pago_apos_mes": 1100.0
       },
       "66016245000115": {
@@ -53341,13 +53341,13 @@
         "mes": "06/2026",
         "antiga_cheio": 810.0,
         "nova_cheio": 0.0,
-        "ja_pago_antes": 600.0,
-        "a_receber_antiga": 210.0,
+        "ja_pago_antes": 750.0,
+        "a_receber_antiga": 60.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 0.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 600.0
+        "ja_pago_apos_mes": 750.0
       },
       "66215677000155": {
         "cnpj": "66215677000155",
@@ -53900,13 +53900,13 @@
         "mes": "06/2026",
         "antiga_cheio": 345.0,
         "nova_cheio": 0.0,
-        "ja_pago_antes": 0.0,
-        "a_receber_antiga": 345.0,
+        "ja_pago_antes": 400.0,
+        "a_receber_antiga": 0.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 0.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 0.0
+        "ja_pago_apos_mes": 400.0
       },
       "66398340000120": {
         "cnpj": "66398340000120",
@@ -54017,13 +54017,13 @@
         "mes": "06/2026",
         "antiga_cheio": 345.0,
         "nova_cheio": 0.0,
-        "ja_pago_antes": 800.0,
+        "ja_pago_antes": 1100.0,
         "a_receber_antiga": 0.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 0.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 800.0
+        "ja_pago_apos_mes": 1100.0
       },
       "66417507000153": {
         "cnpj": "66417507000153",
@@ -54472,13 +54472,13 @@
         "mes": "06/2026",
         "antiga_cheio": 210.0,
         "nova_cheio": 250.0,
-        "ja_pago_antes": 250.0,
+        "ja_pago_antes": 600.0,
         "a_receber_antiga": 0.0,
         "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 250.0,
         "pago_no_mes": 0.0,
-        "ja_pago_apos_mes": 250.0
+        "ja_pago_apos_mes": 600.0
       },
       "66555063000112": {
         "cnpj": "66555063000112",
@@ -54628,12 +54628,12 @@
         "mes": "06/2026",
         "antiga_cheio": 345.0,
         "nova_cheio": 600.0,
-        "ja_pago_antes": 400.0,
+        "ja_pago_antes": 600.0,
         "a_receber_antiga": 0.0,
-        "a_receber_nova": 200.0,
+        "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 600.0,
-        "pago_no_mes": 200.0,
+        "pago_no_mes": 0.0,
         "ja_pago_apos_mes": 600.0
       },
       "66606353000148": {
@@ -54680,12 +54680,12 @@
         "mes": "06/2026",
         "antiga_cheio": 810.0,
         "nova_cheio": 750.0,
-        "ja_pago_antes": 600.0,
-        "a_receber_antiga": 210.0,
-        "a_receber_nova": 150.0,
+        "ja_pago_antes": 750.0,
+        "a_receber_antiga": 60.0,
+        "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 750.0,
-        "pago_no_mes": 150.0,
+        "pago_no_mes": 0.0,
         "ja_pago_apos_mes": 750.0
       },
       "66618981000143": {
@@ -55304,12 +55304,12 @@
         "mes": "06/2026",
         "antiga_cheio": 600.0,
         "nova_cheio": 750.0,
-        "ja_pago_antes": 400.0,
-        "a_receber_antiga": 200.0,
-        "a_receber_nova": 350.0,
+        "ja_pago_antes": 600.0,
+        "a_receber_antiga": 0.0,
+        "a_receber_nova": 150.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 750.0,
-        "pago_no_mes": 350.0,
+        "pago_no_mes": 150.0,
         "ja_pago_apos_mes": 750.0
       },
       "66778501000101": {
@@ -55421,12 +55421,12 @@
         "mes": "06/2026",
         "antiga_cheio": 600.0,
         "nova_cheio": 600.0,
-        "ja_pago_antes": 0.0,
-        "a_receber_antiga": 600.0,
-        "a_receber_nova": 600.0,
+        "ja_pago_antes": 250.0,
+        "a_receber_antiga": 350.0,
+        "a_receber_nova": 350.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 600.0,
-        "pago_no_mes": 600.0,
+        "pago_no_mes": 350.0,
         "ja_pago_apos_mes": 600.0
       },
       "66830439000150": {
@@ -55668,12 +55668,12 @@
         "mes": "06/2026",
         "antiga_cheio": 810.0,
         "nova_cheio": 750.0,
-        "ja_pago_antes": 600.0,
-        "a_receber_antiga": 210.0,
-        "a_receber_nova": 150.0,
+        "ja_pago_antes": 750.0,
+        "a_receber_antiga": 60.0,
+        "a_receber_nova": 0.0,
         "cartilha_vencedora_mes": "nova",
         "valor_vencedor_cheio": 750.0,
-        "pago_no_mes": 150.0,
+        "pago_no_mes": 0.0,
         "ja_pago_apos_mes": 750.0
       },
       "66933303000175": {

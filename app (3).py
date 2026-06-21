@@ -252,6 +252,7 @@ HIST_NOVA_PAGO_POR_CNPJ = os.path.join(DATA_DIR, "novo_pago_max_por_cnpj.json")
 HIST_NOVA_PAID_REF = os.path.join(DATA_DIR, "cartilha_nova_pago_ref.json")    # mm/aaaa -> {cnpj: ja pago banco}
 HIST_NOVA_RESUMO_MENSAL = os.path.join(DATA_DIR, "novo_resumo_mensal.json")
 HIST_REMUN_LEDGER = os.path.join(DATA_DIR, "remuneracao_cnpj_mes_ledger.json")
+HIST_BANK_PAID_REF = os.path.join(DATA_DIR, "remuneracao_banco_pago_ref.json")
 HIST_SUPERVISOR_C6_DAILY = os.path.join(DATA_DIR, "supervisor_c6_daily.json")
 SUPERVISOR_C6_EMAIL_CFG = os.path.join(DATA_DIR, "supervisor_c6_email_config.json")
 SUPERVISOR_C6_MONTHLY_METAS_PATH = os.path.join(DATA_DIR, "supervisor_c6_monthly_metas.json")
@@ -3206,10 +3207,40 @@ def _available_remun_month_keys() -> List[str]:
     return sorted(months, key=month_key_str)
 
 
+def _bank_paid_ref_by_month() -> Dict[str, Dict[str, float]]:
+    raw = safe_json_load(HIST_BANK_PAID_REF, default={}) or {}
+    out: Dict[str, Dict[str, float]] = {}
+    if not isinstance(raw, dict):
+        return out
+    for mkey, rows in raw.items():
+        if not isinstance(rows, dict):
+            continue
+        mtxt = str(mkey or "").strip()
+        if not mtxt:
+            continue
+        out[mtxt] = {}
+        for cnpj, value in rows.items():
+            nk = _normalize_cnpj_text(cnpj)
+            if not nk:
+                continue
+            try:
+                fv = float(value or 0.0)
+            except (TypeError, ValueError):
+                fv = 0.0
+            out[mtxt][nk] = max(float(out[mtxt].get(nk, 0.0)), fv)
+    return out
+
+
+@lru_cache(maxsize=24)
+def _bank_paid_ref_for_month(month_key: str) -> Dict[str, float]:
+    return _bank_paid_ref_by_month().get(str(month_key or "").strip(), {}) or {}
+
+
 def _remun_ledger_payload(save: bool = False) -> dict:
     """Memória única de remuneração: o que o banco já pagou por CNPJ independe da cartilha."""
     month_levels = safe_json_load(HIST_MONTH_LEVELS, default={}) or {}
     visao_snapshot = _load_visao_month_snapshot() or {}
+    bank_paid_ref = _bank_paid_ref_by_month()
     months = sorted(
         set(str(m) for m in month_levels.keys() if str(m).strip())
         | set(str(m) for m in visao_snapshot.keys() if str(m).strip()),
@@ -3272,11 +3303,12 @@ def _remun_ledger_payload(save: bool = False) -> dict:
         old_receive_winner_base = 0.0
         new_receive_winner_base = 0.0
         paid_month_total = 0.0
+        bank_ref_month = bank_paid_ref.get(mkey, {}) or {}
 
         for cnpj in all_cnpjs:
             old_value = float(old_full.get(cnpj, 0.0) or 0.0)
             new_value = float(new_full.get(cnpj, 0.0) or 0.0)
-            paid_before = float(paid_acc.get(cnpj, 0.0) or 0.0)
+            paid_before = max(float(paid_acc.get(cnpj, 0.0) or 0.0), float(bank_ref_month.get(cnpj, 0.0) or 0.0))
             old_receive = max(0.0, old_value - paid_before)
             new_receive = max(0.0, new_value - paid_before)
             winner_full = float(winner_map.get(cnpj, 0.0) or 0.0)
@@ -3375,17 +3407,19 @@ def _nova_prior_paid_value(paid_max: dict, cnpj: str, current_month: str) -> flo
     nk = _normalize_cnpj_text(cnpj)
     winner_prev = _winner_paid_before_month(current_month)
     ref_month = _nova_paid_ref_for_month(current_month)
+    bank_ref_month = _bank_paid_ref_for_month(current_month)
+    bank_ref = float(bank_ref_month.get(nk, 0.0) or 0.0)
     if nk in winner_prev:
-        return max(float(winner_prev.get(nk, 0.0) or 0.0), float(ref_month.get(nk, 0.0) or 0.0))
+        return max(float(winner_prev.get(nk, 0.0) or 0.0), float(ref_month.get(nk, 0.0) or 0.0), bank_ref)
     if nk in ref_month:
-        return float(ref_month.get(nk, 0.0) or 0.0)
+        return max(float(ref_month.get(nk, 0.0) or 0.0), bank_ref)
     nova_prev = _nova_paid_value(paid_max, nk, current_month)
     old_prev = 0.0
     try:
         old_prev = float((_old_paid_max_before(current_month) or {}).get(nk, 0.0) or 0.0)
     except Exception:
         old_prev = 0.0
-    return max(nova_prev, old_prev)
+    return max(nova_prev, old_prev, bank_ref)
 
 
 @lru_cache(maxsize=24)
@@ -3407,10 +3441,12 @@ def _old_prior_paid_value(old_paid_before: dict, cnpj: str, current_month: str) 
     nk = _normalize_cnpj_text(cnpj)
     winner_prev = _winner_paid_before_month(current_month)
     ref_month = _old_paid_ref_for_month(current_month)
+    bank_ref_month = _bank_paid_ref_for_month(current_month)
+    bank_ref = float(bank_ref_month.get(nk, 0.0) or 0.0)
     if nk in winner_prev:
-        return max(float(winner_prev.get(nk, 0.0) or 0.0), float(ref_month.get(nk, 0.0) or 0.0))
+        return max(float(winner_prev.get(nk, 0.0) or 0.0), float(ref_month.get(nk, 0.0) or 0.0), bank_ref)
     if nk in ref_month:
-        return float(ref_month.get(nk, 0.0) or 0.0)
+        return max(float(ref_month.get(nk, 0.0) or 0.0), bank_ref)
     old_prev = 0.0
     try:
         old_prev = float((old_paid_before or {}).get(nk, 0.0) or 0.0)
@@ -3421,7 +3457,7 @@ def _old_prior_paid_value(old_paid_before: dict, cnpj: str, current_month: str) 
         nova_prev = float((_nova_paid_max_from_store_before(current_month) or {}).get(nk, 0.0) or 0.0)
     except Exception:
         nova_prev = 0.0
-    return max(old_prev, nova_prev)
+    return max(old_prev, nova_prev, bank_ref)
 
 
 def _nova_paid_update(paid_max: dict, cnpj: str, month_key: str, amount: float):
@@ -3814,8 +3850,6 @@ def recompute_cartilha_nova() -> pd.DataFrame:
             prev = _nova_prior_paid_value(paid_max, cnpjx, mkey)
             diff = max(0.0, best_amt - prev) if bank_receive is None else max(0.0, bank_receive)
             pix_bonus = 0.0
-            if bank_receive is None and mkey == "06/2026" and best_amt > 0 and _pix_has_cnpj(row.get("chaves_pix_forte", "")):
-                pix_bonus = 15.0
 
             diff_total = diff + pix_bonus
             best_amt_total = best_amt + pix_bonus
@@ -3824,7 +3858,7 @@ def recompute_cartilha_nova() -> pd.DataFrame:
             total_receber += diff_total
             _nova_paid_update(paid_max, cnpjx, mkey, best_amt_total)
 
-            if pix_bonus > 0:
+            if mkey == "06/2026" and best_amt > 0 and _pix_has_cnpj(row.get("chaves_pix_forte", "")):
                 detail_counts["pix_cnpj"] += 1
 
             dt_abertura = _parse_br_date_text(row.get("dt_conta_criada"))
@@ -3934,8 +3968,6 @@ def _cartilha_nova_detail_by_month(target_month: str) -> pd.DataFrame:
             prev = _nova_prior_paid_value(paid_max, cnpjx, mkey)
             diff = max(0.0, best_amt - prev) if bank_receive is None else max(0.0, bank_receive)
             pix_bonus = 0.0
-            if bank_receive is None and mkey == "06/2026" and best_amt > 0 and _pix_has_cnpj(row.get("chaves_pix_forte", "")):
-                pix_bonus = 15.0
 
             best_amt_total = best_amt + pix_bonus
             diff_total = diff + pix_bonus
@@ -6321,14 +6353,12 @@ def _refresh_current_month_remuneration_from_rows(mkey: str, month_rows: Dict[st
         prev = _nova_prior_paid_value(paid_max, cnpjx, mkey)
         diff = max(0.0, best_amt - prev) if bank_receive is None else max(0.0, bank_receive)
         pix_bonus = 0.0
-        if bank_receive is None and mkey == "06/2026" and best_amt > 0 and _pix_has_cnpj(row.get("chaves_pix_forte", "")):
-            pix_bonus = 15.0
         best_total = best_amt + pix_bonus
         diff_total = diff + pix_bonus
         new_cheio += best_total
         new_receber += diff_total
         _nova_paid_update(paid_max, cnpjx, mkey, best_total)
-        if pix_bonus > 0:
+        if mkey == "06/2026" and best_amt > 0 and _pix_has_cnpj(row.get("chaves_pix_forte", "")):
             detail_counts["pix_cnpj"] += 1
         dt_abertura = _parse_br_date_text(row.get("dt_conta_criada"))
         dt_install = _parse_br_date_text(row.get("dt_install_maq"))
@@ -7012,6 +7042,7 @@ def reset_all_data():
         HIST_PAGO_POR_CNPJ, HIST_RESUMO_MENSAL, HIST_SNAPSHOT_MENSAL,
         HIST_NOVA_PAGO_POR_CNPJ, HIST_NOVA_RESUMO_MENSAL,
         HIST_REMUN_LEDGER,
+        HIST_BANK_PAID_REF,
         HIST_SUPERVISOR_C6_DAILY,
         HIST_COMPARE_DAILY,
         LEADS_STATUS_DAILY_PATH,
