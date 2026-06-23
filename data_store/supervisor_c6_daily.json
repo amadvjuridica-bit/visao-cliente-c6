@@ -15823,5 +15823,139 @@
       }
     ],
     "meta_mes": "06/2026"
+  },
+  "21/06/2026": {
+    "report_day": "21/06/2026",
+    "recebe_total": 400.0,
+    "metas_batidas": 1,
+    "qtd_indicadores": 10,
+    "contas_abertas": 889,
+    "contas_qualificadas": 405,
+    "instalacoes_c6pay": 37,
+    "c6pay_ativadas": 23,
+    "pix_pct": 0.5234297108673978,
+    "pix_base": 2006,
+    "pix_cnpj": 1050,
+    "domicilio_qualificado": 8,
+    "spending_qualificado": 16,
+    "cartoes_entregues": 1162,
+    "cartoes_ativados": 76,
+    "wallets_cadastradas": 198,
+    "wallet_pct": 0.1703958691910499,
+    "ativacao_cartao_pct": 0.06540447504302926,
+    "nivel4": 78,
+    "indicadores": [
+      {
+        "Indicador": "Contas abertas",
+        "Realizado_num": 889.0,
+        "Meta_num": 835.0,
+        "Atingimento_num": 1.0646706586826347,
+        "Premio_num": 400.0,
+        "Recebe_num": 400.0,
+        "Faixa": "",
+        "Status": "Batida",
+        "Tipo": "inteiro"
+      },
+      {
+        "Indicador": "Contas qualificadas",
+        "Realizado_num": 405,
+        "Meta_num": 700,
+        "Atingimento_num": 0.5785714285714286,
+        "Premio_num": 400.0,
+        "Recebe_num": 0.0,
+        "Faixa": "700 -> R$ 400,00 | 800 -> R$ 500,00 | 900 -> R$ 540,00 | 1.000 -> R$ 1.400,00",
+        "Status": "Em aberto",
+        "Tipo": "inteiro"
+      },
+      {
+        "Indicador": "Instalacao C6 Pay",
+        "Realizado_num": 37.0,
+        "Meta_num": 95.0,
+        "Atingimento_num": 0.3894736842105263,
+        "Premio_num": 360.0,
+        "Recebe_num": 0.0,
+        "Faixa": "",
+        "Status": "Em aberto",
+        "Tipo": "inteiro"
+      },
+      {
+        "Indicador": "C6 Pay ativada",
+        "Realizado_num": 23.0,
+        "Meta_num": 55.0,
+        "Atingimento_num": 0.41818181818181815,
+        "Premio_num": 700.0,
+        "Recebe_num": 0.0,
+        "Faixa": "",
+        "Status": "Em aberto",
+        "Tipo": "inteiro"
+      },
+      {
+        "Indicador": "Chave Pix CNPJ",
+        "Realizado_num": 0.5234297108673978,
+        "Meta_num": 0.65,
+        "Atingimento_num": 0.805276478257535,
+        "Premio_num": 400.0,
+        "Recebe_num": 0.0,
+        "Faixa": "",
+        "Status": "Em aberto",
+        "Tipo": "percentual"
+      },
+      {
+        "Indicador": "Domicilio qualificado",
+        "Realizado_num": 8.0,
+        "Meta_num": 30.0,
+        "Atingimento_num": 0.26666666666666666,
+        "Premio_num": 600.0,
+        "Recebe_num": 0.0,
+        "Faixa": "",
+        "Status": "Em aberto",
+        "Tipo": "inteiro"
+      },
+      {
+        "Indicador": "Spending qualificado",
+        "Realizado_num": 16.0,
+        "Meta_num": 60.0,
+        "Atingimento_num": 0.26666666666666666,
+        "Premio_num": 600.0,
+        "Recebe_num": 0.0,
+        "Faixa": "",
+        "Status": "Em aberto",
+        "Tipo": "inteiro"
+      },
+      {
+        "Indicador": "Wallet",
+        "Realizado_num": 0.1703958691910499,
+        "Meta_num": 0.6,
+        "Atingimento_num": 0.28399311531841653,
+        "Premio_num": 300.0,
+        "Recebe_num": 0.0,
+        "Faixa": "",
+        "Status": "Em aberto",
+        "Tipo": "percentual"
+      },
+      {
+        "Indicador": "Ativacao cartao",
+        "Realizado_num": 0.06540447504302926,
+        "Meta_num": 0.2,
+        "Atingimento_num": 0.3270223752151463,
+        "Premio_num": 400.0,
+        "Recebe_num": 0.0,
+        "Faixa": "",
+        "Status": "Em aberto",
+        "Tipo": "percentual"
+      },
+      {
+        "Indicador": "Nivel 4 acima de 300",
+        "Realizado_num": 78.0,
+        "Meta_num": 300.0,
+        "Atingimento_num": 0.26,
+        "Premio_num": 400.0,
+        "Recebe_num": 0.0,
+        "Faixa": "",
+        "Status": "Em aberto",
+        "Tipo": "inteiro"
+      }
+    ],
+    "meta_mes": "06/2026"
   }
 }
