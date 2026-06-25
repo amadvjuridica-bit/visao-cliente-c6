@@ -8084,6 +8084,28 @@ def _to_excel_bytes(sheets: Dict[str, pd.DataFrame]) -> bytes:
     bio.seek(0)
     return bio.getvalue()
 
+def _to_excel_bytes_with_date_format(sheets: Dict[str, pd.DataFrame], date_cols: Dict[str, List[str]]) -> bytes:
+    bio = io.BytesIO()
+    with pd.ExcelWriter(bio, engine="openpyxl") as writer:
+        for name, df in sheets.items():
+            sheet = re.sub(r"[:\\/*?\[\]]", "_", name)[:31] or "Planilha"
+            out = df.copy()
+            cols_to_format = set(date_cols.get(name, [])) | set(date_cols.get(sheet, []))
+            for col in cols_to_format:
+                if col in out.columns:
+                    out[col] = pd.to_datetime(out[col], errors="coerce", dayfirst=True)
+            out.to_excel(writer, index=False, sheet_name=sheet)
+            ws = writer.book[sheet]
+            header_map = {str(cell.value): idx for idx, cell in enumerate(ws[1], start=1)}
+            for col in cols_to_format:
+                col_idx = header_map.get(col)
+                if not col_idx:
+                    continue
+                for row_idx in range(2, ws.max_row + 1):
+                    ws.cell(row=row_idx, column=col_idx).number_format = "dd/mm/yyyy"
+    bio.seek(0)
+    return bio.getvalue()
+
 def _load_c6_ops_history():
     return {
         "imports": safe_json_load(C6_OP_IMPORT_LOG, default=[]),
@@ -12394,7 +12416,10 @@ if "Mensagens" in tabs_map:
             file_date = latest_open.strftime("%d%m%Y") if pd.notna(latest_open) else dt.date.today().strftime("%d%m%Y")
             st.download_button(
               "Baixar relatório para ações - contas abertas (Excel)",
-              data=_to_excel_bytes({"Contas_Abertas": acoes_abertas_df}),
+              data=_to_excel_bytes_with_date_format(
+                {"Contas_Abertas": acoes_abertas_df},
+                {"Contas_Abertas": ["dt_fundacao_empresa", "dt_conta_criada", "dt_entrega_cartao"]},
+              ),
               file_name=f"relatorio_acoes_contas_abertas_{file_date}.xlsx",
               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
               use_container_width=True,
