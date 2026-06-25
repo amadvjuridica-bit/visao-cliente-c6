@@ -12409,7 +12409,7 @@ if "Mensagens" in tabs_map:
             )
 
           st.divider()
-          st.subheader("Abertura - clientes com até 4 dias")
+          st.subheader("Abertura - clientes com até 5 dias")
 
           def _msg_col(df: pd.DataFrame, names: List[str], index_zero_based: Optional[int] = None) -> Optional[str]:
             col = _coalesce_col(df, names)
@@ -12442,6 +12442,7 @@ if "Mensagens" in tabs_map:
           tel_2_s = _msg_series(df_msg, ["TELEFONE_2", "TEL2", "FONE2", "CELULAR"], 13)
           status_s = normalize_str(_msg_series(df_msg, [COL_STATUS, "STATUS", "STATUS_CONTA"], 21))
           pix_s = _msg_series(df_msg, [COL_PIX, "PIX", "CHAVE_PIX", "CHAVES PIX FORTE"], 23)
+          wallet_s = _msg_series(df_msg, ["FL_WALLET_CADASTRADA", "WALLET", "FL_WALLET", "CARTAO_WALLET"], 30)
           criterio_s = normalize_str(_msg_series(df_msg, [COL_CRIT, "CRITERIOS_ATINGIDOS_COMISS", "CRITÉRIOS ATINGIDOS COMISS"], 76))
 
           work = pd.DataFrame({
@@ -12453,11 +12454,13 @@ if "Mensagens" in tabs_map:
             "telefone_2": tel_2_s,
             "status": status_s,
             "pix": pix_s,
+            "wallet": wallet_s,
             "criterio": criterio_s,
           })
 
           work["dias_conta"] = (pd.to_datetime(work["data_base"], errors="coerce") - pd.to_datetime(work["data_abertura"], errors="coerce")).dt.days + 1
           work["tem_pix_cnpj"] = work["pix"].apply(_pix_has_cnpj)
+          work["tem_wallet"] = work["wallet"].apply(_truthy_flag)
           work["apto_status"] = work["status"].str.contains("LIBERADA", na=False) & ~work["status"].str.contains("BLOQUEAD|DESATIVAD|ENCERRAD", na=False)
           work["apto_criterio"] = work["criterio"].str.contains("CASH", na=False) & work["criterio"].str.contains("IN", na=False) & work["criterio"].str.contains(r"\d", regex=True, na=False)
           work["cliente_mei"] = work["criterio"].str.contains("CLIENTE MEI| MEI", na=False)
@@ -12465,7 +12468,7 @@ if "Mensagens" in tabs_map:
           base_filtrada = work[
             work["data_base"].notna()
             & work["data_abertura"].notna()
-            & work["dias_conta"].between(1, 4, inclusive="both")
+            & work["dias_conta"].between(1, 6, inclusive="both")
             & work["apto_status"]
             & work["apto_criterio"]
             & ~work["cliente_mei"]
@@ -12480,35 +12483,59 @@ if "Mensagens" in tabs_map:
               if phone and phone not in telefones:
                 telefones.append(phone)
 
-            data_txt = fmt_date(row["data_abertura"]).replace("/", ".")
-            msg_1 = f"Parabéns pela abertura da sua conta no C6 Empresas em {data_txt} — sua empresa já está com a conta ativa. 🎉"
-            if row["tem_pix_cnpj"]:
-              msg_2 = "Com o Pix ativo, você já pode começar a vender e movimentar com mais eficiência. Uma ótima opção é a C6 Pay, com taxas competitivas, Pix gratuito nas vendas e recebimento direto na conta."
-              msg_3 = "Além disso, você pode ter acesso ao cartão de crédito empresarial e, se necessário, utilizar o CDB Cartão de Crédito, que permite até R$ 200 mil de limite enquanto o valor aplicado rende cerca de 102% do CDI, sujeito às condições do banco."
-              tipo = "Com Pix CNPJ"
+            data_txt = fmt_date(row["data_abertura"])
+            tem_pix = bool(row["tem_pix_cnpj"])
+            tem_wallet = bool(row["tem_wallet"])
+            if not tem_pix and not tem_wallet:
+              mensagem = (
+                f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já está com a conta ativa. 🎉\n"
+                "Para aproveitar melhor sua conta, faltam apenas dois passos importantes: cadastrar o CNPJ como chave Pix principal e adicionar seu Cartão Virtual à Wallet do celular. Assim você já pode receber, pagar e movimentar sua Conta PJ desde os primeiros dias, fortalecendo seu relacionamento com o banco.\n"
+                "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
+              )
+              tipo = "Sem Pix + Sem Wallet"
+            elif tem_pix and not tem_wallet:
+              mensagem = (
+                f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já deu um importante passo ao cadastrar a chave Pix CNPJ. 🎉\n"
+                "Agora falta apenas cadastrar seu Cartão Virtual na Wallet do celular. Assim você poderá utilizá-lo nas compras do dia a dia, pagamentos por aproximação e começar a movimentar ainda mais sua Conta PJ.\n"
+                "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
+              )
+              tipo = "Com Pix + Sem Wallet"
+            elif not tem_pix and tem_wallet:
+              mensagem = (
+                f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Seu Cartão Virtual já está pronto para utilização via Wallet. 🎉\n"
+                "Agora o próximo passo é cadastrar o CNPJ como chave Pix principal. Assim sua empresa poderá receber valores diretamente na Conta PJ, concentrar movimentações e fortalecer o relacionamento financeiro com o banco.\n"
+                "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
+              )
+              tipo = "Sem Pix + Com Wallet"
             else:
-              msg_2 = "Identificamos que a chave Pix CNPJ ainda não foi cadastrada. Ativar o Pix é essencial para começar a movimentar a conta, receber sem custo e utilizar melhor os recursos do banco."
-              msg_3 = "Além disso, contas com movimentação ativa tendem a ser consideradas nas análises internas de crédito, podendo facilitar o acesso a limites e soluções financeiras, conforme avaliação."
-              tipo = "Sem Pix CNPJ"
+              mensagem = (
+                f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já possui a chave Pix CNPJ cadastrada e o Cartão Virtual configurado na Wallet. 🎉\n"
+                "Agora queremos fazer um convite: que tal trazer o capital social da sua empresa para a Conta PJ do C6? Concentrar recursos e movimentações ajuda a utilizar a conta no dia a dia e fortalece o relacionamento financeiro da empresa com o banco.\n"
+                "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
+              )
+              tipo = "Com Pix + Com Wallet"
 
             for phone in telefones:
-              csv_rows.append([phone, row["nome"], msg_1, msg_2, msg_3])
+              csv_rows.append([phone, row["nome"], data_txt, mensagem])
               preview_rows.append({
                 "telefone": phone,
                 "nome": row["nome"],
                 "cnpj": row["cnpj"],
-                "data_abertura": fmt_date(row["data_abertura"]),
+                "data_abertura": data_txt,
                 "dias_conta": int(row["dias_conta"]),
+                "tem_pix_cnpj": "SIM" if tem_pix else "NÃO",
+                "tem_wallet": "SIM" if tem_wallet else "NÃO",
                 "tipo": tipo,
               })
 
-          c1, c2, c3 = st.columns(3)
+          c1, c2, c3, c4 = st.columns(4)
           c1.metric("Clientes aptos", br_int(len(base_filtrada)))
           c2.metric("Linhas para envio", br_int(len(csv_rows)))
           c3.metric("Com Pix CNPJ", br_int(int(base_filtrada["tem_pix_cnpj"].sum()) if not base_filtrada.empty else 0))
+          c4.metric("Com Wallet", br_int(int(base_filtrada["tem_wallet"].sum()) if not base_filtrada.empty else 0))
 
           if not csv_rows:
-            st.info("Nenhum cliente apto encontrado para abertura de 1 a 4 dias com as regras atuais.")
+            st.info("Nenhum cliente apto encontrado para abertura de até 5 dias com as regras atuais.")
           else:
             df_csv = pd.DataFrame(csv_rows)
             csv_bytes = df_csv.to_csv(index=False, header=False, sep=";").encode("utf-8-sig")
