@@ -924,5 +924,30 @@
     "current_has_pix": true,
     "last_seen": "2026-06-23",
     "removed_on": ""
+  },
+  "66177192000114": {
+    "first_seen": "2026-06-23",
+    "first_tipo": "CNPJ",
+    "first_operator": "DANIEL DEL OLMO ALVES",
+    "current_has_pix": true,
+    "last_seen": "2026-06-23",
+    "removed_on": ""
+  },
+  "66662318000146": {
+    "first_seen": "2026-06-23",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-23",
+    "removed_on": ""
+  },
+  "66713022000107": {},
+  "66811747000138": {
+    "first_seen": "2026-06-23",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-06-23",
+    "removed_on": ""
   }
 }
