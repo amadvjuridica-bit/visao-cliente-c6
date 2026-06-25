@@ -12486,37 +12486,26 @@ if "Mensagens" in tabs_map:
             data_txt = fmt_date(row["data_abertura"])
             tem_pix = bool(row["tem_pix_cnpj"])
             tem_wallet = bool(row["tem_wallet"])
+            var_4 = "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
             if not tem_pix and not tem_wallet:
-              mensagem = (
-                f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já está com a conta ativa. 🎉\n"
-                "Para aproveitar melhor sua conta, faltam apenas dois passos importantes: cadastrar o CNPJ como chave Pix principal e adicionar seu Cartão Virtual à Wallet do celular. Assim você já pode receber, pagar e movimentar sua Conta PJ desde os primeiros dias, fortalecendo seu relacionamento com o banco.\n"
-                "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
-              )
+              var_2 = f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já está com a conta ativa. 🎉"
+              var_3 = "Para aproveitar melhor sua conta, faltam apenas dois passos importantes: cadastrar o CNPJ como chave Pix principal e adicionar seu Cartão Virtual à Wallet do celular. Assim você já pode receber, pagar e movimentar sua Conta PJ desde os primeiros dias, fortalecendo seu relacionamento com o banco."
               tipo = "Sem Pix + Sem Wallet"
             elif tem_pix and not tem_wallet:
-              mensagem = (
-                f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já deu um importante passo ao cadastrar a chave Pix CNPJ. 🎉\n"
-                "Agora falta apenas cadastrar seu Cartão Virtual na Wallet do celular. Assim você poderá utilizá-lo nas compras do dia a dia, pagamentos por aproximação e começar a movimentar ainda mais sua Conta PJ.\n"
-                "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
-              )
+              var_2 = f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já deu um importante passo ao cadastrar a chave Pix CNPJ. 🎉"
+              var_3 = "Agora falta apenas cadastrar seu Cartão Virtual na Wallet do celular. Assim você poderá utilizá-lo nas compras do dia a dia, pagamentos por aproximação e começar a movimentar ainda mais sua Conta PJ."
               tipo = "Com Pix + Sem Wallet"
             elif not tem_pix and tem_wallet:
-              mensagem = (
-                f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Seu Cartão Virtual já está pronto para utilização via Wallet. 🎉\n"
-                "Agora o próximo passo é cadastrar o CNPJ como chave Pix principal. Assim sua empresa poderá receber valores diretamente na Conta PJ, concentrar movimentações e fortalecer o relacionamento financeiro com o banco.\n"
-                "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
-              )
+              var_2 = f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Seu Cartão Virtual já está pronto para utilização via Wallet. 🎉"
+              var_3 = "Agora o próximo passo é cadastrar o CNPJ como chave Pix principal. Assim sua empresa poderá receber valores diretamente na Conta PJ, concentrar movimentações e fortalecer o relacionamento financeiro com o banco."
               tipo = "Sem Pix + Com Wallet"
             else:
-              mensagem = (
-                f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já possui a chave Pix CNPJ cadastrada e o Cartão Virtual configurado na Wallet. 🎉\n"
-                "Agora queremos fazer um convite: que tal trazer o capital social da sua empresa para a Conta PJ do C6? Concentrar recursos e movimentações ajuda a utilizar a conta no dia a dia e fortalece o relacionamento financeiro da empresa com o banco.\n"
-                "📌 Vamos dar o próximo passo? Traga o capital social da sua empresa para a Conta PJ do C6 e concentre sua movimentação financeira no banco. Proposta disponível: contrate a C6 Pay diretamente pelo aplicativo. A SuperMini possui isenção da mensalidade ao receber acima de R$ 500 por mês e todas as maquininhas contam com taxa de 0,00% para recebimentos via Pix."
-              )
+              var_2 = f"Parabéns pela abertura da sua Conta PJ no C6 Empresas em {data_txt}! Sua empresa já possui a chave Pix CNPJ cadastrada e o Cartão Virtual configurado na Wallet. 🎉"
+              var_3 = "Agora queremos fazer um convite: que tal trazer o capital social da sua empresa para a Conta PJ do C6? Concentrar recursos e movimentações ajuda a utilizar a conta no dia a dia e fortalece o relacionamento financeiro da empresa com o banco."
               tipo = "Com Pix + Com Wallet"
 
             for phone in telefones:
-              csv_rows.append([phone, row["nome"], data_txt, mensagem])
+              csv_rows.append([phone, row["nome"], var_2, var_3, var_4])
               preview_rows.append({
                 "telefone": phone,
                 "nome": row["nome"],
@@ -12526,6 +12515,9 @@ if "Mensagens" in tabs_map:
                 "tem_pix_cnpj": "SIM" if tem_pix else "NÃO",
                 "tem_wallet": "SIM" if tem_wallet else "NÃO",
                 "tipo": tipo,
+                "variável 2": var_2,
+                "variável 3": var_3,
+                "variável 4": var_4,
               })
 
           c1, c2, c3, c4 = st.columns(4)
