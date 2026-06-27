@@ -949,5 +949,14 @@
     "current_has_pix": true,
     "last_seen": "2026-06-24",
     "removed_on": ""
-  }
+  },
+  "66688592000194": {
+    "first_seen": "2026-06-24",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-24",
+    "removed_on": ""
+  },
+  "66895740000141": {}
 }
