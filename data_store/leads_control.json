@@ -881,11 +881,18 @@
       "day": "2026-06-25",
       "imported_at": "2026-06-27T08:55:28.564854",
       "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_26062026.xlsx",
+      "hash": "c15279a186ddf3ef4a82dfc9ef60d402",
+      "day": "2026-06-26",
+      "imported_at": "2026-06-27T09:12:03.499198",
+      "origin": "importacao_diaria"
     }
   ],
-  "updated_at": "2026-06-27T08:55:28.564854",
+  "updated_at": "2026-06-27T09:12:03.499198",
   "last_processed": {
-    "day": "2026-06-25",
-    "imported_at": "2026-06-27T08:55:28.564854"
+    "day": "2026-06-26",
+    "imported_at": "2026-06-27T09:12:03.499198"
   }
 }
