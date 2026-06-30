@@ -7160,14 +7160,22 @@ def _read_ops_file(uploaded_file) -> pd.DataFrame:
         except Exception:
             pass
         last_err = None
-        for enc in ["utf-8-sig", "latin1", "cp1252"]:
+        for enc in ["utf-8-sig", "utf-8", "latin1", "cp1252"]:
             for sep in [";", ",", "\t", "|"]:
                 try:
-                    df = pd.read_csv(io.BytesIO(raw), sep=sep, dtype=str, encoding=enc)
+                    text = raw.decode(enc, errors="replace")
+                    df = pd.read_csv(io.StringIO(text), sep=sep, dtype=str, engine="python", on_bad_lines="skip")
                     if len(df.columns) > 1:
                         return _fix_shifted_resumo_operadores(df)
                 except Exception as e:
                     last_err = e
+        try:
+            text = raw.decode("latin1", errors="replace")
+            df = pd.read_csv(io.StringIO(text), sep=None, dtype=str, engine="python", on_bad_lines="skip")
+            if len(df.columns) > 1:
+                return _fix_shifted_resumo_operadores(df)
+        except Exception as e:
+            last_err = e
         raise last_err
     return _fix_shifted_resumo_operadores(pd.read_excel(io.BytesIO(raw), dtype=str, engine="openpyxl"))
 
