@@ -412,5 +412,23 @@
     "ops_rows": 3637,
     "leads_rows": 11303,
     "visao_rows": 2303
+  },
+  {
+    "processed_at": "2026-06-30 09:40:10",
+    "ops_rows": 3637,
+    "leads_rows": 11941,
+    "visao_rows": 2484
+  },
+  {
+    "processed_at": "2026-06-30 09:45:07",
+    "ops_rows": 3637,
+    "leads_rows": 11941,
+    "visao_rows": 2484
+  },
+  {
+    "processed_at": "2026-06-30 09:52:52",
+    "ops_rows": 3637,
+    "leads_rows": 11941,
+    "visao_rows": 2484
   }
 ]
