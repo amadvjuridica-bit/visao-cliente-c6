@@ -972,5 +972,105 @@
     "current_has_pix": true,
     "last_seen": "2026-06-29",
     "removed_on": ""
+  },
+  "64739722000145": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "EMAIL",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "64790765000155": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "65563131000122": {},
+  "65582291000119": {},
+  "65617198000100": {},
+  "65867693000160": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "66161123000112": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "66163658000122": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "66286108000109": {},
+  "66709059000161": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ|EMAIL",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "66745826000198": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ|PHONE",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "66839742000113": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "66976178000180": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "67248025000180": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "67270676000176": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
+  },
+  "67664584000170": {
+    "first_seen": "2026-06-29",
+    "first_tipo": "CNPJ|PHONE",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-06-29",
+    "removed_on": ""
   }
 }
