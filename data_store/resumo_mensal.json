@@ -86,5 +86,16 @@
     "deveria_receber": 245745.0,
     "ja_pago_ref": 94915.0,
     "receber_mes": 150830.0
+  },
+  "07/2026": {
+    "faixa": "Até 49 (1.0)",
+    "qualificadas": 42,
+    "n1": 21,
+    "n2": 11,
+    "n3": 4,
+    "n4": 6,
+    "deveria_receber": 10310.0,
+    "ja_pago_ref": 8980.0,
+    "receber_mes": 1330.0
   }
 }
