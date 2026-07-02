@@ -4042,6 +4042,23 @@ def _comparativo_receita_analytic_sheets(mkey: str) -> Dict[str, pd.DataFrame]:
 
     df_antigo = pd.DataFrame(antigo_rows)
     df_novo = _cartilha_nova_detail_by_month(mkey)
+    merge_cols = ["Mês", "CNPJ", "Nome cliente", "Tipo pessoa", "Status CC", "Mês ref comissão"]
+    antigo_cols = merge_cols + [
+        "Faixa antiga", "Nível antigo", "Critérios antigos", "Banco BW apuração",
+        "Banco BX multiplicador", "Banco BY já pago", "Banco BZ previsão",
+        "Valor cheio antigo", "Já pago ref antigo", "A receber antigo",
+    ]
+    novo_cols = merge_cols + [
+        "Valor Cash In", "Valor Spending", "Valor C6 Pay", "Bônus PIX CNPJ",
+        "Banco CF apuração", "Banco CG multiplicador", "Banco CH previsão",
+        "Valor cheio novo", "Já pago ref novo", "A receber novo",
+    ]
+    for col in antigo_cols:
+        if col not in df_antigo.columns:
+            df_antigo[col] = pd.Series(dtype="float64" if col in {"Nível antigo", "Banco BW apuração", "Banco BX multiplicador", "Banco BY já pago", "Banco BZ previsão", "Valor cheio antigo", "Já pago ref antigo", "A receber antigo"} else "object")
+    for col in novo_cols:
+        if col not in df_novo.columns:
+            df_novo[col] = pd.Series(dtype="float64" if col in {"Valor Cash In", "Valor Spending", "Valor C6 Pay", "Bônus PIX CNPJ", "Banco CF apuração", "Banco CG multiplicador", "Banco CH previsão", "Valor cheio novo", "Já pago ref novo", "A receber novo"} else "object")
 
     if df_antigo.empty and df_novo.empty:
         return {"Regra_Antiga": pd.DataFrame(), "Cartilha_Nova": pd.DataFrame(), "Comparativo": pd.DataFrame()}
@@ -4049,7 +4066,7 @@ def _comparativo_receita_analytic_sheets(mkey: str) -> Dict[str, pd.DataFrame]:
     comp = pd.merge(
         df_antigo,
         df_novo,
-        on=["Mês", "CNPJ", "Nome cliente", "Tipo pessoa", "Status CC", "Mês ref comissão"],
+        on=merge_cols,
         how="outer",
     )
     for col in ["Banco BW apuração", "Banco BX multiplicador", "Banco BY já pago", "Banco BZ previsão", "Valor cheio antigo", "Já pago ref antigo", "A receber antigo", "Valor Cash In", "Valor Spending", "Valor C6 Pay", "Bônus PIX CNPJ", "Banco CF apuração", "Banco CG multiplicador", "Banco CH previsão", "Valor cheio novo", "Já pago ref novo", "A receber novo"]:
