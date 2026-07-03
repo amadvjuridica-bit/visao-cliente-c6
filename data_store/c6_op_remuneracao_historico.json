@@ -1,6 +1,6 @@
 {
-  "last_signature": "ce5d161c5f283493484bc261f1a00760",
-  "updated_at": "2026-07-02 09:47:07",
+  "last_signature": "f0ac9b617571d2f95633c6d05d7fb8f9",
+  "updated_at": "2026-07-02 09:51:01",
   "rows": [
     {
       "processado_em": "2026-05-07 20:38:07",
@@ -14737,6 +14737,118 @@
       "motivo": "Conta aberta OCO",
       "quantidade": 1,
       "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "ACT",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "Indicação ACT",
+      "quantidade": 7,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "ACT",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "Indicação ACT",
+      "quantidade": 3,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "ACT",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "Indicação ACT",
+      "quantidade": 3,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "ACT",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "Indicação ACT",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "ACT",
+      "operador": "SUPORTE XPRISMA",
+      "motivo": "Indicação ACT",
+      "quantidade": 155,
+      "valor_total": 154.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OCO",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "",
+      "quantidade": 4,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OCO",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OCO",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 3,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OCO",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "",
+      "quantidade": 6,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OCO",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OCO",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "",
+      "quantidade": 6,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OCO",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 4,
+      "valor_total": 20.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OQL",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "",
+      "quantidade": 8,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-02 09:51:01",
+      "setor": "OQL",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
-  "version": "2026-07-02-094957",
-  "generated_at": "2026-07-02T09:49:57",
-  "reason": "c6-operacao-upload",
+  "version": "2026-07-03-110103",
+  "generated_at": "2026-07-03T11:01:03",
+  "reason": "painel-c6-upload",
   "files": [
     "c6_daily_funil_track.json",
     "c6_daily_import_meta.json",
