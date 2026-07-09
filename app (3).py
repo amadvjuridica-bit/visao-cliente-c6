@@ -289,6 +289,7 @@ PANEL_C6_REFRESH_META = os.path.join(DATA_DIR, "panel_c6_refresh_meta.json")
 PANEL_C6_INCREMENTAL_CACHE = os.path.join(DATA_DIR, "panel_c6_incremental_cache.json")
 PANEL_C6_CARTILHA_NOVA_CACHE = os.path.join(DATA_DIR, "panel_c6_cartilha_nova_cache.json")
 REMUN_ENGINE_VERSION = "2026-05-19-wallet-direta-v7"
+MAX_CLOUD_SEED_FILE_BYTES = 90 * 1024 * 1024
 
 PIX_VALID_VALUES = {
     "CNPJ",
@@ -1467,6 +1468,17 @@ def _cloud_payload_source_name(target_name: str) -> str:
     return f"cloud_payload_{safe}.json"
 
 
+def _cloud_seed_file_ok(source_name: str) -> bool:
+    source_name = os.path.basename(str(source_name or ""))
+    if not source_name:
+        return False
+    path = os.path.join(DATA_DIR, source_name)
+    try:
+        return os.path.exists(path) and os.path.getsize(path) <= MAX_CLOUD_SEED_FILE_BYTES
+    except Exception:
+        return False
+
+
 def _write_cloud_cache_payload(path: str, df: Optional[pd.DataFrame]) -> Optional[dict]:
     if df is None or df.empty:
         return None
@@ -1475,6 +1487,8 @@ def _write_cloud_cache_payload(path: str, df: Optional[pd.DataFrame]) -> Optiona
     try:
         with open(source_path, "w", encoding="utf-8") as f:
             json.dump(_df_to_store_payload(df), f, ensure_ascii=False, separators=(",", ":"))
+        if not _cloud_seed_file_ok(source_name):
+            return None
         return {"source": source_name, "target": os.path.basename(path)}
     except Exception:
         return None
@@ -1492,7 +1506,8 @@ def _prepare_cloud_seed_from_local_data() -> List:
     by_key = {}
     for entry in files:
         key = os.path.basename(str(entry.get("target") or entry.get("source") or "")) if isinstance(entry, dict) else os.path.basename(str(entry or ""))
-        if key and not key.startswith("cloud_payload_"):
+        source = os.path.basename(str(entry.get("source") or key)) if isinstance(entry, dict) else key
+        if key and not key.startswith("cloud_payload_") and _cloud_seed_file_ok(source):
             by_key[key] = entry
 
     for name in os.listdir(DATA_DIR):
@@ -1502,6 +1517,7 @@ def _prepare_cloud_seed_from_local_data() -> List:
             and not name.startswith("cloud_seed_version")
             and ".corrompido_" not in name
             and ".backup" not in name
+            and _cloud_seed_file_ok(name)
         ):
             by_key.setdefault(name, name)
 
@@ -1561,11 +1577,15 @@ def _sync_local_data_to_cloud_seed(reason: str = "") -> Tuple[bool, str]:
             json.dump(seed, f, ensure_ascii=False, indent=2)
 
         paths = [os.path.join("data_store", "cloud_seed_version.json")]
+        seen_paths = set(paths)
         for entry in files:
             source = entry.get("source") if isinstance(entry, dict) else entry
             source = os.path.basename(str(source or ""))
-            if source:
-                paths.append(os.path.join("data_store", source))
+            rel_path = os.path.join("data_store", source) if source else ""
+            abs_path = os.path.join(APP_DIR, rel_path) if rel_path else ""
+            if rel_path and rel_path not in seen_paths and os.path.exists(abs_path) and _cloud_seed_file_ok(source):
+                paths.append(rel_path)
+                seen_paths.add(rel_path)
         subprocess.run(["git", "add", "-f", *paths], cwd=APP_DIR, check=True, capture_output=True, text=True)
         diff = subprocess.run(["git", "diff", "--cached", "--quiet", "--", "data_store"], cwd=APP_DIR)
         if diff.returncode == 0:
@@ -1574,6 +1594,11 @@ def _sync_local_data_to_cloud_seed(reason: str = "") -> Tuple[bool, str]:
         subprocess.run(["git", "commit", "-m", f"Atualizar dados C6 online {label}"], cwd=APP_DIR, check=True, capture_output=True, text=True)
         subprocess.run(["git", "push", "origin", "main"], cwd=APP_DIR, check=True, capture_output=True, text=True)
         return True, "Dados locais publicados para o app online."
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or exc.stdout or str(exc)).strip()
+        if len(detail) > 500:
+            detail = detail[:500].rstrip() + "..."
+        return False, f"Falha ao publicar dados locais: {detail or exc}"
     except Exception as exc:
         return False, f"Falha ao publicar dados locais: {exc}"
 
