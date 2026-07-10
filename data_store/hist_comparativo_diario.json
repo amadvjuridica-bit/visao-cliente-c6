@@ -1581,5 +1581,65 @@
     "qual_m2": 25,
     "pix_total": 1087,
     "cashin_total": 2075037.52
+  },
+  "03/07/2026": {
+    "mes_ref": "07/2026",
+    "base_receber_mes": 10198.0,
+    "c6_total": 2095,
+    "leads_total": 12723,
+    "qual_total": 129,
+    "qual_m0": 5,
+    "qual_m1": 82,
+    "qual_m2": 42,
+    "pix_total": 1117,
+    "cashin_total": 2903348.4099999997
+  },
+  "05/07/2026": {
+    "mes_ref": "07/2026",
+    "base_receber_mes": 14245.0,
+    "c6_total": 2165,
+    "leads_total": 12814,
+    "qual_total": 176,
+    "qual_m0": 7,
+    "qual_m1": 101,
+    "qual_m2": 68,
+    "pix_total": 1154,
+    "cashin_total": 3250427.56
+  },
+  "06/07/2026": {
+    "mes_ref": "07/2026",
+    "base_receber_mes": 20182.5,
+    "c6_total": 2228,
+    "leads_total": 12970,
+    "qual_total": 219,
+    "qual_m0": 12,
+    "qual_m1": 129,
+    "qual_m2": 78,
+    "pix_total": 1196,
+    "cashin_total": 4461558.9
+  },
+  "07/07/2026": {
+    "mes_ref": "07/2026",
+    "base_receber_mes": 24520.0,
+    "c6_total": 2261,
+    "leads_total": 13148,
+    "qual_total": 247,
+    "qual_m0": 15,
+    "qual_m1": 146,
+    "qual_m2": 86,
+    "pix_total": 1196,
+    "cashin_total": 5206658.15
+  },
+  "08/07/2026": {
+    "mes_ref": "07/2026",
+    "base_receber_mes": 29025.0,
+    "c6_total": 2307,
+    "leads_total": 13347,
+    "qual_total": 271,
+    "qual_m0": 19,
+    "qual_m1": 159,
+    "qual_m2": 93,
+    "pix_total": 1224,
+    "cashin_total": 5687799.89
   }
 }

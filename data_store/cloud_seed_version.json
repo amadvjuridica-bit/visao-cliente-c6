@@ -1,11 +1,10 @@
 {
-  "version": "2026-07-03-111048",
-  "generated_at": "2026-07-03T11:10:48",
-  "reason": "c6-operacao-upload",
+  "version": "2026-07-10-121306",
+  "generated_at": "2026-07-10T12:13:06",
+  "reason": "painel-c6-upload",
   "files": [
     "c6_daily_funil_track.json",
     "c6_daily_import_meta.json",
-    "c6_leads_cnpj_track.json",
     "c6_operacao_ops_cache_meta.json",
     "c6_op_importacoes.json",
     "c6_op_omc_maxpay.json",

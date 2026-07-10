@@ -466,5 +466,35 @@
     "ops_rows": 260,
     "leads_rows": 12473,
     "visao_rows": 2094
+  },
+  {
+    "processed_at": "2026-07-03 11:12:02",
+    "ops_rows": 411,
+    "leads_rows": 12473,
+    "visao_rows": 2094
+  },
+  {
+    "processed_at": "2026-07-06 12:34:24",
+    "ops_rows": 411,
+    "leads_rows": 12792,
+    "visao_rows": 2165
+  },
+  {
+    "processed_at": "2026-07-06 14:42:41",
+    "ops_rows": 664,
+    "leads_rows": 12792,
+    "visao_rows": 2165
+  },
+  {
+    "processed_at": "2026-07-07 12:10:32",
+    "ops_rows": 664,
+    "leads_rows": 12948,
+    "visao_rows": 2228
+  },
+  {
+    "processed_at": "2026-07-07 12:15:09",
+    "ops_rows": 900,
+    "leads_rows": 12948,
+    "visao_rows": 2228
   }
 ]

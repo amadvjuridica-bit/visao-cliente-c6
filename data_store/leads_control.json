@@ -923,11 +923,53 @@
       "day": "2026-07-02",
       "imported_at": "2026-07-03T11:01:02.370870",
       "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_03072026.xlsx",
+      "hash": "4494df45914a32f8d2c8ddc26ddba6a8",
+      "day": "2026-07-03",
+      "imported_at": "2026-07-04T16:21:12.198347",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_05072026.xlsx",
+      "hash": "521ab1eaba25bd801b94b159c2dae771",
+      "day": "2026-07-05",
+      "imported_at": "2026-07-06T12:20:45.223085",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_06072026.xlsx",
+      "hash": "3363299e4e0995c85ef091cf9e004302",
+      "day": "2026-07-06",
+      "imported_at": "2026-07-07T11:44:37.963945",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_07072026.xlsx",
+      "hash": "7816df532100eb8f433003c1ba21a4af",
+      "day": "2026-07-07",
+      "imported_at": "2026-07-08T10:27:27.064819",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_08072026.xlsx",
+      "hash": "1fe21e3e30d4468bbbf5ea4ef1cb5207",
+      "day": "2026-07-08",
+      "imported_at": "2026-07-09T10:56:16.452318",
+      "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_09072026.xlsx",
+      "hash": "4c6abb243d830f615f30b343ced41e99",
+      "day": "2026-07-09",
+      "imported_at": "2026-07-10T12:13:05.361611",
+      "origin": "importacao_diaria"
     }
   ],
-  "updated_at": "2026-07-03T11:01:02.370870",
+  "updated_at": "2026-07-10T12:13:05.361611",
   "last_processed": {
-    "day": "2026-07-02",
-    "imported_at": "2026-07-03T11:01:02.370870"
+    "day": "2026-07-09",
+    "imported_at": "2026-07-10T12:13:05.361611"
   }
 }
