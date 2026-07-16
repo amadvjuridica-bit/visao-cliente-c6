@@ -1,4 +1,4 @@
-﻿# =========================
+# =========================
 # app.py — COMPLETO
 # =========================
 
@@ -1184,6 +1184,70 @@ def _patch_panel_cache_row(path: str, month_key: str, row: list):
     payload["data"] = data
     payload["index"] = list(range(len(data)))
     local_json_save(path, payload)
+
+
+def _panel_c6_incremental_df_from_summary() -> pd.DataFrame:
+    resumo = safe_json_load(HIST_RESUMO_MENSAL, default={}) or {}
+    rows = []
+    for mkey in sorted([str(k) for k in resumo.keys()], key=month_key_str):
+        item = resumo.get(mkey, {}) or {}
+        rows.append([
+            mkey,
+            item.get("faixa", ""),
+            int(item.get("qualificadas", 0) or 0),
+            int(item.get("n1", 0) or 0),
+            int(item.get("n2", 0) or 0),
+            int(item.get("n3", 0) or 0),
+            int(item.get("n4", 0) or 0),
+            float(item.get("deveria_receber", 0.0) or 0.0),
+            float(item.get("ja_pago_ref", 0.0) or 0.0),
+            float(item.get("receber_mes", 0.0) or 0.0),
+        ])
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "Mês", "Faixa", "Qualificadas",
+            "Nível 1", "Nível 2", "Nível 3", "Nível 4",
+            "Deveria receber (cheio)", "Já pago (referência)", "A receber no mês",
+        ],
+    )
+
+
+def _panel_c6_cartilha_nova_df_from_summary() -> pd.DataFrame:
+    resumo = safe_json_load(HIST_NOVA_RESUMO_MENSAL, default={}) or {}
+    rows = []
+    for mkey in sorted([str(k) for k in resumo.keys()], key=month_key_str):
+        item = resumo.get(mkey, {}) or {}
+        rows.append([
+            mkey,
+            int(item.get("qualificadas", 0) or 0),
+            float(item.get("acelerador", 0.0) or 0.0),
+            int(item.get("cash_in", 0) or 0),
+            int(item.get("spending", 0) or 0),
+            int(item.get("c6pay", 0) or 0),
+            int(item.get("c6pay_credenciamento", 0) or 0),
+            int(item.get("pix_cnpj", 0) or 0),
+            int(item.get("wallet", 0) or 0),
+            float(item.get("deveria_receber", 0.0) or 0.0),
+            float(item.get("ja_pago_ref", 0.0) or 0.0),
+            float(item.get("receber_mes", 0.0) or 0.0),
+        ])
+    return pd.DataFrame(
+        rows,
+        columns=[
+            "Mês", "Qualificadas", "Acelerador", "Cash In", "Spending", "C6 Pay",
+            "Credenciamento C6 Pay", "PIX CNPJ", "Wallet",
+            "Deveria receber (cheio)", "Já pago (referência)", "A receber no mês",
+        ],
+    )
+
+
+def _sync_panel_c6_cached_dfs_from_summary() -> tuple[pd.DataFrame, pd.DataFrame]:
+    incremental_df = _panel_c6_incremental_df_from_summary()
+    cartilha_nova_df = _panel_c6_cartilha_nova_df_from_summary()
+    _save_panel_c6_cached_df(PANEL_C6_INCREMENTAL_CACHE, incremental_df)
+    _save_panel_c6_cached_df(PANEL_C6_CARTILHA_NOVA_CACHE, cartilha_nova_df)
+    return incremental_df, cartilha_nova_df
 
 
 @st.cache_data(show_spinner=False)
@@ -9413,6 +9477,12 @@ if "Painel C6 Empresas" in tabs_map:
             st.session_state["_panel_c6_incremental_df"] = _cached_incremental_df
         if "_panel_c6_cartilha_nova_df" not in st.session_state:
             st.session_state["_panel_c6_cartilha_nova_df"] = _cached_cartilha_nova_df
+
+    _summary_incremental_df, _summary_cartilha_nova_df = _sync_panel_c6_cached_dfs_from_summary()
+    if not _summary_incremental_df.empty:
+        st.session_state["_panel_c6_incremental_df"] = _summary_incremental_df.copy()
+    if not _summary_cartilha_nova_df.empty:
+        st.session_state["_panel_c6_cartilha_nova_df"] = _summary_cartilha_nova_df.copy()
 
     _compare_hist_existing = safe_json_load(HIST_COMPARE_DAILY, default={}) or {} if _cmp_pending else {}
     for day_key, rec in _cmp_pending.items():
