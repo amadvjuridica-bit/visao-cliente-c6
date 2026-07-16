@@ -7849,15 +7849,30 @@ def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]]
             result = result.mask(result.astype(str).str.strip().eq(""), s)
         return result.fillna("")
 
+    def _safe_lct_date_series(values) -> pd.Series:
+        raw = normalize_str(values)
+        result = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]")
+        patterns = [
+            r"(\d{1,2}/\d{1,2}/\d{2,4})",
+            r"(\d{1,2}-\d{1,2}-\d{2,4})",
+            r"((?:19|20)\d{2}-\d{1,2}-\d{1,2})",
+        ]
+        for pattern in patterns:
+            extracted = raw.str.extract(pattern, expand=False)
+            try:
+                parsed = pd.to_datetime(extracted, errors="coerce", dayfirst=True)
+            except Exception:
+                parsed = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]")
+            valid = parsed.notna() & parsed.dt.year.between(1900, 2100)
+            result = result.mask(result.isna() & valid, parsed)
+        return result
+
     def _first_date(cols: List[str]) -> pd.Series:
         result = pd.Series(pd.NaT, index=df.index, dtype="datetime64[ns]")
         for col in cols:
             if col not in df.columns:
                 continue
-            raw = normalize_str(df[col])
-            parsed = pd.to_datetime(raw, errors="coerce", dayfirst=True)
-            if parsed.isna().all():
-                parsed = pd.to_datetime(raw.str.extract(r"(\d{2}/\d{2}/\d{4})", expand=False), errors="coerce", dayfirst=True)
+            parsed = _safe_lct_date_series(df[col])
             result = result.mask(result.isna(), parsed)
         return result
 
