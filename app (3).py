@@ -7779,10 +7779,19 @@ def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = Non
 
 
 @st.cache_data(show_spinner=False)
-def _load_lct_temp_history_cached(_version: str = "lct-v3") -> Tuple[List[pd.DataFrame], List[str]]:
+def _load_lct_temp_history_cached(_version: str = "lct-v4-sbm") -> Tuple[List[pd.DataFrame], List[str]]:
     frames = []
     names = []
-    for path in _temp_import_files_by_keyword("resumo lct"):
+    paths = []
+    seen = set()
+    for keyword in ["resumo lct", "resumo sbm"]:
+        for path in _temp_import_files_by_keyword(keyword):
+            norm_path = os.path.normcase(os.path.abspath(path))
+            if norm_path in seen:
+                continue
+            seen.add(norm_path)
+            paths.append(path)
+    for path in paths:
         df = _read_temp_import_file_any(path)
         if df is None or df.empty:
             continue
@@ -8514,30 +8523,42 @@ def _process_c6_operacao(df_ops_raw: pd.DataFrame, df_leads_raw: pd.DataFrame, d
     act_indicados_base["dia_indicacao"] = pd.to_datetime(act_indicados_base["data_acao"], errors="coerce").dt.date
     act_indicados_base["dia_indicacao_key"] = pd.to_datetime(act_indicados_base["dia_indicacao"], errors="coerce").dt.strftime("%Y-%m-%d").fillna("")
     act_indicados_base["mes_ref_indicacao"] = pd.to_datetime(act_indicados_base["dia_indicacao"], errors="coerce").dt.strftime("%Y-%m").fillna("")
-    act_daily_base = act_rep[act_rep["operador_ativo"] & act_rep["dia_comissao"].notna()].copy()
-    act_diario = act_daily_base.groupby(["dia_comissao", "operador", "tipo_operador"], dropna=False).agg(contas_abertas=("abriu_apos_indicacao", "sum"), abertas_14d=("janela_14d", "sum"), comissao_total=("valor_total", "sum"), aparece_email=("operador_relatorio", "max")).reset_index()
-    indicados_diario = act_indicados_base[act_indicados_base["dia_indicacao"].notna()].groupby(["dia_indicacao", "operador", "tipo_operador"], dropna=False).agg(clientes_indicados=("cnpj", "nunique")).reset_index().rename(columns={"dia_indicacao": "dia_comissao"})
-    if not act_diario.empty or not indicados_diario.empty:
-        act_diario = indicados_diario.merge(act_diario, on=["dia_comissao", "operador", "tipo_operador"], how="outer")
+
+    act_diario = act_indicados_base[act_indicados_base["dia_indicacao"].notna()].groupby(
+        ["dia_indicacao", "operador", "tipo_operador"], dropna=False
+    ).agg(
+        clientes_indicados=("cnpj", "nunique"),
+        contas_abertas=("abriu_apos_indicacao", "sum"),
+        abertas_14d=("janela_14d", "sum"),
+        comissao_total=("valor_total", "sum"),
+        aparece_email=("operador_relatorio", "max"),
+    ).reset_index().rename(columns={"dia_indicacao": "dia_comissao"})
+    if not act_diario.empty:
         for col in ["clientes_indicados", "contas_abertas", "abertas_14d"]:
             act_diario[col] = pd.to_numeric(act_diario.get(col, 0), errors="coerce").fillna(0).astype(int)
         act_diario["comissao_total"] = pd.to_numeric(act_diario.get("comissao_total", 0.0), errors="coerce").fillna(0.0)
         act_diario["aparece_email"] = act_diario.get("aparece_email", True).fillna(True).astype(bool)
-    if not act_diario.empty:
         act_diario["eficiencia_%"] = (act_diario["contas_abertas"] / act_diario["clientes_indicados"].replace(0, pd.NA) * 100).fillna(0).round(2)
         act_diario = act_diario.sort_values(["dia_comissao", "comissao_total", "contas_abertas"], ascending=[False, False, False])
-    act_mensal = act_daily_base[act_daily_base["mes_ref_comissao"].ne("")].groupby(["mes_ref_comissao", "operador", "tipo_operador"], dropna=False).agg(contas_abertas=("abriu_apos_indicacao", "sum"), abertas_14d=("janela_14d", "sum"), comissao_total=("valor_total", "sum"), aparece_email=("operador_relatorio", "max")).reset_index()
-    indicados_mensal = act_indicados_base[act_indicados_base["mes_ref_indicacao"].ne("")].groupby(["mes_ref_indicacao", "operador", "tipo_operador"], dropna=False).agg(clientes_indicados=("cnpj", "nunique")).reset_index().rename(columns={"mes_ref_indicacao": "mes_ref_comissao"})
-    if not act_mensal.empty or not indicados_mensal.empty:
-        act_mensal = indicados_mensal.merge(act_mensal, on=["mes_ref_comissao", "operador", "tipo_operador"], how="outer")
+
+    act_mensal = act_indicados_base[act_indicados_base["mes_ref_indicacao"].ne("")].groupby(
+        ["mes_ref_indicacao", "operador", "tipo_operador"], dropna=False
+    ).agg(
+        clientes_indicados=("cnpj", "nunique"),
+        contas_abertas=("abriu_apos_indicacao", "sum"),
+        abertas_14d=("janela_14d", "sum"),
+        comissao_total=("valor_total", "sum"),
+        aparece_email=("operador_relatorio", "max"),
+    ).reset_index().rename(columns={"mes_ref_indicacao": "mes_ref_comissao"})
+    if not act_mensal.empty:
         for col in ["clientes_indicados", "contas_abertas", "abertas_14d"]:
             act_mensal[col] = pd.to_numeric(act_mensal.get(col, 0), errors="coerce").fillna(0).astype(int)
         act_mensal["comissao_total"] = pd.to_numeric(act_mensal.get("comissao_total", 0.0), errors="coerce").fillna(0.0)
         act_mensal["aparece_email"] = act_mensal.get("aparece_email", True).fillna(True).astype(bool)
-    if not act_mensal.empty:
         act_mensal["eficiencia_%"] = (act_mensal["contas_abertas"] / act_mensal["clientes_indicados"].replace(0, pd.NA) * 100).fillna(0).round(2)
         act_mensal = act_mensal.sort_values(["mes_ref_comissao", "comissao_total", "contas_abertas"], ascending=[False, False, False])
-    latest_act_day = act_daily_base.loc[act_daily_base["abriu_apos_indicacao"], "dia_comissao"].max() if not act_daily_base.empty else pd.NaT
+
+    latest_act_day = act_indicados_base["dia_indicacao"].max() if not act_indicados_base.empty else pd.NaT
     act_diario_atual = act_diario[act_diario["dia_comissao"].eq(latest_act_day)].copy() if pd.notna(latest_act_day) and not act_diario.empty else pd.DataFrame()
     act_faixa = act_rep[act_rep["dt_fundacao_empresa"].notna()].groupby("faixa_idade_empresa", dropna=False).agg(clientes=("cnpj", "nunique"), abertas=("abriu_apos_indicacao", "sum")).reset_index()
     act_faixa["taxa_abertura_%"] = (act_faixa["abertas"] / act_faixa["clientes"].replace(0, pd.NA) * 100).fillna(0).round(2)
