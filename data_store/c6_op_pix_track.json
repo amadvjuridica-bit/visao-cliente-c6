@@ -1612,5 +1612,32 @@
     "current_has_pix": true,
     "last_seen": "2026-07-15",
     "removed_on": ""
-  }
+  },
+  "66401755000106": {},
+  "66510681000146": {
+    "first_seen": "2026-07-15",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-15",
+    "removed_on": ""
+  },
+  "66530461000184": {
+    "first_seen": "2026-07-15",
+    "first_tipo": "PHONE",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-15",
+    "removed_on": ""
+  },
+  "66940464000196": {
+    "first_seen": "2026-07-15",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-15",
+    "removed_on": ""
+  },
+  "67142264000150": {},
+  "67831005000137": {}
 }

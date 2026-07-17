@@ -1704,7 +1704,7 @@
   },
   "15/07/2026": {
     "mes_ref": "07/2026",
-    "base_receber_mes": 79160.0,
+    "base_receber_mes": 84545.0,
     "c6_total": 2671,
     "leads_total": 14873,
     "qual_total": 425,
@@ -1713,5 +1713,16 @@
     "qual_m2": 138,
     "pix_total": 1395,
     "cashin_total": 10842032.370000001
+  },
+  "16/07/2026": {
+    "mes_ref": "07/2026",
+    "base_receber_mes": 84545.0,
+    "c6_total": 2761,
+    "qual_total": 444,
+    "qual_m0": 55,
+    "qual_m1": 247,
+    "qual_m2": 142,
+    "pix_total": 1437,
+    "cashin_total": 11501176.88
   }
 }
