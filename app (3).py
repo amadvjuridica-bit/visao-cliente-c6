@@ -7894,7 +7894,7 @@ def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]]
         cand = _normalize_cnpj_series(df[col])
         cnpj = cnpj.mask(cnpj.astype(str).str.len().lt(14) & cand.astype(str).str.len().ge(14), cand)
     out["cnpj"] = cnpj.fillna("")
-    out["data_lct"] = _first_date(["data_lct", "Data", "DATA", "Ação"])
+    out["data_lct"] = _first_date(["data_lct", "Unnamed: 4", "Data", "DATA", "Ação", "Fase", "FASE"])
     out["dt_fundacao_lct"] = _first_date(["dt_fundacao_lct", "Fase", "FASE", "Inclusão"])
     source_parts = []
     for col in ["acao_lct", "origem_lct_texto", "Unnamed: 4", "Ação", "ACAO", "Acao", "Agente", "Histórico", "HISTORICO", "HISTÓRICO", "Historico", "Hora"]:
@@ -7945,7 +7945,10 @@ def _compact_lct_cache_df(df_lct: Optional[pd.DataFrame]) -> Optional[pd.DataFra
         extracted["acao_lct"] = normalize_str(extracted["acao_lct"]).str.upper()
     else:
         extracted["acao_lct"] = ""
-    extracted["origem_lct_texto"] = extracted["acao_lct"]
+    if "origem_lct_texto" in extracted.columns:
+        extracted["origem_lct_texto"] = normalize_str(extracted["origem_lct_texto"]).str.upper()
+    else:
+        extracted["origem_lct_texto"] = extracted["acao_lct"]
     keep_cols = [
         "nome_cliente_lct",
         "cnpj",
