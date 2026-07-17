@@ -7732,7 +7732,7 @@ def _read_lct_file_any(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
                 lines = sample.splitlines()
                 first_data = lines[1].split(";") if len(lines) > 1 else []
                 header = lines[0].split(";") if lines else []
-                if len(header) == 16 and len(first_data) == 17:
+                if len(header) == 16 and len(first_data) >= 17:
                     text = raw_bytes.decode("utf-8-sig", errors="replace")
                     rows = []
                     for ln in text.splitlines()[1:]:
@@ -7740,7 +7740,7 @@ def _read_lct_file_any(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
                         if len(parts) < 17:
                             parts = parts + ([""] * (17 - len(parts)))
                         elif len(parts) > 17:
-                            parts = parts[:16] + [";".join(parts[16:])]
+                            parts = parts[:16] + [parts[-1]]
                         rows.append(parts)
                     fixed_cols = [
                         "Nome", "Cód", "CPF / CNPJ", "Agente Flag", "Agente", "Ação", "Data", "Hora",
@@ -7779,7 +7779,7 @@ def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = Non
 
 
 @st.cache_data(show_spinner=False)
-def _load_lct_temp_history_cached(_version: str = "lct-v4-sbm") -> Tuple[List[pd.DataFrame], List[str]]:
+def _load_lct_temp_history_cached(_version: str = "lct-v5-sbm-layout") -> Tuple[List[pd.DataFrame], List[str]]:
     frames = []
     names = []
     paths = []
