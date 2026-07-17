@@ -1,7 +1,7 @@
 {
-  "version": "2026-07-17-104028",
-  "generated_at": "2026-07-17T10:40:28",
-  "reason": "painel-c6-upload",
+  "version": "2026-07-17-121017",
+  "generated_at": "2026-07-17T12:10:17",
+  "reason": "leads-lct-upload",
   "files": [
     "c6_daily_funil_track.json",
     "c6_daily_import_meta.json",
@@ -51,6 +51,7 @@
     {
       "source": "cloud_payload_c6_daily_lct_cache_compacto.json.json",
       "target": "c6_daily_lct_cache_compacto.json"
-    }
+    },
+    "novo_pago_max_por_cnpj.json"
   ]
 }
