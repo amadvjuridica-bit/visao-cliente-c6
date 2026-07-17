@@ -7768,7 +7768,17 @@ def _read_temp_import_file_any(path: str) -> Optional[pd.DataFrame]:
 
 
 def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = None) -> Tuple[pd.DataFrame, str]:
-    frames, names = _load_lct_temp_history_cached()
+    sig_items = []
+    seen_sig = set()
+    for keyword in ["resumo lct", "resumo sbm"]:
+        for path in _temp_import_files_by_keyword(keyword):
+            norm_path = os.path.normcase(os.path.abspath(path))
+            if norm_path in seen_sig:
+                continue
+            seen_sig.add(norm_path)
+            _, mtime_ns, size = _safe_file_signature(path)
+            sig_items.append((os.path.basename(path), int(mtime_ns or 0), int(size or 0)))
+    frames, names = _load_lct_temp_history_cached(tuple(sorted(sig_items)))
     frames = [df.copy() for df in frames]
     names = list(names)
     if cached_lct is not None and not cached_lct.empty:
@@ -7779,7 +7789,7 @@ def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = Non
 
 
 @st.cache_data(show_spinner=False)
-def _load_lct_temp_history_cached(_version: str = "lct-v5-sbm-layout") -> Tuple[List[pd.DataFrame], List[str]]:
+def _load_lct_temp_history_cached(file_signature: Tuple[Tuple[str, int, int], ...], version: str = "lct-v6-sbm-file-signature") -> Tuple[List[pd.DataFrame], List[str]]:
     frames = []
     names = []
     paths = []
