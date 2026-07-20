@@ -1624,10 +1624,19 @@ def _prepare_cloud_seed_from_local_data() -> List:
 def _sync_local_data_to_cloud_seed(reason: str = "") -> Tuple[bool, str]:
     """Publica os dados locais versionados para o app online reidratar o Firestore."""
     if "firebase" in st.secrets:
-        return False, "O app já está usando a base em nuvem."
+        return False, "O app ja esta usando a base em nuvem."
     if not os.path.isdir(os.path.join(APP_DIR, ".git")):
-        return False, "Repositório Git não encontrado."
+        return False, "Repositorio Git nao encontrado."
+
+    def _git_run(args, check=True):
+        return subprocess.run(["git", *args], cwd=APP_DIR, check=check, capture_output=True, text=True)
+
+    def _sync_with_remote() -> None:
+        _git_run(["fetch", "origin", "main"], check=False)
+        _git_run(["pull", "--rebase", "--autostash", "origin", "main"], check=True)
+
     try:
+        _sync_with_remote()
         files = _prepare_cloud_seed_from_local_data()
         version = dt.datetime.now().strftime("%Y-%m-%d-%H%M%S")
         seed = {
@@ -1650,13 +1659,20 @@ def _sync_local_data_to_cloud_seed(reason: str = "") -> Tuple[bool, str]:
             if rel_path and rel_path not in seen_paths and os.path.exists(abs_path) and _cloud_seed_file_ok(source):
                 paths.append(rel_path)
                 seen_paths.add(rel_path)
-        subprocess.run(["git", "add", "-f", *paths], cwd=APP_DIR, check=True, capture_output=True, text=True)
+        _git_run(["add", "-f", *paths])
         diff = subprocess.run(["git", "diff", "--cached", "--quiet", "--", "data_store"], cwd=APP_DIR)
         if diff.returncode == 0:
-            return False, "Sem mudanças de dados para publicar."
+            return False, "Sem mudancas de dados para publicar."
         label = dt.datetime.now().strftime("%d/%m/%Y %H:%M")
-        subprocess.run(["git", "commit", "-m", f"Atualizar dados C6 online {label}"], cwd=APP_DIR, check=True, capture_output=True, text=True)
-        subprocess.run(["git", "push", "origin", "main"], cwd=APP_DIR, check=True, capture_output=True, text=True)
+        _git_run(["commit", "-m", f"Atualizar dados C6 online {label}"])
+        push = _git_run(["push", "origin", "main"], check=False)
+        if push.returncode != 0:
+            detail = (push.stderr or "") + "\n" + (push.stdout or "")
+            if any(token in detail.lower() for token in ["non-fast-forward", "fetch first", "rejected", "behind"]):
+                _sync_with_remote()
+                push = _git_run(["push", "origin", "main"], check=False)
+            if push.returncode != 0:
+                raise subprocess.CalledProcessError(push.returncode, ["git", "push", "origin", "main"], output=push.stdout, stderr=push.stderr)
         return True, "Dados locais publicados para o app online."
     except subprocess.CalledProcessError as exc:
         detail = (exc.stderr or exc.stdout or str(exc)).strip()
@@ -1665,7 +1681,6 @@ def _sync_local_data_to_cloud_seed(reason: str = "") -> Tuple[bool, str]:
         return False, f"Falha ao publicar dados locais: {detail or exc}"
     except Exception as exc:
         return False, f"Falha ao publicar dados locais: {exc}"
-
 
 def _truthy_flag(value) -> bool:
     if value is None:
@@ -7732,7 +7747,7 @@ def _read_lct_file_any(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
                 lines = sample.splitlines()
                 first_data = lines[1].split(";") if len(lines) > 1 else []
                 header = lines[0].split(";") if lines else []
-                if len(header) == 16 and len(first_data) == 17:
+                if len(header) == 16 and len(first_data) >= 17:
                     text = raw_bytes.decode("utf-8-sig", errors="replace")
                     rows = []
                     for ln in text.splitlines()[1:]:
@@ -7740,7 +7755,7 @@ def _read_lct_file_any(name: str, raw_bytes: bytes) -> Optional[pd.DataFrame]:
                         if len(parts) < 17:
                             parts = parts + ([""] * (17 - len(parts)))
                         elif len(parts) > 17:
-                            parts = parts[:16] + [";".join(parts[16:])]
+                            parts = parts[:16] + [parts[-1]]
                         rows.append(parts)
                     fixed_cols = [
                         "Nome", "Cód", "CPF / CNPJ", "Agente Flag", "Agente", "Ação", "Data", "Hora",
@@ -7768,7 +7783,17 @@ def _read_temp_import_file_any(path: str) -> Optional[pd.DataFrame]:
 
 
 def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = None) -> Tuple[pd.DataFrame, str]:
-    frames, names = _load_lct_temp_history_cached()
+    sig_items = []
+    seen_sig = set()
+    for keyword in ["resumo lct", "resumo sbm"]:
+        for path in _temp_import_files_by_keyword(keyword):
+            norm_path = os.path.normcase(os.path.abspath(path))
+            if norm_path in seen_sig:
+                continue
+            seen_sig.add(norm_path)
+            _, mtime_ns, size = _safe_file_signature(path)
+            sig_items.append((os.path.basename(path), int(mtime_ns or 0), int(size or 0)))
+    frames, names = _load_lct_temp_history_cached(tuple(sorted(sig_items)))
     frames = [df.copy() for df in frames]
     names = list(names)
     if cached_lct is not None and not cached_lct.empty:
@@ -7779,7 +7804,7 @@ def _load_lct_history_from_temp_imports(cached_lct: Optional[pd.DataFrame] = Non
 
 
 @st.cache_data(show_spinner=False)
-def _load_lct_temp_history_cached(_version: str = "lct-v4-sbm") -> Tuple[List[pd.DataFrame], List[str]]:
+def _load_lct_temp_history_cached(file_signature: Tuple[Tuple[str, int, int], ...], version: str = "lct-v6-sbm-file-signature") -> Tuple[List[pd.DataFrame], List[str]]:
     frames = []
     names = []
     paths = []
@@ -7894,7 +7919,7 @@ def _extract_lct_base(df_lct: pd.DataFrame, source_keywords: Optional[List[str]]
         cand = _normalize_cnpj_series(df[col])
         cnpj = cnpj.mask(cnpj.astype(str).str.len().lt(14) & cand.astype(str).str.len().ge(14), cand)
     out["cnpj"] = cnpj.fillna("")
-    out["data_lct"] = _first_date(["data_lct", "Data", "DATA", "Ação"])
+    out["data_lct"] = _first_date(["data_lct", "Unnamed: 4", "Data", "DATA", "Ação", "Fase", "FASE"])
     out["dt_fundacao_lct"] = _first_date(["dt_fundacao_lct", "Fase", "FASE", "Inclusão"])
     source_parts = []
     for col in ["acao_lct", "origem_lct_texto", "Unnamed: 4", "Ação", "ACAO", "Acao", "Agente", "Histórico", "HISTORICO", "HISTÓRICO", "Historico", "Hora"]:
@@ -7945,7 +7970,10 @@ def _compact_lct_cache_df(df_lct: Optional[pd.DataFrame]) -> Optional[pd.DataFra
         extracted["acao_lct"] = normalize_str(extracted["acao_lct"]).str.upper()
     else:
         extracted["acao_lct"] = ""
-    extracted["origem_lct_texto"] = extracted["acao_lct"]
+    if "origem_lct_texto" in extracted.columns:
+        extracted["origem_lct_texto"] = normalize_str(extracted["origem_lct_texto"]).str.upper()
+    else:
+        extracted["origem_lct_texto"] = extracted["acao_lct"]
     keep_cols = [
         "nome_cliente_lct",
         "cnpj",
