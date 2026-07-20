@@ -1318,7 +1318,7 @@ def _already_processed_upload(kind: str, file_name: str, raw_bytes: bytes) -> bo
         meta_name = str((meta.get(kind_key, {}) or {}).get("name", "") or "").strip()
         safe_name = os.path.basename(str(file_name or "").strip())
         temp_path = os.path.join(APP_DIR, "temp_imports", safe_name)
-        if meta_name == safe_name and os.path.exists(temp_path) and os.path.getsize(temp_path) == len(raw_bytes or b""):
+        if kind_key != "lct" and meta_name == safe_name and os.path.exists(temp_path) and os.path.getsize(temp_path) == len(raw_bytes or b""):
             done.add(sig)
             return True
     except Exception:
@@ -2350,6 +2350,11 @@ def _status_extract_date_base_from_col_b(df: pd.DataFrame) -> Optional[dt.date]:
 
 def _load_daily_import_cache(kind: str):
     kind_key = str(kind or "").strip().lower()
+    if kind_key == "lct" and st.session_state.get("c6_daily_lct_df") is not None:
+        try:
+            return st.session_state["c6_daily_lct_df"].copy(), str(st.session_state.get("c6_daily_lct_df__name") or ""), "Resumo LCT (sessao atual)"
+        except Exception:
+            pass
     if kind_key == "visao":
         cache_path = C6_DAILY_VISAO_CACHE
     elif kind_key == "lct":
@@ -2358,6 +2363,8 @@ def _load_daily_import_cache(kind: str):
         cache_path = C6_DAILY_LEADS_CACHE
     if "firebase" in st.secrets:
         payload, meta, origin = _load_cloud_daily_import_payload(cache_path, kind_key)
+        if kind_key == "lct" and not payload:
+            payload, meta, origin = _load_cloud_daily_import_payload(C6_DAILY_LCT_CACHE, kind_key)
         if payload:
             df = _df_from_store_payload(payload)
             info = meta.get(kind_key) or {}
@@ -2369,10 +2376,12 @@ def _load_daily_import_cache(kind: str):
         with open(cache_path, "rb") as f:
             raw = f.read()
         info = (local_json_load(C6_DAILY_IMPORT_META, default={}) or {}).get(kind_key) or {}
-        file_name = str(info.get("name") or "")
-        if file_name.lower().endswith(".csv"):
+        file_name = str(info.get("name") or os.path.basename(cache_path))
+        if kind_key == "lct":
+            df = _read_lct_file_any(file_name, raw)
+        elif file_name.lower().endswith(".csv"):
             sample = raw[:200_000].decode("utf-8-sig", errors="replace")
-            candidates = [";", ",", "\t", "|"]
+            candidates = [";", ",", "	", "|"]
             counts = {sep: sample.count(sep) for sep in candidates}
             sep = max(counts, key=counts.get) if counts else ","
             if counts.get(sep, 0) <= 0:
@@ -2383,10 +2392,9 @@ def _load_daily_import_cache(kind: str):
         meta = local_json_load(C6_DAILY_IMPORT_META, default={}) or {}
         info = meta.get(kind_key) or {}
         file_name = str(info.get("name") or os.path.basename(cache_path))
-        return df, file_name, "Importação diária (cache local)"
+        return df, file_name, "Importacao diaria (cache local)"
     except Exception:
         return None, "", ""
-
 
 def _status_calcular_validas_14d(df: pd.DataFrame, data_base: dt.date) -> int:
     colunas_cadastro = [c for c in df.columns if "DATA_HORA_CADASTRO" in str(c).upper()]
@@ -11849,6 +11857,11 @@ if "Leads Diários" in tabs_map:
                     st.session_state["c6_daily_lct_df"] = _compact_lct_cache_df(df_lct_tmp)
                     st.session_state["c6_daily_lct_df__name"] = up_lct.name
                     if _save_daily_import_cache("lct", up_lct.name, raw_lct_bytes):
+                        try:
+                            _load_lct_temp_history_cached.clear()
+                            _load_funil_temp_history_cached.clear()
+                        except Exception:
+                            pass
                         st.success("Resumo LCT importado.")
                     else:
                         st.error("Não consegui salvar o Resumo LCT na nuvem. A importação não ficará disponível em outros computadores.")
