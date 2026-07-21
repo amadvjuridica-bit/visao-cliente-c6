@@ -1,6 +1,6 @@
 {
-  "last_signature": "c7b3152fa8ca8d15103dc2d9ab9b04f7",
-  "updated_at": "2026-07-20 16:39:04",
+  "last_signature": "6ef736d99f39a250a8d267ee473cceea",
+  "updated_at": "2026-07-20 16:40:39",
   "rows": [
     {
       "processado_em": "2026-05-07 20:38:07",
@@ -16908,6 +16908,270 @@
     },
     {
       "processado_em": "2026-07-20 16:39:04",
+      "setor": "OQL",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "Qualificação OQL nível 4",
+      "quantidade": 1,
+      "valor_total": 13.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "ANDRESSA BARBOSA CARVALHO",
+      "motivo": "Indicação ACT",
+      "quantidade": 11,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "Indicação ACT",
+      "quantidade": 56,
+      "valor_total": 10.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "Indicação ACT",
+      "quantidade": 23,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "GLEICY VELASQUEZ DA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 18,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "HÉCTOR DE ALMEIDA DA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 30,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "JASMINI FERREIRA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 27,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "Indicação ACT",
+      "quantidade": 48,
+      "valor_total": 10.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "JULYANNO ARAUJO F. F. MARTINS",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "Indicação ACT",
+      "quantidade": 26,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "LUIZ HENRIQUE ANUNCIACAO G",
+      "motivo": "Indicação ACT",
+      "quantidade": 22,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "MARISTELA LEITE DA SILVA ESPIN",
+      "motivo": "Indicação ACT",
+      "quantidade": 33,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "PEDRO AUGUSTO GOMES MILAN",
+      "motivo": "Indicação ACT",
+      "quantidade": 6,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "SUPORTE XPRISMA",
+      "motivo": "Indicação ACT",
+      "quantidade": 1975,
+      "valor_total": 3314.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "ACT",
+      "operador": "THUANIA OLIVEIRA DA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 5,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "",
+      "quantidade": 14,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 4,
+      "valor_total": 10.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 5,
+      "valor_total": 12.5
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "GLEICY VELASQUEZ DA SILVA",
+      "motivo": "",
+      "quantidade": 3,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "HÉCTOR DE ALMEIDA DA SILVA",
+      "motivo": "",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "",
+      "quantidade": 31,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 12,
+      "valor_total": 42.5
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "",
+      "quantidade": 53,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OCO",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 13,
+      "valor_total": 42.5
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OQL",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "",
+      "quantidade": 63,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OQL",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "Qualificação OQL",
+      "quantidade": 11,
+      "valor_total": 33.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OQL",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "Qualificação OQL nível 4",
+      "quantidade": 2,
+      "valor_total": 26.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OQL",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "",
+      "quantidade": 23,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OQL",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "Qualificação OQL",
+      "quantidade": 8,
+      "valor_total": 24.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OQL",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "Qualificação OQL nível 4",
+      "quantidade": 1,
+      "valor_total": 13.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OQL",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "",
+      "quantidade": 34,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
+      "setor": "OQL",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "Qualificação OQL",
+      "quantidade": 9,
+      "valor_total": 27.0
+    },
+    {
+      "processado_em": "2026-07-20 16:40:39",
       "setor": "OQL",
       "operador": "LIVIA ALVES GRANJA",
       "motivo": "Qualificação OQL nível 4",
