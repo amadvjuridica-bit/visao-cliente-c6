@@ -1998,5 +1998,76 @@
     "last_seen": "2026-07-22",
     "removed_on": ""
   },
-  "68033955000189": {}
+  "68033955000189": {},
+  "66140243000133": {
+    "first_seen": "2026-07-22",
+    "first_tipo": "EMAIL|PHONE",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-22",
+    "removed_on": ""
+  },
+  "66472480000100": {
+    "first_seen": "2026-07-22",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-22",
+    "removed_on": ""
+  },
+  "66539424000137": {
+    "first_seen": "2026-07-22",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-22",
+    "removed_on": ""
+  },
+  "66551955000145": {},
+  "66596312000118": {},
+  "66616746000132": {},
+  "66680201000195": {},
+  "66915925000170": {},
+  "67115646000195": {
+    "first_seen": "2026-07-22",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-22",
+    "removed_on": ""
+  },
+  "67164169000158": {
+    "first_seen": "2026-07-22",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-22",
+    "removed_on": ""
+  },
+  "67232412000128": {
+    "first_seen": "2026-07-22",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-22",
+    "removed_on": ""
+  },
+  "67274368000119": {},
+  "67281307000189": {
+    "first_seen": "2026-07-22",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-22",
+    "removed_on": ""
+  },
+  "67577466000125": {},
+  "67756823000112": {
+    "first_seen": "2026-07-22",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-22",
+    "removed_on": ""
+  }
 }
