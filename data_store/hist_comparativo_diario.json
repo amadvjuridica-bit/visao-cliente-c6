@@ -1761,5 +1761,17 @@
     "pix_total": 1651,
     "cashin_total": 15543240.54,
     "leads_total": 16477
+  },
+  "23/07/2026": {
+    "mes_ref": "07/2026",
+    "base_receber_mes": 129155.0,
+    "c6_total": 3105,
+    "leads_total": 16750,
+    "qual_total": 548,
+    "qual_m0": 98,
+    "qual_m1": 280,
+    "qual_m2": 170,
+    "pix_total": 1654,
+    "cashin_total": 16150570.19
   }
 }
