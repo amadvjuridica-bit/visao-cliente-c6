@@ -1463,5 +1463,16 @@
     "Aguardar atuação manual BKO": 26,
     "Abertura de conta em analise": 1,
     "_validas_14d": 3309
+  },
+  "2026-07-28": {
+    "SEM_STATUS": 13792,
+    "Ainda nao iniciou a abertura de conta": 3301,
+    "Desacordo comercial": 206,
+    "Cliente deverá fazer um novo processo de abertura de conta via APP": 40,
+    "Orientar o cliente enviar documento societário via APP": 36,
+    "Aguardar atuação manual BKO": 25,
+    "Conta Aberta Oriente o cliente a fazer o primeiro acesso via APP": 2,
+    "Abertura de conta em analise": 1,
+    "_validas_14d": 3186
   }
 }
