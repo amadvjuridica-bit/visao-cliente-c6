@@ -125,8 +125,8 @@
     "operador": "CARLOS AUGUSTO BRITTES DOS SAN"
   },
   "66527774000183": {
-    "max_paid": 3.0,
-    "month": "2026-06",
+    "max_paid": 13.0,
+    "month": "2026-07",
     "operador": "CARLOS AUGUSTO BRITTES DOS SAN"
   },
   "66634608000186": {
@@ -375,7 +375,7 @@
     "operador": "CARLOS AUGUSTO BRITTES DOS SAN"
   },
   "67199963000137": {
-    "max_paid": 3.0,
+    "max_paid": 13.0,
     "month": "2026-07",
     "operador": "LIVIA ALVES GRANJA"
   },
@@ -485,7 +485,7 @@
     "operador": "JULIANA DOS SANTOS MARI"
   },
   "67834042000107": {
-    "max_paid": 3.0,
+    "max_paid": 13.0,
     "month": "2026-07",
     "operador": "LIVIA ALVES GRANJA"
   },
@@ -503,5 +503,25 @@
     "max_paid": 3.0,
     "month": "2026-07",
     "operador": "JULIANA DOS SANTOS MARI"
+  },
+  "65466541000155": {
+    "max_paid": 3.0,
+    "month": "2026-07",
+    "operador": "LIVIA ALVES GRANJA"
+  },
+  "66839001000132": {
+    "max_paid": 3.0,
+    "month": "2026-07",
+    "operador": "CARLOS AUGUSTO BRITTES DOS SAN"
+  },
+  "66874465000180": {
+    "max_paid": 3.0,
+    "month": "2026-07",
+    "operador": "LIVIA ALVES GRANJA"
+  },
+  "67543134000120": {
+    "max_paid": 3.0,
+    "month": "2026-07",
+    "operador": "CARLOS AUGUSTO BRITTES DOS SAN"
   }
 }
