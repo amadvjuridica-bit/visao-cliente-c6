@@ -512,7 +512,7 @@
     "first_tipo": "CNPJ|EMAIL",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-05-29",
+    "last_seen": "2026-07-29",
     "removed_on": ""
   },
   "62952059000137": {
@@ -998,7 +998,7 @@
     "first_tipo": "EMAIL",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-07-01",
+    "last_seen": "2026-07-29",
     "removed_on": ""
   },
   "64739722000145": {
@@ -1154,9 +1154,9 @@
     "first_seen": "2026-06-30",
     "first_tipo": "CNPJ",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
-    "current_has_pix": true,
+    "current_has_pix": false,
     "last_seen": "2026-07-01",
-    "removed_on": ""
+    "removed_on": "2026-07-29"
   },
   "66476246000142": {
     "first_seen": "2026-06-30",
@@ -1230,7 +1230,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-07-01",
+    "last_seen": "2026-07-29",
     "removed_on": ""
   },
   "66949412000180": {
@@ -1238,7 +1238,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-07-01",
+    "last_seen": "2026-07-29",
     "removed_on": ""
   },
   "66968656000100": {
@@ -1246,7 +1246,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-07-01",
+    "last_seen": "2026-07-29",
     "removed_on": ""
   },
   "67143194000155": {
@@ -1262,7 +1262,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-07-01",
+    "last_seen": "2026-07-29",
     "removed_on": ""
   },
   "67234866000138": {},
@@ -1280,7 +1280,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
     "current_has_pix": true,
-    "last_seen": "2026-07-01",
+    "last_seen": "2026-07-29",
     "removed_on": ""
   },
   "66037030000180": {
@@ -2094,6 +2094,783 @@
     "first_seen": "2026-07-22",
     "first_tipo": "CNPJ",
     "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "58588662000104": {},
+  "62901275000153": {},
+  "64311625000157": {},
+  "65066598000167": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "65619442000166": {},
+  "65665880000160": {},
+  "65721353000126": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "65736609000179": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "65767385000162": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "65922933000181": {},
+  "65944586000198": {},
+  "66039571000148": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66041430000160": {},
+  "66054892000111": {},
+  "66056814000156": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66059503000140": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "GLEICY VELASQUEZ DA SILVA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66081511000193": {},
+  "66094858000170": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66163501000105": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66188934000107": {},
+  "66195985000166": {},
+  "66256737000188": {},
+  "66264658000119": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66272462000176": {},
+  "66285825000108": {},
+  "66332118000125": {},
+  "66392324000120": {},
+  "66414413000120": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66428613000132": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66435699000120": {},
+  "66442721000160": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "GLEICY VELASQUEZ DA SILVA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66467214000180": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66521655000113": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "GLEICY VELASQUEZ DA SILVA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66550670000190": {},
+  "66572328000190": {},
+  "66590727000184": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66591466000117": {},
+  "66598639000129": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "GLEICY VELASQUEZ DA SILVA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66608359000154": {},
+  "66610697000120": {},
+  "66616607000109": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66630871000105": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66638166000146": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ|PHONE",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66651929000199": {},
+  "66681986000110": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66708094000166": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ|EMAIL",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66738612000194": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66753730000171": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66766065000150": {},
+  "66775922000189": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66803485000160": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66806302000160": {},
+  "66808150000134": {},
+  "66812437000138": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66839296000147": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66846945000137": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66927141000162": {},
+  "66971940000136": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "66987064000136": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67018948000145": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ|EMAIL",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67022618000123": {},
+  "67036747000170": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67063208000120": {},
+  "67064370000163": {},
+  "67066601000178": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "GLEICY VELASQUEZ DA SILVA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67083850000171": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67110504000135": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67139531000130": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67141299000175": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67152468000172": {},
+  "67153722000157": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67156960000116": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67176691000150": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67212673000186": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67217360000110": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67224836000140": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67229448000152": {},
+  "67242870000148": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67246093000100": {},
+  "67248924000182": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67256639000103": {},
+  "67262771000128": {},
+  "67288378000103": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67293924000102": {},
+  "67307380000182": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "PHONE",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67313720000188": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67497472000172": {},
+  "67508702000151": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67545094000155": {},
+  "67566373000103": {},
+  "67571546000173": {},
+  "67577983000102": {},
+  "67578584000158": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ|EMAIL",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67578919000138": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67583174000103": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ|EMAIL",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67583852000120": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67606636000152": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67615992000132": {},
+  "67625511000170": {},
+  "67632014000107": {},
+  "67644558000180": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67648953000131": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67703532000166": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67705526000148": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ|EMAIL",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67726842000104": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "GLEICY VELASQUEZ DA SILVA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67729367000111": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67731993000142": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67734956000198": {},
+  "67744833000138": {},
+  "67754829000150": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67754843000154": {},
+  "67769565000109": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67769590000192": {},
+  "67775911000161": {},
+  "67795803000150": {},
+  "67811278000110": {},
+  "67819505000153": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67821867000189": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67823489000172": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67830866000109": {},
+  "67849226000132": {},
+  "67852125000110": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67855591000150": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67868283000169": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67882499000189": {},
+  "67885022000157": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67888722000103": {},
+  "67889788000100": {},
+  "67899093000109": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67909072000127": {},
+  "67909626000196": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67911949000114": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67920990000157": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67923473000131": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67924336000111": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "GLEICY VELASQUEZ DA SILVA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67929111000158": {},
+  "67930760000179": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67945282000170": {},
+  "67949323000105": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67993924000107": {},
+  "67994968000151": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "67995938000160": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "68030754000128": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "68048752000166": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "JULIANA DOS SANTOS MARI",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "68099082000107": {},
+  "68105921000152": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "68110990000154": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "68135385000138": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "68144935000185": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "GLEICY VELASQUEZ DA SILVA",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "68149300000170": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "CARLOS AUGUSTO BRITTES DOS SAN",
+    "current_has_pix": true,
+    "last_seen": "2026-07-29",
+    "removed_on": ""
+  },
+  "68150120000109": {},
+  "68150506000110": {},
+  "68162432000132": {},
+  "68170451000100": {
+    "first_seen": "2026-07-29",
+    "first_tipo": "CNPJ",
+    "first_operator": "MARISTELA LEITE DA SILVA ESPIN",
     "current_has_pix": true,
     "last_seen": "2026-07-29",
     "removed_on": ""
