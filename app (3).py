@@ -12665,7 +12665,9 @@ if "Mensagens" in tabs_map:
           status_s = normalize_str(_msg_series(df_msg, [COL_STATUS, "STATUS", "STATUS_CONTA"], 21))
           pix_s = _msg_series(df_msg, [COL_PIX, "PIX", "CHAVE_PIX", "CHAVES PIX FORTE"], 23)
           wallet_s = _msg_series(df_msg, ["FL_WALLET_CADASTRADA", "WALLET", "FL_WALLET", "CARTAO_WALLET"], 30)
-          criterio_s = normalize_str(_msg_series(df_msg, [COL_CRIT, "CRITERIOS_ATINGIDOS_COMISS", "CRITÉRIOS ATINGIDOS COMISS"], 76))
+          criterio_col = _msg_col(df_msg, [COL_CRIT, "CRITERIOS_ATINGIDOS_COMISS", "CRIT?RIOS ATINGIDOS COMISS"], 76)
+          criterio_s = normalize_str(df_msg[criterio_col]) if criterio_col is not None else pd.Series([""] * len(df_msg), index=df_msg.index, dtype="string")
+          aplicar_filtro_criterio = criterio_col is not None and criterio_s.astype(str).str.strip().ne("").any()
 
           work = pd.DataFrame({
             "data_base": base_s,
@@ -12684,8 +12686,12 @@ if "Mensagens" in tabs_map:
           work["tem_pix_cnpj"] = work["pix"].apply(_pix_has_cnpj)
           work["tem_wallet"] = work["wallet"].apply(_truthy_flag)
           work["apto_status"] = work["status"].str.contains("LIBERADA", na=False) & ~work["status"].str.contains("BLOQUEAD|DESATIVAD|ENCERRAD", na=False)
-          work["apto_criterio"] = work["criterio"].str.contains("CASH", na=False) & work["criterio"].str.contains("IN", na=False) & work["criterio"].str.contains(r"\d", regex=True, na=False)
-          work["cliente_mei"] = work["criterio"].str.contains("CLIENTE MEI| MEI", na=False)
+          if aplicar_filtro_criterio:
+            work["apto_criterio"] = work["criterio"].str.contains("CASH", na=False) & work["criterio"].str.contains("IN", na=False) & work["criterio"].str.contains(r"\d", regex=True, na=False)
+            work["cliente_mei"] = work["criterio"].str.contains("CLIENTE MEI| MEI", na=False)
+          else:
+            work["apto_criterio"] = True
+            work["cliente_mei"] = False
 
           base_filtrada = work[
             work["data_base"].notna()
