@@ -78,14 +78,14 @@
   },
   "06/2026": {
     "faixa": "350+ (1.5)",
-    "qualificadas": 540,
-    "n1": 164,
-    "n2": 159,
+    "qualificadas": 549,
+    "n1": 165,
+    "n2": 164,
     "n3": 92,
-    "n4": 125,
-    "deveria_receber": 245745.0,
-    "ja_pago_ref": 94915.0,
-    "receber_mes": 150830.0
+    "n4": 128,
+    "deveria_receber": 250110.0,
+    "ja_pago_ref": 96055.0,
+    "receber_mes": 154055.0
   },
   "07/2026": {
     "faixa": "350+ (1.5)",
@@ -95,18 +95,18 @@
     "n3": 131,
     "n4": 149,
     "deveria_receber": 307545.0,
-    "ja_pago_ref": 110925.0,
-    "receber_mes": 196620.0
+    "ja_pago_ref": 113810.0,
+    "receber_mes": 193735.0
   },
   "08/2026": {
-    "faixa": "Até 49 (1.0)",
-    "qualificadas": 21,
-    "n1": 21,
+    "faixa": "50+ (1.1)",
+    "qualificadas": 53,
+    "n1": 53,
     "n2": 0,
     "n3": 0,
     "n4": 0,
-    "deveria_receber": 2940.0,
-    "ja_pago_ref": 2940.0,
-    "receber_mes": 0.0
+    "deveria_receber": 8162.0,
+    "ja_pago_ref": 7854.0,
+    "receber_mes": 308.0
   }
 }
