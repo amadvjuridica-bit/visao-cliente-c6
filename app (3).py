@@ -7711,12 +7711,19 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
                 "tpv_m0": float(tpv_m0_s.loc[idx] or 0.0),
                 "criterios_atingidos": criterios_s.loc[idx],
             })
-    return pd.DataFrame(rows)
+    out = pd.DataFrame(rows)
+    if out.empty:
+        return out
+    cnpj_por_telefone = out.groupby("telefone")["cnpj"].nunique()
+    telefones_compartilhados = set(cnpj_por_telefone[cnpj_por_telefone > 5].index.astype(str))
+    if telefones_compartilhados:
+        out = out[~out["telefone"].astype(str).isin(telefones_compartilhados)].copy()
+    return out.reset_index(drop=True)
 
 
 def _open_accounts_actions_summary(df_visao: pd.DataFrame) -> dict:
     if df_visao is None or df_visao.empty:
-        return {"linhas_base": 0, "linhas_telefone_brutas": 0, "telefones_duplicados_cliente": 0, "sem_telefone": 0, "contas_criadas": 0, "excluidas_status": 0, "clientes_validos": 0}
+        return {"linhas_base": 0, "linhas_telefone_brutas": 0, "telefones_duplicados_cliente": 0, "telefones_multi_cnpj": 0, "linhas_removidas_multi_cnpj": 0, "sem_telefone": 0, "contas_criadas": 0, "excluidas_status": 0, "clientes_validos": 0}
     data_abertura = pd.to_datetime(_series_by_name_or_letter(df_visao, [COL_ABERTURA, "DATA CONTA CRIADA", "DT CONTA CRIADA"], "T"), errors="coerce", dayfirst=True)
     status_s = normalize_str(_series_by_name_or_letter(df_visao, [COL_STATUS, "STATUS", "STATUS_CONTA", "STATUS CC"], "V")).str.upper()
     has_open = data_abertura.notna()
@@ -7728,17 +7735,35 @@ def _open_accounts_actions_summary(df_visao: pd.DataFrame) -> dict:
     raw_phone_lines = int(valid_mask.sum()) * 2
     duplicates = 0
     no_phone = 0
+    phone_cnpj_pairs = []
+    phone_line_count = {}
+    cnpj_s = _series_by_name_or_letter(df_visao, [COL_CNPJ, "CNPJ", "CPF_CNPJ"], "C").astype("string").fillna("")
     for idx in df_visao.loc[valid_mask].index:
+        cnpj_norm = _normalize_cnpj_text(cnpj_s.loc[idx])
+        phones_cliente = []
         p1 = _msg_open_account_phone(tel_1_s.loc[idx])
         p2 = _msg_open_account_phone(tel_2_s.loc[idx])
-        if not p1 and not p2:
+        for phone in [p1, p2]:
+            if phone and phone not in phones_cliente:
+                phones_cliente.append(phone)
+        if not phones_cliente:
             no_phone += 1
         if p1 and p2 and p1 == p2:
             duplicates += 1
+        for phone in phones_cliente:
+            phone_cnpj_pairs.append((phone, cnpj_norm))
+            phone_line_count[phone] = phone_line_count.get(phone, 0) + 1
+    multi_phones = set()
+    if phone_cnpj_pairs:
+        phone_df = pd.DataFrame(phone_cnpj_pairs, columns=["telefone", "cnpj"])
+        counts = phone_df.groupby("telefone")["cnpj"].nunique()
+        multi_phones = set(counts[counts > 5].index.astype(str))
     return {
         "linhas_base": int(len(df_visao)),
         "linhas_telefone_brutas": raw_phone_lines,
         "telefones_duplicados_cliente": int(duplicates),
+        "telefones_multi_cnpj": int(len(multi_phones)),
+        "linhas_removidas_multi_cnpj": int(sum(phone_line_count.get(phone, 0) for phone in multi_phones)),
         "sem_telefone": int(no_phone),
         "contas_criadas": int(has_open.sum()),
         "excluidas_status": int(blocked.sum()),
@@ -12626,6 +12651,7 @@ if "Mensagens" in tabs_map:
               f"Linhas potenciais de telefone: {br_int(acoes_summary['linhas_telefone_brutas'])}. "
               f"Excluídos por status bloqueado/desativado/encerrado/cancelado: {br_int(acoes_summary['excluidas_status'])}. "
               f"Telefones duplicados no mesmo cliente removidos: {br_int(acoes_summary['telefones_duplicados_cliente'])}. "
+              f"Telefones em mais de 5 CNPJs removidos: {br_int(acoes_summary.get('telefones_multi_cnpj', 0))} telefones / {br_int(acoes_summary.get('linhas_removidas_multi_cnpj', 0))} linhas. "
               f"Clientes sem telefone: {br_int(acoes_summary['sem_telefone'])}. "
               f"No arquivo: {br_int(acoes_abertas_df['cnpj'].nunique())} clientes e {br_int(len(acoes_abertas_df))} linhas de telefone."
             )
