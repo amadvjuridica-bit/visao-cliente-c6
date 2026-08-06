@@ -1,6 +1,6 @@
 {
-  "last_signature": "9483235accbf752e60188454b0e992f0",
-  "updated_at": "2026-07-31 11:58:04",
+  "last_signature": "77673d4158e7b07824a62df751fb896d",
+  "updated_at": "2026-08-06 09:53:53",
   "rows": [
     {
       "processado_em": "2026-05-07 20:38:07",
@@ -19617,6 +19617,390 @@
       "motivo": "Qualificação OQL",
       "quantidade": 1,
       "valor_total": 3.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "ADRIELY QUITÉRIA DA COSTA SANT",
+      "motivo": "Indicação ACT",
+      "quantidade": 7,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "ANDRESSA BARBOSA CARVALHO",
+      "motivo": "Indicação ACT",
+      "quantidade": 11,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "ANDRESSA GOMES DE SOUZA",
+      "motivo": "Indicação ACT",
+      "quantidade": 24,
+      "valor_total": 10.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "BEATRIZ MONGES ORTEGA",
+      "motivo": "Indicação ACT",
+      "quantidade": 8,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "Indicação ACT",
+      "quantidade": 57,
+      "valor_total": 10.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "CRISCIELI AMORIM SEBEN PER",
+      "motivo": "Indicação ACT",
+      "quantidade": 15,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "Indicação ACT",
+      "quantidade": 23,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "FERNANDA ALBUQUERQUE DE FRANÇA",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "GABRIELA JUSSARA MORAES DE LIM",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "GIOVANA VITÓRIA VASCONCELO",
+      "motivo": "Indicação ACT",
+      "quantidade": 11,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "GLEICY VELASQUEZ DA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 56,
+      "valor_total": 12.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "HÉCTOR DE ALMEIDA DA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 53,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "ISABELA FERREIRA",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "JASMINI FERREIRA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 32,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "Indicação ACT",
+      "quantidade": 53,
+      "valor_total": 17.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "JULYANNO ARAUJO F. F. MARTINS",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "LAURIANY OLIVEIRA DA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 16,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "LEONARDO DE SOUZA ROMA CAMARGO",
+      "motivo": "Indicação ACT",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "Indicação ACT",
+      "quantidade": 36,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "LUIZ HENRIQUE ANUNCIACAO G",
+      "motivo": "Indicação ACT",
+      "quantidade": 34,
+      "valor_total": 5.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "MARISTELA LEITE DA SILVA ESPIN",
+      "motivo": "Indicação ACT",
+      "quantidade": 56,
+      "valor_total": 12.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "PATRICIA BUREMAN DOS SANTO",
+      "motivo": "Indicação ACT",
+      "quantidade": 34,
+      "valor_total": 20.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "PEDRO AUGUSTO GOMES MILAN",
+      "motivo": "Indicação ACT",
+      "quantidade": 37,
+      "valor_total": 12.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "SUPORTE XPRISMA",
+      "motivo": "Indicação ACT",
+      "quantidade": 2845,
+      "valor_total": 5301.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "THIAGO GUTIERREZ DOS SANTOS",
+      "motivo": "Indicação ACT",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "THUANIA OLIVEIRA DA SILVA",
+      "motivo": "Indicação ACT",
+      "quantidade": 15,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "VITORIA GABRIELA FERNANDES RIB",
+      "motivo": "Indicação ACT",
+      "quantidade": 3,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "VITORIA LOUIZE TORRES ARMO",
+      "motivo": "Indicação ACT",
+      "quantidade": 25,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "ACT",
+      "operador": "YASMIN GABRIELY DE PAUDA MARIN",
+      "motivo": "Indicação ACT",
+      "quantidade": 7,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "ANDRESSA GOMES DE SOUZA",
+      "motivo": "",
+      "quantidade": 11,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "ANDRESSA GOMES DE SOUZA",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "BEATRIZ MONGES ORTEGA",
+      "motivo": "",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "",
+      "quantidade": 14,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "CARLOS AUGUSTO BRITTES DOS SAN",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 4,
+      "valor_total": 10.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "DANIEL DEL OLMO ALVES",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 5,
+      "valor_total": 12.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "GLEICY VELASQUEZ DA SILVA",
+      "motivo": "",
+      "quantidade": 4,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "GLEICY VELASQUEZ DA SILVA",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "HÉCTOR DE ALMEIDA DA SILVA",
+      "motivo": "",
+      "quantidade": 13,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "HÉCTOR DE ALMEIDA DA SILVA",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 2,
+      "valor_total": 5.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "",
+      "quantidade": 37,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "JULIANA DOS SANTOS MARI",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 15,
+      "valor_total": 50.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "",
+      "quantidade": 54,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "LIVIA ALVES GRANJA",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 16,
+      "valor_total": 50.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "LUIZ HENRIQUE ANUNCIACAO G",
+      "motivo": "",
+      "quantidade": 13,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "PATRICIA BUREMAN DOS SANTO",
+      "motivo": "",
+      "quantidade": 5,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "PATRICIA BUREMAN DOS SANTO",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 3,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-08-06 09:53:53",
+      "setor": "OCO",
+      "operador": "VITORIA LOUIZE TORRES ARMO",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
     }
   ]
 }
