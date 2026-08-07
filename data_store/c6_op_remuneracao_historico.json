@@ -1,6 +1,6 @@
 {
-  "last_signature": "27e2b463af70d9bf9841b8d4995fd746",
-  "updated_at": "2026-08-06 09:56:50",
+  "last_signature": "e47b7a6bb8ad3026a2afb72980ca4121",
+  "updated_at": "2026-08-06 10:09:26",
   "rows": [
     {
       "processado_em": "2026-05-07 20:38:07",
@@ -20425,6 +20425,430 @@
       "motivo": "Qualificação OQL nível 4",
       "quantidade": 1,
       "valor_total": 13.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "26",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "41",
+      "motivo": "Indicação ACT",
+      "quantidade": 2,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "51",
+      "motivo": "Indicação ACT",
+      "quantidade": 9,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "53",
+      "motivo": "Indicação ACT",
+      "quantidade": 4,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "58",
+      "motivo": "Indicação ACT",
+      "quantidade": 13,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "59",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "60",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "62",
+      "motivo": "Indicação ACT",
+      "quantidade": 16,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "66",
+      "motivo": "Indicação ACT",
+      "quantidade": 5,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "67",
+      "motivo": "Indicação ACT",
+      "quantidade": 3,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "69",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "70",
+      "motivo": "Indicação ACT",
+      "quantidade": 10,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "72",
+      "motivo": "Indicação ACT",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "73",
+      "motivo": "Indicação ACT",
+      "quantidade": 6,
+      "valor_total": 5.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "74",
+      "motivo": "Indicação ACT",
+      "quantidade": 7,
+      "valor_total": 5.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "77",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "79",
+      "motivo": "Indicação ACT",
+      "quantidade": 8,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "83",
+      "motivo": "Indicação ACT",
+      "quantidade": 4,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "87",
+      "motivo": "Indicação ACT",
+      "quantidade": 3,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "89",
+      "motivo": "Indicação ACT",
+      "quantidade": 6,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "899",
+      "motivo": "Indicação ACT",
+      "quantidade": 312,
+      "valor_total": 592.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "91",
+      "motivo": "Indicação ACT",
+      "quantidade": 5,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "93",
+      "motivo": "Indicação ACT",
+      "quantidade": 4,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "94",
+      "motivo": "Indicação ACT",
+      "quantidade": 4,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "95",
+      "motivo": "Indicação ACT",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "ACT",
+      "operador": "96",
+      "motivo": "Indicação ACT",
+      "quantidade": 14,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "41",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "43",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "43",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "51",
+      "motivo": "",
+      "quantidade": 4,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "51",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "58",
+      "motivo": "",
+      "quantidade": 6,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "62",
+      "motivo": "",
+      "quantidade": 3,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "62",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "66",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "70",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "70",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "74",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 3,
+      "valor_total": 7.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "77",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "79",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "83",
+      "motivo": "",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "83",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 1,
+      "valor_total": 2.5
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "93",
+      "motivo": "",
+      "quantidade": 2,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "94",
+      "motivo": "Conta aberta OCO",
+      "quantidade": 2,
+      "valor_total": 5.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "95",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OCO",
+      "operador": "96",
+      "motivo": "",
+      "quantidade": 1,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OQL",
+      "operador": "41",
+      "motivo": "",
+      "quantidade": 20,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OQL",
+      "operador": "41",
+      "motivo": "Qualificação OQL",
+      "quantidade": 2,
+      "valor_total": 6.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OQL",
+      "operador": "41",
+      "motivo": "Qualificação OQL nível 4",
+      "quantidade": 1,
+      "valor_total": 13.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OQL",
+      "operador": "43",
+      "motivo": "",
+      "quantidade": 41,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OQL",
+      "operador": "43",
+      "motivo": "Qualificação OQL",
+      "quantidade": 3,
+      "valor_total": 9.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OQL",
+      "operador": "51",
+      "motivo": "",
+      "quantidade": 21,
+      "valor_total": 0.0
+    },
+    {
+      "processado_em": "2026-08-06 10:09:26",
+      "setor": "OQL",
+      "operador": "58",
+      "motivo": "",
+      "quantidade": 15,
+      "valor_total": 0.0
     }
   ]
 }
