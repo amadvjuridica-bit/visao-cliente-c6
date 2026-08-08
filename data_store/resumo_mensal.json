@@ -100,13 +100,13 @@
   },
   "08/2026": {
     "faixa": "150+ (1.25)",
-    "qualificadas": 274,
-    "n1": 149,
-    "n2": 68,
-    "n3": 34,
-    "n4": 23,
-    "deveria_receber": 78150.0,
-    "ja_pago_ref": 56555.0,
-    "receber_mes": 21595.0
+    "qualificadas": 338,
+    "n1": 185,
+    "n2": 78,
+    "n3": 40,
+    "n4": 35,
+    "deveria_receber": 98425.0,
+    "ja_pago_ref": 66882.5,
+    "receber_mes": 31542.5
   }
 }
