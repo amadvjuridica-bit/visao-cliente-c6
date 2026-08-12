@@ -2342,7 +2342,7 @@
     "first_tipo": "CNPJ",
     "first_operator": "LIVIA ALVES GRANJA",
     "current_has_pix": true,
-    "last_seen": "2026-08-05",
+    "last_seen": "2026-08-10",
     "removed_on": ""
   },
   "66806302000160": {},
@@ -2566,7 +2566,7 @@
     "first_tipo": "CNPJ|EMAIL",
     "first_operator": "JULIANA DOS SANTOS MARI",
     "current_has_pix": true,
-    "last_seen": "2026-08-05",
+    "last_seen": "2026-08-10",
     "removed_on": ""
   },
   "67578919000138": {
@@ -3614,6 +3614,72 @@
   "68393767000161": {},
   "68393889000158": {
     "first_seen": "2026-08-09",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-08-10",
+    "removed_on": ""
+  },
+  "65471398000190": {
+    "first_seen": "2026-08-10",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-08-10",
+    "removed_on": ""
+  },
+  "65477221000109": {
+    "first_seen": "2026-08-10",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-08-10",
+    "removed_on": ""
+  },
+  "67646363000170": {},
+  "67748232000101": {
+    "first_seen": "2026-08-10",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-08-10",
+    "removed_on": ""
+  },
+  "68115686000108": {
+    "first_seen": "2026-08-10",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-08-10",
+    "removed_on": ""
+  },
+  "68159585000120": {
+    "first_seen": "2026-08-10",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-08-10",
+    "removed_on": ""
+  },
+  "68244100000105": {
+    "first_seen": "2026-08-10",
+    "first_tipo": "CNPJ",
+    "first_operator": "LIVIA ALVES GRANJA",
+    "current_has_pix": true,
+    "last_seen": "2026-08-10",
+    "removed_on": ""
+  },
+  "68291510000107": {},
+  "68360476000177": {
+    "first_seen": "2026-08-10",
+    "first_tipo": "CNPJ",
+    "first_operator": "ANDRESSA GOMES DE SOUZA",
+    "current_has_pix": true,
+    "last_seen": "2026-08-10",
+    "removed_on": ""
+  },
+  "68403354000110": {
+    "first_seen": "2026-08-10",
     "first_tipo": "CNPJ",
     "first_operator": "ANDRESSA GOMES DE SOUZA",
     "current_has_pix": true,
