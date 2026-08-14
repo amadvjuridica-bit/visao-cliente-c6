@@ -471,6 +471,12 @@ def _load_c6_leads_cnpj_track() -> dict:
 
 def _save_c6_leads_cnpj_track(track: dict):
     saved = local_json_save(C6_LEADS_CNPJ_TRACK, track)
+    if saved and "firebase" not in st.secrets:
+        try:
+            with gzip.open(f"{C6_LEADS_CNPJ_TRACK}.gz", "wt", encoding="utf-8") as f:
+                json.dump(track, f, ensure_ascii=False, separators=(",", ":"))
+        except Exception:
+            pass
     try:
         _load_big_json_cached.clear()
     except Exception:
@@ -1622,6 +1628,9 @@ def _prepare_cloud_seed_from_local_data() -> List:
             and _cloud_seed_file_ok(name)
         ):
             by_key.setdefault(name, name)
+    leads_track_gz = os.path.basename(f"{C6_LEADS_CNPJ_TRACK}.gz")
+    if _cloud_seed_file_ok(leads_track_gz):
+        by_key.setdefault(leads_track_gz, leads_track_gz)
 
     cache_entries = []
     try:
