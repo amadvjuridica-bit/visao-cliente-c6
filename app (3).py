@@ -333,12 +333,15 @@ def _bundled_seed_payload(doc_id: str, default):
             break
     if not source_name:
         source_name = doc_base if doc_base.endswith(".json") else ""
-    if not source_name or not source_name.endswith(".json"):
+    if not source_name or not (source_name.endswith(".json") or source_name.endswith(".json.gz")):
         return default
     path = os.path.join(DATA_DIR, source_name)
     if not os.path.exists(path):
         return default
     try:
+        if source_name.endswith(".gz"):
+            with gzip.open(path, "rt", encoding="utf-8") as f:
+                return json.load(f)
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception:
@@ -449,7 +452,10 @@ def _load_big_json_cached(path: str, mtime: float, size: int):
 
 def _load_c6_leads_cnpj_track() -> dict:
     if "firebase" in st.secrets:
-        return local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+        raw = local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+        if raw:
+            return raw
+        return _bundled_seed_payload(os.path.basename(C6_LEADS_CNPJ_TRACK), default={}) or {}
     gz_path = f"{C6_LEADS_CNPJ_TRACK}.gz"
     if not os.path.exists(C6_LEADS_CNPJ_TRACK):
         if os.path.exists(gz_path):
@@ -1630,7 +1636,10 @@ def _prepare_cloud_seed_from_local_data() -> List:
             by_key.setdefault(name, name)
     leads_track_gz = os.path.basename(f"{C6_LEADS_CNPJ_TRACK}.gz")
     if _cloud_seed_file_ok(leads_track_gz):
-        by_key.setdefault(leads_track_gz, leads_track_gz)
+        by_key.setdefault(
+            os.path.basename(C6_LEADS_CNPJ_TRACK),
+            {"source": leads_track_gz, "target": os.path.basename(C6_LEADS_CNPJ_TRACK)},
+        )
 
     cache_entries = []
     try:
