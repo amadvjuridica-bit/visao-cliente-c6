@@ -1,0 +1,13 @@
+.git
+.venv
+__pycache__/
+*.pyc
+logs/
+temp_imports/
+*.log
+
+# Mantem o build leve. O app restaura esse historico pelo .gz versionado
+# ou pelo volume persistente configurado em C6_DATA_DIR.
+data_store/c6_leads_cnpj_track.json
+data_store/*.corrompido_*.json
+data_store/*.backup*
