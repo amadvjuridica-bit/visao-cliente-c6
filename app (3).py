@@ -440,6 +440,36 @@ def local_json_save(path: str, obj):
     return True
 
 
+@st.cache_data(show_spinner=False)
+def _load_big_json_cached(path: str, mtime: float, size: int):
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _load_c6_leads_cnpj_track() -> dict:
+    if "firebase" in st.secrets:
+        return local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+    if not os.path.exists(C6_LEADS_CNPJ_TRACK):
+        return {}
+    try:
+        return _load_big_json_cached(
+            C6_LEADS_CNPJ_TRACK,
+            os.path.getmtime(C6_LEADS_CNPJ_TRACK),
+            os.path.getsize(C6_LEADS_CNPJ_TRACK),
+        ) or {}
+    except Exception:
+        return local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+
+
+def _save_c6_leads_cnpj_track(track: dict):
+    saved = local_json_save(C6_LEADS_CNPJ_TRACK, track)
+    try:
+        _load_big_json_cached.clear()
+    except Exception:
+        pass
+    return saved
+
+
 def local_json_delete(path: str):
     if "firebase" in st.secrets:
         safe_json_delete(path)
@@ -1791,7 +1821,7 @@ def _persist_leads_cnpj_track(df_leads: pd.DataFrame):
     if base is None or base.empty:
         return
 
-    track = local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+    track = _load_c6_leads_cnpj_track()
     for _, row in base.iterrows():
         cnpj = str(row.get("cnpj") or "").strip()
         if not cnpj:
@@ -1812,13 +1842,13 @@ def _persist_leads_cnpj_track(df_leads: pd.DataFrame):
         }
         item["timeline"] = timeline
         track[cnpj] = item
-    local_json_save(C6_LEADS_CNPJ_TRACK, track)
+    _save_c6_leads_cnpj_track(track)
 
 
 def _calc_bko_business_streak(cnpj: str, current_data_base) -> int:
     if not cnpj or pd.isna(current_data_base):
         return 0
-    track = local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+    track = _load_c6_leads_cnpj_track()
     item = track.get(str(cnpj)) or {}
     timeline = item.get("timeline") if isinstance(item.get("timeline"), dict) else {}
     if not timeline:
@@ -1871,7 +1901,7 @@ def _calc_bko_followup(cnpj: str, current_data_base) -> Dict[str, object]:
     if not cnpj or pd.isna(current_data_base):
         return empty
 
-    track = local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+    track = _load_c6_leads_cnpj_track()
     item = track.get(str(cnpj)) or {}
     timeline = item.get("timeline") if isinstance(item.get("timeline"), dict) else {}
     if not timeline:
@@ -1950,7 +1980,7 @@ def _calc_bko_followup(cnpj: str, current_data_base) -> Dict[str, object]:
 
 
 def _build_bko_followup_table(base: pd.DataFrame, oco: pd.DataFrame) -> pd.DataFrame:
-    track = local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+    track = _load_c6_leads_cnpj_track()
     target_status = "AGUARDAR ATUACAO MANUAL BKO"
     rows = []
 
