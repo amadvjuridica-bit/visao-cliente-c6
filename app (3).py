@@ -5,6 +5,7 @@
 import os
 import io
 import json
+import gzip
 import re
 import hashlib
 import smtplib
@@ -237,7 +238,7 @@ SUPERVISOR_C6_METAS = {
     "nivel4": {"meta": 300, "premio": 400.0},
 }
 
-DATA_DIR = os.path.join(APP_DIR, "data_store")
+DATA_DIR = os.environ.get("C6_DATA_DIR") or os.path.join(APP_DIR, "data_store")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 HIST_OPEN_DAILY = os.path.join(DATA_DIR, "hist_aberturas_diario.json")        # dd/mm/aaaa -> aberturas
@@ -449,7 +450,14 @@ def _load_big_json_cached(path: str, mtime: float, size: int):
 def _load_c6_leads_cnpj_track() -> dict:
     if "firebase" in st.secrets:
         return local_json_load(C6_LEADS_CNPJ_TRACK, default={}) or {}
+    gz_path = f"{C6_LEADS_CNPJ_TRACK}.gz"
     if not os.path.exists(C6_LEADS_CNPJ_TRACK):
+        if os.path.exists(gz_path):
+            try:
+                with gzip.open(gz_path, "rt", encoding="utf-8") as f:
+                    return json.load(f) or {}
+            except Exception:
+                return {}
         return {}
     try:
         return _load_big_json_cached(
