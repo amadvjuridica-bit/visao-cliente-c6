@@ -214,6 +214,7 @@ ACELERADORES_NOVA = [
     (0, 1.00),
 ]
 
+CARTILHA_NOVA_INICIO = "04/2026"
 CARTILHA_NOVA_MESES = {"04/2026", "05/2026", "06/2026"}
 # Na planilha Analítico Visão Cliente do banco, MULTIPLICADOR_NOVA_CARTILHA sai 1 nas linhas;
 # só ligue True se quiser usar a escada ACELERADORES_NOVA no app.
@@ -3337,6 +3338,9 @@ def _nova_paid_ref_for_month(month_key: str) -> Dict[str, float]:
 
 
 def _new_cartilha_full_amount_from_row(row: dict) -> float:
+    bank_vals = _nova_bank_cartilha_values(row or {})
+    if bank_vals is not None:
+        return float(bank_vals[0] or 0.0)
     if str((row or {}).get("mes_ref_comiss", "") or "").strip().upper() not in {"M0", "M1", "M2"}:
         return 0.0
     fator = float(_nova_cartilha_fator_por_qualificadas(0))
@@ -3361,6 +3365,8 @@ def _old_cartilha_full_by_month(mkey: str) -> Dict[str, float]:
 
 def _new_cartilha_full_by_month(mkey: str) -> Dict[str, float]:
     out: Dict[str, float] = {}
+    if not _cartilha_nova_active_month(mkey):
+        return out
     for cnpj, row in _visao_month_valid_rows(mkey).items():
         full = _new_cartilha_full_amount_from_row(row)
         if full > 0:
@@ -3447,7 +3453,7 @@ def _remun_ledger_payload(save: bool = False) -> dict:
         }
 
         new_full: Dict[str, float] = {}
-        if mkey in CARTILHA_NOVA_MESES and rows_for_month:
+        if _cartilha_nova_active_month(mkey, rows_for_month) and rows_for_month:
             for cnpj, row in rows_for_month.items():
                 nk = _normalize_cnpj_text(cnpj)
                 if not nk or not _c6_visao_row_eligible_pj(row):
@@ -3460,7 +3466,7 @@ def _remun_ledger_payload(save: bool = False) -> dict:
         old_receive_total = sum(max(0.0, float(old_full.get(cnpj, 0.0)) - float(paid_acc.get(cnpj, 0.0))) for cnpj in all_cnpjs)
         new_receive_total = sum(max(0.0, float(new_full.get(cnpj, 0.0)) - float(paid_acc.get(cnpj, 0.0))) for cnpj in all_cnpjs)
 
-        if mkey in CARTILHA_NOVA_MESES and new_receive_total >= old_receive_total:
+        if _cartilha_nova_active_month(mkey, rows_for_month) and new_receive_total >= old_receive_total:
             winner = "nova"
             winner_map = new_full
         else:
@@ -3554,7 +3560,7 @@ def _winner_paid_before_month(current_month: str) -> Dict[str, float]:
     if month_key_str(current_month) > month_key_str("04/2026"):
         paid.update(_old_paid_max_before("04/2026") or {})
 
-    for mkey in sorted(CARTILHA_NOVA_MESES, key=month_key_str):
+    for mkey in _available_cartilha_nova_month_keys():
         if month_key_str(mkey) >= month_key_str(current_month):
             break
 
@@ -3735,6 +3741,37 @@ def _nova_month_uses_bank_values(valid_rows: list) -> bool:
     return any(bool((row or {}).get("nova_cartilha_bank_present", False)) for _, row in valid_rows)
 
 
+def _month_has_bank_new_cartilha(mkey: str, rows_for_month: Optional[dict] = None) -> bool:
+    if month_key_str(mkey) < month_key_str(CARTILHA_NOVA_INICIO):
+        return False
+    rows = rows_for_month if rows_for_month is not None else _visao_month_rows(mkey)
+    return any(bool((row or {}).get("nova_cartilha_bank_present", False)) for row in (rows or {}).values())
+
+
+def _cartilha_nova_active_month(mkey: str, rows_for_month: Optional[dict] = None) -> bool:
+    return str(mkey or "") in CARTILHA_NOVA_MESES or _month_has_bank_new_cartilha(str(mkey or ""), rows_for_month)
+
+
+def _available_cartilha_nova_month_keys() -> List[str]:
+    months = []
+    for mkey in _available_visao_month_keys():
+        rows = _visao_month_rows(mkey)
+        if _cartilha_nova_active_month(mkey, rows):
+            months.append(mkey)
+    return sorted(set(months), key=month_key_str)
+
+
+def _nova_bank_criterio_bucket(row: dict) -> str:
+    txt = str((row or {}).get("nova_cartilha_criterios", "") or "").upper()
+    if "C6PAY" in txt or "C6 PAY" in txt or "DOMICILIO" in txt or "DOMICÍLIO" in txt:
+        return "c6pay"
+    if "SPENDING" in txt:
+        return "spending"
+    if "CASH" in txt:
+        return "cash_in"
+    return ""
+
+
 def _old_bank_cartilha_values(row: dict) -> Optional[Tuple[float, float, float]]:
     if not bool(row.get("old_cartilha_bank_present", False)):
         return None
@@ -3805,6 +3842,7 @@ def _persist_visao_month_snapshot(df_c6: pd.DataFrame):
             "tpv_m2": float(pd.to_numeric(pd.Series([row.get("TPV_M2")]), errors="coerce").fillna(0.0).iloc[0]),
             "tpv_m0_valor": float(pd.to_numeric(pd.Series([row.get("TPV_M0")]), errors="coerce").fillna(0.0).iloc[0]),
             "nova_cartilha_bank_present": any(c in row.index for c in ["APURACAO_COMISS_NOVA_CARTILHA", "MULTIPLICADOR_NOVA_CARTILHA", "PREVISAO_COMISS_NOVA_CARTILHA"]),
+            "nova_cartilha_criterios": str(row.get("CRITERIOS_ATINGIDOS_COMISS_NOVA_CARTILHA", "") or ""),
             "nova_cartilha_apuracao": _num_from_row(row, "APURACAO_COMISS_NOVA_CARTILHA"),
             "nova_cartilha_multiplicador": _num_from_row(row, "MULTIPLICADOR_NOVA_CARTILHA", 1.0),
             "nova_cartilha_previsao": _num_from_row(row, "PREVISAO_COMISS_NOVA_CARTILHA"),
@@ -3867,6 +3905,7 @@ def _visao_month_rows_from_df(df_c6: Optional[pd.DataFrame]) -> Dict[str, dict]:
             "tpv_m2": float(pd.to_numeric(pd.Series([row.get("TPV_M2")]), errors="coerce").fillna(0.0).iloc[0]),
             "tpv_m0_valor": float(pd.to_numeric(pd.Series([row.get("TPV_M0")]), errors="coerce").fillna(0.0).iloc[0]),
             "nova_cartilha_bank_present": any(c in row.index for c in ["APURACAO_COMISS_NOVA_CARTILHA", "MULTIPLICADOR_NOVA_CARTILHA", "PREVISAO_COMISS_NOVA_CARTILHA"]),
+            "nova_cartilha_criterios": str(row.get("CRITERIOS_ATINGIDOS_COMISS_NOVA_CARTILHA", "") or ""),
             "nova_cartilha_apuracao": _num_from_row(row, "APURACAO_COMISS_NOVA_CARTILHA"),
             "nova_cartilha_multiplicador": _num_from_row(row, "MULTIPLICADOR_NOVA_CARTILHA", 1.0),
             "nova_cartilha_previsao": _num_from_row(row, "PREVISAO_COMISS_NOVA_CARTILHA"),
@@ -3955,7 +3994,7 @@ def _visao_month_rows(mkey: str) -> Dict[str, dict]:
 
 
 def recompute_cartilha_nova() -> pd.DataFrame:
-    months = sorted([m for m in _available_visao_month_keys() if m in CARTILHA_NOVA_MESES], key=month_key_str)
+    months = _available_cartilha_nova_month_keys()
 
     # Cumulativo só da cartilha nova. Se abril não vier no histórico, repõe teto já salvo para maio não “zerar” o abate.
     paid_max: Dict[str, dict] = dict(_nova_cartilha_paid_max_start(months))
@@ -4007,12 +4046,16 @@ def recompute_cartilha_nova() -> pd.DataFrame:
             else:
                 bank_receive = None
 
-            if best_amt == tpv_amt and best_amt > 0:
-                detail_counts["c6pay"] += 1
-            elif best_amt == spending_amt and best_amt > 0:
-                detail_counts["spending"] += 1
-            elif best_amt == cash_amt and best_amt > 0:
-                detail_counts["cash_in"] += 1
+            if best_amt > 0:
+                bank_bucket = _nova_bank_criterio_bucket(row) if bank_vals is not None else ""
+                if bank_bucket:
+                    detail_counts[bank_bucket] += 1
+                elif best_amt == tpv_amt:
+                    detail_counts["c6pay"] += 1
+                elif best_amt == spending_amt:
+                    detail_counts["spending"] += 1
+                else:
+                    detail_counts["cash_in"] += 1
 
             cnpjx = _normalize_cnpj_text(cnpj)
             prev = _nova_prior_paid_value(paid_max, cnpjx, mkey)
@@ -4075,7 +4118,7 @@ def recompute_cartilha_nova() -> pd.DataFrame:
 
 
 def _cartilha_nova_detail_by_month(target_month: str) -> pd.DataFrame:
-    months = sorted([m for m in _available_visao_month_keys() if m in CARTILHA_NOVA_MESES], key=month_key_str)
+    months = _available_cartilha_nova_month_keys()
     paid_max: Dict[str, dict] = dict(_nova_cartilha_paid_max_start(months))
     detail_df = pd.DataFrame()
 
@@ -4125,7 +4168,9 @@ def _cartilha_nova_detail_by_month(target_month: str) -> pd.DataFrame:
 
             criterio = "Nenhum"
             if best_amt > 0:
-                if best_amt == tpv_amt:
+                if bank_vals is not None and str(row.get("nova_cartilha_criterios", "") or "").strip():
+                    criterio = str(row.get("nova_cartilha_criterios", "") or "").strip()
+                elif best_amt == tpv_amt:
                     criterio = "C6 Pay"
                 elif best_amt == spending_amt:
                     criterio = "Spending"
@@ -10103,7 +10148,7 @@ if "Painel C6 Empresas" in tabs_map:
 
     st.divider()
 
-    st.subheader("Cartilha nova (abril a junho/26)")
+    st.subheader("Cartilha nova vigente")
 
     df_novo_calc = st.session_state.get("_panel_c6_cartilha_nova_df", pd.DataFrame())
     if not isinstance(df_novo_calc, pd.DataFrame):
@@ -10140,7 +10185,7 @@ if "Painel C6 Empresas" in tabs_map:
     if not saved_novo:
         saved_novo = safe_json_load(HIST_NOVA_RESUMO_MENSAL, default={}) or {}
     if not saved_novo:
-        st.info("Ainda não há base suficiente para a cartilha nova. Importe os arquivos diários de abril, maio e junho para comparar.")
+        st.info("Ainda não há base suficiente para a cartilha nova. Importe a Visão Cliente com as colunas CE a CH da cartilha nova.")
     else:
         months_sorted_novo = sorted(saved_novo.keys(), key=month_key_str)
         mes_novo_sel = st.selectbox("Selecione o mês da cartilha nova", months_sorted_novo, index=len(months_sorted_novo) - 1)
