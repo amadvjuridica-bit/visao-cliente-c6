@@ -1,8 +1,7 @@
 {
-  "version": "2026-08-14-193410",
-  "generated_at": "2026-08-14T19:34:10",
-  "reason": "consolidado-atual-sem-arquivo-bruto",
-  "copy_to_firestore": false,
+  "version": "2026-08-16-210356",
+  "generated_at": "2026-08-16T21:03:56",
+  "reason": "painel-c6-upload",
   "files": [
     "c6_daily_funil_track.json",
     "c6_daily_import_meta.json",
