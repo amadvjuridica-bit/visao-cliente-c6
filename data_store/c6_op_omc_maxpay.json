@@ -927,7 +927,7 @@
   "68529275000150": {
     "max_paid": 3.0,
     "month": "2026-08",
-    "operador": "LIVIA ALVES GRANJA"
+    "operador": "GLEICY VELASQUEZ DA SILVA"
   },
   "65477221000109": {
     "max_paid": 3.0,
@@ -948,5 +948,25 @@
     "max_paid": 3.0,
     "month": "2026-08",
     "operador": "LIVIA ALVES GRANJA"
+  },
+  "67082417000111": {
+    "max_paid": 3.0,
+    "month": "2026-08",
+    "operador": "ANDRESSA GOMES DE SOUZA"
+  },
+  "67312742000123": {
+    "max_paid": 3.0,
+    "month": "2026-08",
+    "operador": "GLEICY VELASQUEZ DA SILVA"
+  },
+  "68409665000197": {
+    "max_paid": 3.0,
+    "month": "2026-08",
+    "operador": "LIVIA ALVES GRANJA"
+  },
+  "68489790000154": {
+    "max_paid": 3.0,
+    "month": "2026-08",
+    "operador": "ANDRESSA GOMES DE SOUZA"
   }
 }
