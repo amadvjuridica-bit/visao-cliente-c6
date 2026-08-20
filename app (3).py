@@ -255,6 +255,7 @@ HIST_NOVA_PAID_REF = os.path.join(DATA_DIR, "cartilha_nova_pago_ref.json")    # 
 HIST_NOVA_RESUMO_MENSAL = os.path.join(DATA_DIR, "novo_resumo_mensal.json")
 HIST_REMUN_LEDGER = os.path.join(DATA_DIR, "remuneracao_cnpj_mes_ledger.json")
 HIST_BANK_PAID_REF = os.path.join(DATA_DIR, "remuneracao_banco_pago_ref.json")
+HIST_MSG_OPEN_REMUN = os.path.join(DATA_DIR, "mensagens_contas_abertas_remun_hist.json")
 HIST_SUPERVISOR_C6_DAILY = os.path.join(DATA_DIR, "supervisor_c6_daily.json")
 SUPERVISOR_C6_EMAIL_CFG = os.path.join(DATA_DIR, "supervisor_c6_email_config.json")
 SUPERVISOR_C6_MONTHLY_METAS_PATH = os.path.join(DATA_DIR, "supervisor_c6_monthly_metas.json")
@@ -7751,6 +7752,126 @@ def _apply_ura_blacklist(df_ura: pd.DataFrame, blacklist_cnpjs: set, blacklist_p
     return out.loc[~remove].copy()
 
 
+def _open_remun_level_text(criterio: str) -> str:
+    txt = str(criterio or "").strip()
+    if not txt:
+        return ""
+    parts = []
+    for label in ["CASH IN", "SPENDING", "DOMICILIO", "DOMICÍLIO"]:
+        m = re.search(rf"{label}\s*:\s*(-?\d+)", txt, flags=re.IGNORECASE)
+        if m:
+            clean_label = "Domicilio" if "DOMIC" in label.upper() else label.title()
+            parts.append(f"{clean_label}: {m.group(1)}")
+    return " | ".join(parts) if parts else txt
+
+
+def _open_remun_qualified(criterio: str, previsao: float = 0.0) -> bool:
+    if float(previsao or 0.0) > 0:
+        return True
+    nums = [int(x) for x in re.findall(r":\s*(-?\d+)", str(criterio or ""))]
+    return any(n > 0 for n in nums)
+
+
+def _open_accounts_remun_records_from_df(df_visao: Optional[pd.DataFrame], source_name: str = "") -> Tuple[str, Dict[str, dict]]:
+    if df_visao is None or df_visao.empty:
+        return "", {}
+    df = df_visao.copy()
+    month_dt = detect_report_month_from_df(df)
+    if month_dt is None:
+        return "", {}
+    mkey = fmt_month(month_dt)
+    cnpj_s = _series_by_name_or_letter(df, [COL_CNPJ, "CNPJ", "CPF_CNPJ"], "C").astype("string").fillna("")
+    mes_ref_s = _series_by_name_or_letter(df, [COL_BR, "MES_REF_COMISS", "MES REFERENCIA COMISSAO"], "BO").astype("string").fillna("").str.strip().str.upper()
+    criterio_s = _series_by_name_or_letter(df, ["CRITERIOS_ATINGIDOS_COMISS_NOVA_CARTILHA"], "CE").astype("string").fillna("")
+    apuracao_s = pd.to_numeric(_series_by_name_or_letter(df, ["APURACAO_COMISS_NOVA_CARTILHA"], "CF"), errors="coerce").fillna(0.0)
+    mult_s = pd.to_numeric(_series_by_name_or_letter(df, ["MULTIPLICADOR_NOVA_CARTILHA"], "CG"), errors="coerce").fillna(1.0)
+    previsao_s = pd.to_numeric(_series_by_name_or_letter(df, ["PREVISAO_COMISS_NOVA_CARTILHA"], "CH"), errors="coerce").fillna(0.0)
+    nome_s = _series_by_name_or_letter(df, ["NOME_CLIENTE", "NOME CLIENTE", "CLIENTE", "NOME"], "D").astype("string").fillna("")
+
+    out: Dict[str, dict] = {}
+    for idx in df.index:
+        cnpj = _normalize_cnpj_text(cnpj_s.loc[idx])
+        stage = str(mes_ref_s.loc[idx] or "").strip().upper()
+        if not cnpj or stage not in {"M0", "M1", "M2"}:
+            continue
+        criterio = str(criterio_s.loc[idx] or "").strip()
+        previsao = float(previsao_s.loc[idx] or 0.0)
+        out[cnpj] = {
+            "cnpj": cnpj,
+            "nome_cliente": str(nome_s.loc[idx] or ""),
+            "mes_fechamento": mkey,
+            "mes_ref_comissao": stage,
+            "criterio_nova": criterio,
+            "nivel_nova": _open_remun_level_text(criterio),
+            "qualificou_nova": "SIM" if _open_remun_qualified(criterio, previsao) else "NAO",
+            "apuracao_nova": float(apuracao_s.loc[idx] or 0.0),
+            "multiplicador_nova": float(mult_s.loc[idx] or 1.0),
+            "previsao_nova": previsao,
+            "fonte": str(source_name or ""),
+        }
+    return mkey, out
+
+
+def _merge_open_accounts_remun_store(month_key: str, rows_by_cnpj: Dict[str, dict]):
+    if not month_key or not rows_by_cnpj:
+        return
+    store = local_json_load(HIST_MSG_OPEN_REMUN, default={}) or {}
+    store[str(month_key)] = rows_by_cnpj
+    local_json_save(HIST_MSG_OPEN_REMUN, store)
+
+
+def _open_accounts_remun_store_with_current(df_visao: Optional[pd.DataFrame] = None, source_name: str = "") -> Dict[str, Dict[str, dict]]:
+    store = local_json_load(HIST_MSG_OPEN_REMUN, default={}) or {}
+    if not isinstance(store, dict):
+        store = {}
+    mkey, current = _open_accounts_remun_records_from_df(df_visao, source_name)
+    if mkey and current:
+        store = dict(store)
+        merged = dict(store.get(mkey, {}) or {})
+        merged.update(current)
+        store[mkey] = merged
+    return store
+
+
+def _enrich_open_accounts_with_remun_history(report_df: pd.DataFrame, df_visao_current: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+    if report_df is None or report_df.empty:
+        return report_df
+    store = _open_accounts_remun_store_with_current(df_visao_current, "Visão Cliente atual")
+    if not store:
+        return report_df
+
+    stage_by_cnpj: Dict[str, Dict[str, dict]] = {}
+    current_by_cnpj: Dict[str, dict] = {}
+    for mkey in sorted([str(k) for k in store.keys()], key=month_key_str):
+        rows = store.get(mkey, {}) or {}
+        if not isinstance(rows, dict):
+            continue
+        for cnpj, item in rows.items():
+            if not isinstance(item, dict):
+                continue
+            nk = _normalize_cnpj_text(cnpj)
+            stage = str(item.get("mes_ref_comissao", "") or "").strip().upper()
+            if not nk or stage not in {"M0", "M1", "M2"}:
+                continue
+            item = dict(item)
+            item["mes_fechamento"] = str(item.get("mes_fechamento") or mkey)
+            stage_by_cnpj.setdefault(nk, {})[stage] = item
+            current_by_cnpj[nk] = item
+
+    out = report_df.copy()
+    cnpj_norm = out["cnpj"].apply(_normalize_cnpj_text) if "cnpj" in out.columns else pd.Series([""] * len(out), index=out.index)
+    out["estagio_remuneracao_atual"] = cnpj_norm.apply(lambda c: str((current_by_cnpj.get(c) or {}).get("mes_ref_comissao", "") or ""))
+    out["mes_fechamento_remuneracao_atual"] = cnpj_norm.apply(lambda c: str((current_by_cnpj.get(c) or {}).get("mes_fechamento", "") or ""))
+    for stage in ["M0", "M1", "M2"]:
+        lower = stage.lower()
+        out[f"qualificou_{lower}_cartilha_nova"] = cnpj_norm.apply(lambda c, s=stage: str((stage_by_cnpj.get(c, {}).get(s) or {}).get("qualificou_nova", "") or ""))
+        out[f"nivel_{lower}_cartilha_nova"] = cnpj_norm.apply(lambda c, s=stage: str((stage_by_cnpj.get(c, {}).get(s) or {}).get("nivel_nova", "") or ""))
+        out[f"criterio_{lower}_cartilha_nova"] = cnpj_norm.apply(lambda c, s=stage: str((stage_by_cnpj.get(c, {}).get(s) or {}).get("criterio_nova", "") or ""))
+        out[f"previsao_{lower}_cartilha_nova"] = cnpj_norm.apply(lambda c, s=stage: float((stage_by_cnpj.get(c, {}).get(s) or {}).get("previsao_nova", 0.0) or 0.0))
+        out[f"mes_fechamento_{lower}"] = cnpj_norm.apply(lambda c, s=stage: str((stage_by_cnpj.get(c, {}).get(s) or {}).get("mes_fechamento", "") or ""))
+    return out
+
+
 def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
     if df_visao is None or df_visao.empty:
         return pd.DataFrame()
@@ -7819,7 +7940,33 @@ def _build_open_accounts_actions_report(df_visao: pd.DataFrame) -> pd.DataFrame:
     telefones_compartilhados = set(cnpj_por_telefone[cnpj_por_telefone > 5].index.astype(str))
     if telefones_compartilhados:
         out = out[~out["telefone"].astype(str).isin(telefones_compartilhados)].copy()
+    out = _enrich_open_accounts_with_remun_history(out, df_visao)
     return out.reset_index(drop=True)
+
+
+def _read_bank_closing_file_any(uploaded_file) -> Optional[pd.DataFrame]:
+    raw = uploaded_file.getvalue()
+    name = str(getattr(uploaded_file, "name", "") or "")
+    try:
+        if name.lower().endswith(".csv"):
+            sample = raw[:200_000].decode("utf-8-sig", errors="replace")
+            sep = _detect_delim_for_csv(sample) if "_detect_delim_for_csv" in globals() else ";"
+            return pd.read_csv(io.BytesIO(raw), sep=sep, engine="python", on_bad_lines="skip", encoding="utf-8-sig")
+        return pd.read_excel(io.BytesIO(raw), engine="openpyxl")
+    except Exception as e:
+        st.error(f"Erro ao ler fechamento de remuneração: {e}")
+        return None
+
+
+def _open_accounts_remun_history_summary() -> str:
+    store = local_json_load(HIST_MSG_OPEN_REMUN, default={}) or {}
+    if not isinstance(store, dict) or not store:
+        return "Nenhum fechamento de remuneração salvo para M0/M1/M2."
+    parts = []
+    for mkey in sorted([str(k) for k in store.keys()], key=month_key_str):
+        rows = store.get(mkey, {}) or {}
+        parts.append(f"{mkey}: {br_int(len(rows))} CNPJs")
+    return "Histórico de remuneração salvo: " + " | ".join(parts)
 
 
 def _open_accounts_actions_summary(df_visao: pd.DataFrame) -> dict:
@@ -12729,6 +12876,32 @@ if "Mensagens" in tabs_map:
         if df_visao_msg is None or df_visao_msg.empty:
           st.info("Importe primeiro a planilha C6 (Visão Cliente) no Painel C6 Empresas.")
         else:
+          with st.expander("Atualizar histórico M0/M1/M2 da cartilha nova", expanded=False):
+            st.caption("Use aqui os fechamentos do banco quando quiser enriquecer o relatório com qualificação M0, M1 e M2 por CNPJ. O app usa CNPJ, BO (M0/M1/M2), CE (critérios) e CH (previsão).")
+            up_fechamentos_msg = st.file_uploader(
+              "Fechamentos de remuneração / Visão Cliente do banco (.xlsx ou .csv)",
+              type=["xlsx", "csv"],
+              accept_multiple_files=True,
+              key="mensagens_fechamentos_remun_upload",
+            )
+            if up_fechamentos_msg:
+              total_cnpjs_hist = 0
+              meses_hist = []
+              for f_hist in up_fechamentos_msg:
+                df_hist = _read_bank_closing_file_any(f_hist)
+                if df_hist is None or df_hist.empty:
+                  continue
+                mkey_hist, rows_hist = _open_accounts_remun_records_from_df(df_hist, getattr(f_hist, "name", ""))
+                if mkey_hist and rows_hist:
+                  _merge_open_accounts_remun_store(mkey_hist, rows_hist)
+                  total_cnpjs_hist += len(rows_hist)
+                  meses_hist.append(mkey_hist)
+              if meses_hist:
+                st.success(f"Fechamentos salvos para {', '.join(sorted(set(meses_hist), key=month_key_str))}. CNPJs processados: {br_int(total_cnpjs_hist)}.")
+              else:
+                st.warning("Não encontrei CNPJ, BO, CE e mês de referência nos arquivos enviados.")
+            st.caption(_open_accounts_remun_history_summary())
+
           acoes_abertas_df = _build_open_accounts_actions_report(df_visao_msg)
           acoes_summary = _open_accounts_actions_summary(df_visao_msg)
           st.caption(f"Visão Cliente em uso: {visao_msg_name or 'arquivo importado'}")
