@@ -1,6 +1,6 @@
 {
-  "version": "2026-08-22-111422",
-  "generated_at": "2026-08-22T11:14:22",
+  "version": "2026-08-24-113053",
+  "generated_at": "2026-08-24T11:30:53",
   "reason": "painel-c6-upload",
   "files": [
     "c6_daily_funil_track.json",
@@ -56,7 +56,6 @@
     {
       "source": "c6_leads_cnpj_track.json.gz",
       "target": "c6_leads_cnpj_track.json"
-    },
-    "mensagens_contas_abertas_remun_hist.json"
+    }
   ]
 }
