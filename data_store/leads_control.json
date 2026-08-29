@@ -1224,11 +1224,18 @@
       "day": "2026-08-27",
       "imported_at": "2026-08-28T14:34:47.521224",
       "origin": "importacao_diaria"
+    },
+    {
+      "name": "Analitico Leads_28082026.xlsx",
+      "hash": "16babd058fdeed10de55c03d43453bf2",
+      "day": "2026-08-28",
+      "imported_at": "2026-08-29T10:18:20.208473",
+      "origin": "importacao_diaria"
     }
   ],
-  "updated_at": "2026-08-28T14:34:47.521224",
+  "updated_at": "2026-08-29T10:18:20.208473",
   "last_processed": {
-    "day": "2026-08-27",
-    "imported_at": "2026-08-28T14:34:47.521224"
+    "day": "2026-08-28",
+    "imported_at": "2026-08-29T10:18:20.208473"
   }
 }

@@ -1,67 +1,15 @@
 {
-  "04/2026": {
-    "qualificadas": 637,
-    "acelerador": 1.0,
-    "cash_in": 574,
-    "spending": 40,
-    "c6pay": 23,
-    "c6pay_credenciamento": 24,
-    "pix_cnpj": 0,
-    "wallet": 0,
-    "deveria_receber": 316900.0,
-    "ja_pago_ref": 151190.0,
-    "receber_mes": 165710.0
-  },
-  "05/2026": {
-    "qualificadas": 439,
-    "acelerador": 1.0,
-    "cash_in": 396,
-    "spending": 24,
-    "c6pay": 19,
-    "c6pay_credenciamento": 17,
-    "pix_cnpj": 0,
-    "wallet": 183,
-    "deveria_receber": 222000.0,
-    "ja_pago_ref": 122485.0,
-    "receber_mes": 99515.0
-  },
-  "06/2026": {
-    "qualificadas": 511,
-    "acelerador": 1.0,
-    "cash_in": 467,
-    "spending": 30,
-    "c6pay": 14,
-    "c6pay_credenciamento": 41,
-    "pix_cnpj": 419,
-    "wallet": 248,
-    "deveria_receber": 254000.0,
-    "ja_pago_ref": 97200.0,
-    "receber_mes": 156800.0
-  },
-  "07/2026": {
-    "qualificadas": 667,
-    "acelerador": 1.0,
-    "cash_in": 601,
-    "spending": 49,
-    "c6pay": 17,
-    "c6pay_credenciamento": 44,
-    "pix_cnpj": 0,
-    "wallet": 345,
-    "deveria_receber": 335550.0,
-    "ja_pago_ref": 108720.0,
-    "receber_mes": 226830.0
-  },
   "08/2026": {
-    "qualificadas": 757,
+    "qualificadas": 796,
     "acelerador": 1.0,
-    "cash_in": 676,
-    "spending": 52,
+    "cash_in": 711,
+    "spending": 56,
     "c6pay": 29,
-    "c6pay_credenciamento": 28,
+    "c6pay_credenciamento": 29,
     "pix_cnpj": 0,
-    "wallet": 430,
-    "deveria_receber": 370500.0,
-    "ja_pago_ref": 141410.0,
-    "receber_mes": 229090.0
+    "wallet": 436,
+    "deveria_receber": 391750.0,
+    "ja_pago_ref": 146590.0,
+    "receber_mes": 245160.0
   }
 }
