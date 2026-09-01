@@ -1,15 +1,15 @@
 {
   "08/2026": {
-    "qualificadas": 796,
+    "qualificadas": 839,
     "acelerador": 1.0,
-    "cash_in": 711,
-    "spending": 56,
-    "c6pay": 29,
-    "c6pay_credenciamento": 29,
+    "cash_in": 748,
+    "spending": 61,
+    "c6pay": 30,
+    "c6pay_credenciamento": 30,
     "pix_cnpj": 0,
-    "wallet": 436,
-    "deveria_receber": 391750.0,
-    "ja_pago_ref": 146590.0,
-    "receber_mes": 245160.0
+    "wallet": 456,
+    "deveria_receber": 420700.0,
+    "ja_pago_ref": 152570.0,
+    "receber_mes": 268130.0
   }
 }
