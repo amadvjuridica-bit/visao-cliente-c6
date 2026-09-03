@@ -1,6 +1,6 @@
 {
-  "version": "2026-09-01-114708",
-  "generated_at": "2026-09-01T11:47:08",
+  "version": "2026-09-03-074217",
+  "generated_at": "2026-09-03T07:42:17",
   "reason": "painel-c6-upload",
   "files": [
     "c6_daily_funil_track.json",
@@ -16,7 +16,6 @@
     "hist_aberturas_diario.json",
     "hist_cadastros_diario.json",
     "hist_comparativo_diario.json",
-    "hist_mes_cnpj_nivel.json",
     "leads_control.json",
     "leads_status_daily_q.json",
     "novo_pago_max_por_cnpj.json",
