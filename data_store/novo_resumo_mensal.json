@@ -13,16 +13,16 @@
     "receber_mes": 268130.0
   },
   "09/2026": {
-    "qualificadas": 131,
+    "qualificadas": 522,
     "acelerador": 1.0,
-    "cash_in": 127,
-    "spending": 2,
-    "c6pay": 2,
-    "c6pay_credenciamento": 0,
+    "cash_in": 482,
+    "spending": 25,
+    "c6pay": 15,
+    "c6pay_credenciamento": 16,
     "pix_cnpj": 0,
-    "wallet": 299,
-    "deveria_receber": 55100.0,
-    "ja_pago_ref": 35430.0,
-    "receber_mes": 19670.0
+    "wallet": 333,
+    "deveria_receber": 238500.0,
+    "ja_pago_ref": 123950.0,
+    "receber_mes": 114550.0
   }
 }
